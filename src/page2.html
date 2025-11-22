@@ -44,11 +44,6 @@
 
 	function init(){
 	// Sets up questions then forces a render
-		let questions = [
-						["Q1","The sky is blue", ["True"], ["True", "False"], 1.0],
-						["Q2","What is 1 + 1?", ["2"], ["1", "2", "3", "4"], 1.0],
-						["Q3","What is -1 + 1?", ["0"], ["0", "1", "3", "4"], 1.0]
-						];
 		// Start listening for messages like quiz rendering
 		window.addEventListener('message', (event) => {
 			if(event.origin != 'localhost'){
@@ -61,7 +56,7 @@
 			}
 		});
 		// send questions to the parent
-		window.parent.postMessage({type: 'QUIZ_ADD_QUESTIONS', message: questions}, '*');
+		window.parent.postMessage({type: 'QUIZ_ADD_QUESTIONS', message: ""}, '*');
 	}
 
 	init();
