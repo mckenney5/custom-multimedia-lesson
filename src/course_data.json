@@ -37,6 +37,15 @@
 			"pointValue": 1,
 			"isCorrect": null,
 			"choices": []
+		},
+		{
+			"id": "Q3",
+			"text": "Which of the following are warm colors? Select all that apply",
+			"correctAnswers": ["red", "orange", "yellow"],
+			"possibleAnswers": ["blue", "orange", "red", "yellow"],
+			"pointValue": 1,
+			"isCorrect": null,
+			"choices": []
 		}
 	]
 },
