@@ -1,0 +1,352 @@
+var debugging = true;
+var state = {
+	// --- Properties (Data) ---
+	data: {
+		pages: [],
+		currentPageIndex: 0,
+		progress: 0, // Sets the furthest we have been
+		totalCourseSeconds: 0,
+		log: [],
+	},
+	// --
+
+	lessonFrame: null,	 // Will hold the iframe element
+	infoBanner: null, // Will hold the banner element
+	pauseSave: false, // Flag to pause the save on a reset
+	test: null, // Used for debugging
+
+	init: function(frameId, bannerId) {
+	// finds the required iframe and banner
+		this.lessonFrame = document.getElementById(frameId);
+		this.infoBanner = document.getElementById(bannerId);
+		this.infoBanner.addEventListener("click", () => {this.infoBanner.style.display = "none"});
+
+		// load last webpage we were on
+		this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].name;
+		setInterval(() => {
+			if(++this.data.totalCourseSeconds % 60 == 0){
+				if(!debugging) this.save();
+			}
+			const page = this.data.pages[this.data.currentPageIndex];
+			page.watchTime += 1;
+			this.finalizePage();
+
+		}, 1000);
+	},
+
+	next: function() {
+	// Trys to go to the next page and update progress
+		if (!this.lessonFrame || !this.infoBanner) {
+			console.error("State not initialized. Call state.init() first.");
+			return;
+		}
+		this.finalizePage(); //check progress
+		const page = this.data.pages[this.data.currentPageIndex];
+		if (page.completed) {
+			// Hide any old errors
+			this.infoBanner.style.display = "none";
+
+			// Increment index
+			this.data.currentPageIndex++;
+
+			// Check if we are at the end
+			if (this.data.currentPageIndex >= this.data.pages.length) {
+				// We're on the last page, maybe show a "Course Complete" message
+				alert("Congratulations! You have finished the course.");
+				this.data.currentPageIndex = this.data.pages.length - 1; // Stay on last page
+				return; // Don't try to load a page that doesn't exist
+			}
+
+			// Get the new page name
+
+			// Set the iframe source
+			this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].name;
+
+		} else {
+			// Show an error
+			this.bannerMessage("Please complete all items on the page");
+		}
+	},
+
+	prev: function() {
+	// Tries to go back a page
+		if (!this.lessonFrame || !this.infoBanner) {
+			console.error("State not initialized. Call state.init() first.");
+			return;
+		}
+
+		// Hide any old errors
+		this.infoBanner.style.display = "none";
+
+		// Deccrement index
+		this.data.currentPageIndex--;
+
+		// Check if we are at the end
+		if (this.data.currentPageIndex < 0) {
+			this.bannerMessage("Cannot go back. You are on the first page");
+			this.data.currentPageIndex = 0;
+			return;
+		}
+
+		// Set the iframe source
+		this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].name;
+	},
+
+	save: function(){
+	// saves the state to the local browser storage
+		if(this.pauseSave){ console.log("Ignoring Save"); return;}
+
+		let stateAsString = JSON.stringify(this.data);
+		localStorage.setItem("courseProgress", stateAsString);
+		//TODO save the log as a seperate storage item
+		this.log("Course Progress Saved");
+	},
+
+	loadSave: function(){
+	// loads the state from the local browser
+		let stateAsString = localStorage.getItem("courseProgress");
+
+		if(stateAsString) {
+			let loadedState = JSON.parse(stateAsString);
+			this.log("Loaded progress");
+			//this.data = loadedState;
+			Object.assign(this.data, loadedState); // <-- merge data and the loaded state
+		} else {
+			this.log("Started new course");
+		}
+	},
+
+	reset: function(){
+	// reset the state
+		let confirmed = window.confirm("Are you sure you want to reset all of your progress? This action cannot be undone.");
+		if(confirmed){
+			this.pauseSave = true;
+			console.log("Resetting progress");
+			this.lessonFrame.src = this.data.pages[0].name + '?_cb=' + Date.now();
+			localStorage.removeItem("courseProgress");
+			// TODO check if we are debugging, if so, delete the saved log too
+			window.onbeforeunload = null;
+			window.location.reload();
+		}
+	},
+
+	checkIfComplete: function() {
+		const page = this.data.pages[this.data.currentPageIndex];
+		return (
+			page.watchTime >= page.completionRules.watchTime &&
+			page.score >= page.completionRules.score &&
+			page.scrolled === page.completionRules.scrolled
+		)
+	},
+
+	finalizePage: function(){
+		const page = this.data.pages[this.data.currentPageIndex];
+		if(this.checkIfComplete() && this.data.currentPageIndex == this.data.progress){
+			page.completed = true;
+			this.data.progress += 1;
+			this.save();
+			this.log(`Page ${this.data.currentPageIndex} completed`);
+			this.bannerMessage("This page is completed. You may continue", false);
+			return true;
+		}
+		return false;
+	},
+
+	handleMessage: function(){
+		//console.log(event);
+		const page = this.data.pages[this.data.currentPageIndex];
+		if(event.origin != window.location.origin){
+			console.log("Unknown Sender!");
+			return;
+		}
+		if(event.data.type === "QUIZ_SUBMITTED"){
+			this.log(page.name + " Quiz was submitted");
+			page.score = this.gradeQuizQuestions(page.questions, event.data.message);
+			this.finalizePage();
+		} else if(event.data.type === "QUIZ_ADD_QUESTIONS"){
+			// Page requests the quiz to be rendered from the JSON, and gets the rendered HTML returned
+			this.log(page.name + " Quiz questions added");
+			//this.setQuizQuestions(String(this.data.currentPageIndex), event.data.message);
+			this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_ADD_QUESTIONS", message: this.renderQuiz(this.data.currentPageIndex)}, '*');
+		} else if(event.data.type === "LOG"){
+			this.log(`${page.name} ${event.data.message}`);
+		} else if(event.data.type === "PAGE_SCROLLED"){
+			this.log(page.name + " Page was scrolled all the way down");
+			page.scrolled = event.data.scrolled;
+		} else {
+			console.log("Unknown message");
+			return;
+		}
+		this.finalizePage();
+	},
+
+	bannerMessage: function(message, isError=true){
+		if(isError){
+			this.infoBanner.style = "background-color: #f8d7da; color: #721c24;";
+		} else {
+			this.infoBanner.style = "background-color: #fff3cd; color: #856404;";
+		}
+		this.infoBanner.innerHTML = `<p>${message}</p>`;
+		this.infoBanner.style.display = "block";
+	},
+
+	log: function(message){
+		this.data.log.push(`[${new Date().toLocaleTimeString()}] ${message}`);
+		if(debugging) console.log("log --> " + message);
+	},
+
+	setQuizQuestions: function(pageName, data){
+		// sets a list of questions to a page
+		this.data.quizes[pageName] = data;
+		console.log(`${pageName} | ${data}`);
+		console.log(this.data.quizes);
+	},
+
+	gradeQuizQuestions: function(questions, responses){
+		//compares answers to response, marks them correct or incorrect, adds up points of the correct ones, adds up total points, returns the score
+		// questions is an object, responses are a 2D array of strings
+		this.test = responses;
+		questions.forEach((q, i) => q.choices = responses[q.id] || []); // <-- add responses to the question to save for later TODO check if choices[i] is needed
+		//TODO consider merging both lists and seeing if the neighbor element is the same?
+		const sortAndLower = arr => // <-- takes in an array (arr), returns either the sorted lowercase array (arr) or empty []. slice makes a new copy, map makes all time change
+			(arr || []).slice().map(s => String(s).toLowerCase()).sort();
+
+		questions.forEach(q => { // <-- goes through each question, sets the isCorrect flag if the converted & sorted answer is the same as the response
+			const a = sortAndLower(q.correctAnswers);
+			const r = sortAndLower(q.choices);
+			q.isCorrect = (a.length === r.length &&
+				a.every((e, i) => e === r[i])
+			);
+		});
+
+		const score = questions.reduce((acc, q) => acc + (q.isCorrect ? q.pointValue : 0), 0); // <-- check and add every correct answer. Add 0 if not correct
+		const maxPoints = questions.reduce((acc, q) => acc + q.pointValue, 0); // <-- tally all the possible points
+
+		if(maxPoints <= 0){
+			console.error("Max points set too low --> ", maxPoints);
+			return -1;
+		}
+
+		console.log(questions);
+		console.log(score/maxPoints);
+		return (score / maxPoints);
+	},
+
+	gradeQuizQuestions2: function(questions, responses){
+
+		let score = 0.0;
+		let maxPoints = 0.0;
+		for(let i = 0; i < questions.length; i++){
+			questions[i].choices = responses[questions[i].id].slice().sort();
+
+			for(let l = 0; l < questions[i].correctAnswers.length; l++){
+				questions[i].correctAnswers[l] = questions[i].correctAnswers[l].toLowerCase();
+			}
+			for(let l = 0; l < questions[i].choices.length; l++){
+				questions[i].choices[l] = questions[i].choices[l].toLowerCase();
+			}
+			questions[i].isCorrect = (
+				questions[i].correctAnswers.length === questions[i].choices.length &&
+				questions[i].correctAnswers.sort() === questions[i].choices.sort() //<-- this needs its own for loop and string conversion to compare
+			);
+			console.log(`length --> ${questions[i].correctAnswers.length} ${questions[i].choices.length} | items --> ${questions[i].correctAnswers} ${questions[i].choices}`);
+			console.log(`len eval --> ${questions[i].correctAnswers.length === questions[i].choices.length} | ans eval --> ${questions[i].correctAnswers.sort() === questions[i].choices.sort()}`);
+			if(questions[i].isCorrect){
+				score += questions[i].pointValue;
+			}
+			maxPoints += questions[i].pointValue;
+		}
+		if(maxPoints <= 0){
+			console.error("Max points set too low --> ", maxPoints);
+			return -1;
+		}
+		console.log(questions);
+		console.log(score/maxPoints);
+		return (score/maxPoints);
+	},
+
+	renderQuiz: function(index){
+		// Puts all of the questions on the screen, in their own DIV
+		let QUIZ_QUESTIONS = this.data.pages[index].questions;
+		console.log(QUIZ_QUESTIONS);
+		let html = "";
+		for(let i = 0; i < QUIZ_QUESTIONS.length; i++){
+		// Render every question in a div
+			if(i % 2 == 0){
+			// alternate background colors
+				html += `<div id="Q${i+1}" style="background: lightgray;">`;
+			} else {
+				html += `<div id="Q${i+1}" style="background: white;">`;
+			}
+
+			html += `<h3 id="text">${i+1}. ${QUIZ_QUESTIONS[i].text}</h3>`;
+			for(let l = 0; l < QUIZ_QUESTIONS[i].possibleAnswers.length; l++){
+			// Render every choice
+				html += `
+					<input id="a${l}" type="checkbox" value="${QUIZ_QUESTIONS[i].possibleAnswers[l]}">
+					<label id="a${l}-label" for="a${l}">${QUIZ_QUESTIONS[i].possibleAnswers[l]}</label>
+					</br>
+				`;
+			}
+			html += "</div>";
+		}
+		html += "</br><button onclick='submitQuiz()'>Submit</button>";
+		return html;
+	},
+
+	loadCourseData: async function(){
+		try {
+			let response = null;
+			if(debugging){
+				console.log("Skipping cache for JSON");
+				response = await fetch("course_data.json", {
+					cache: "no-store"
+				});
+			} else {
+				response = await fetch("course_data.json");
+			}
+			console.log("Loaded JSON");
+			const rawPages = await response.json();
+
+			this.data.pages = rawPages.map(page => ({
+				// take the JSON, make a new object with those attributes (...) AND add others
+				...page,
+				completed: false,
+				// TODO make this its own object to compare with completiton rules
+				scrolled: false,
+				score: 0.0,
+				watchTime: 0
+
+			}));
+		} catch(error){
+			console.error("Failed to load course data: ", error);
+		}
+	}
+};
+
+// --- End of State Object ---
+
+window.onload = async () => {
+	await state.loadCourseData();
+	state.loadSave();
+	state.init("lesson-frame", "info-banner");
+	window.addEventListener('message', state.handleMessage.bind(state));
+};
+
+window.onbeforeunload = () => {
+	if(state.data.pages || state.data.pages.length === 0){
+		console.log("pages not loaded");
+		state.save();
+		return;
+	}
+	state.save();
+	if(!state.data.pages[state.data.currentPageIndex].completed){
+		return "Your progress on the current page my be lost.";
+	}
+};
+
+function test(){
+	state.infoBanner.innerHTML = "<p>Please complete all items on the page</p>";
+	state.infoBanner.style.display = "block";
+	state.save();
+}

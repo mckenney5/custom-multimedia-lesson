@@ -1,0 +1,70 @@
+#lesson-content {
+	background: linear-gradient(to top, #f5f5f5, #e0e0e0);
+	border-top-left-radius: 1.5rem;
+	border-top-right-radius: 1.5rem;
+}
+
+#course-nav {
+	padding: 0.5% 0px;
+	width: 99%;
+	margin: 0 auto;
+}
+
+#course-nav button {
+	background-color: #007bff;
+	color: white;
+	border: none;
+	border-radius: 5px;
+	cursor: pointer;
+	margin-left: 5px;
+	margin-right: 5px;
+}
+
+#course-nav #reset {
+	background-color: red;
+	font-size: 1.5rem;
+	width: 6.25rem;
+	height: 2.5rem;
+	line-height: 2.5rem;
+	padding: 0;
+}
+
+/* The hover effect for the button */
+#course-nav button:hover {
+	background-color: #0056b3;
+}
+
+/* The error banner (hidden by default) */
+#info-banner {
+	display: none;
+	background-color: #f8d7da;
+	color: #721c24;
+	padding: 10px;
+	border-radius: 5px;
+	margin-top: 15px;
+	cursor: pointer;
+}
+
+#lesson-frame {
+	width: 98%;
+	height: 90vh;
+	margin: 0 auto;
+	background: white;
+	box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.5);
+	border-top-left-radius: 1.5rem;
+	border-top-right-radius: 1.5rem;
+}
+
+#course-body {
+	margin: 0px 8px;
+	text-align: center;
+	background: #f7f7f7;
+}
+
+#course-nav button.nav-arrow {
+	font-size: 1.5rem;
+	width: 3.125rem;
+	height: 2.5rem;
+	line-height: 2.5rem;
+	padding: 0;
+}
