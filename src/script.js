@@ -1,5 +1,5 @@
-var debugging = true;
-var state = {
+let debugging = true;
+let state = {
 	// --- Properties (Data) ---
 	data: {
 		pages: [],
