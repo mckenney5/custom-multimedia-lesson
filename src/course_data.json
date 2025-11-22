@@ -1,0 +1,51 @@
+[
+{
+	"type": "article",
+	"name": "page1.html",
+	"articleText": "Welcome to the course...",
+	"completionRules": {
+		"watchTime": 5,
+		"score": 0.0,
+		"scrolled": true
+	}
+},
+{
+	"type": "quiz",
+	"name": "page2.html",
+	"completionRules": {
+		"watchTime": 0,
+		"score": 0.7,
+		"scrolled": false
+	},
+	"questions": [
+		{
+			"id": "Q1",
+			"text": "The sky is blue.",
+			"correctAnswers": ["True"],
+			"possibleAnswers": ["True", "False"],
+			"pointValue": 1,
+			"isCorrect": null,
+			"choices": []
+		},
+		{
+			"id": "Q2",
+			"text": "What is 3 + 1",
+			"correctAnswers": ["4"],
+			"possibleAnswers": ["1", "2", "3", "4"],
+			"pointValue": 1,
+			"isCorrect": null,
+			"choices": []
+		}
+	]
+},
+{
+	"type": "video",
+	"name": "page3.html",
+	"videoURL": "assets/vid.mp4",
+	"completionRules": {
+		"watchTime": 60,
+		"score": 0.0,
+		"scrolled": false
+	}
+}
+]

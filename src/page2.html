@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<!-- This is the first part of a lesson -->
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Simple Quiz</title>
+</head>
+<body>
+	<h1>Page 2</h1></br>
+	<h2 id="question-header">Quiz</h2>
+	<div id="question-area"></div>
+
+	<div id="feedback" style="display: none; margin-top: 20px;">
+		<p>Your answer has been submitted to the LMS. You may close this window.</p>
+	</div>
+
+	<script>
+	//to send data to parent:
+	// window.parent.functionName(parameter);
+	const MAX_ATTEMPTS = 3;
+	let attempts = 0;
+
+	function submitQuiz(){
+		if(attempts >= MAX_ATTEMPTS){
+			console.log("Max attempts reached. Ignored submission");
+			return;
+		}
+		attempts += 1;
+		const parent = document.getElementById("question-area");
+		const children = parent.querySelectorAll(":scope > div");
+		const answers = {};
+
+		for (const div of children){
+			const inputs = div.querySelectorAll('input[type="checkbox"]');
+			const selection = [];
+			for (const input of inputs){
+				if (input.checked) selection.push(input.value);
+			}
+			answers[div.id] = selection;
+		}
+		window.parent.postMessage({ type: 'QUIZ_SUBMITTED', message: answers }, '*');
+	}
+
+
+	function init(){
+	// Sets up questions then forces a render
+		let questions = [
+						["Q1","The sky is blue", ["True"], ["True", "False"], 1.0],
+						["Q2","What is 1 + 1?", ["2"], ["1", "2", "3", "4"], 1.0],
+						["Q3","What is -1 + 1?", ["0"], ["0", "1", "3", "4"], 1.0]
+						];
+		// Start listening for messages like quiz rendering
+		window.addEventListener('message', (event) => {
+			if(event.origin != 'localhost'){
+				console.error("Unknown orgin " + event.origin);
+				//return;
+			}
+
+			if(event.data.type === "QUIZ_ADD_QUESTIONS"){
+				document.getElementById("question-area").innerHTML = event.data.message;
+			}
+		});
+		// send questions to the parent
+		window.parent.postMessage({type: 'QUIZ_ADD_QUESTIONS', message: questions}, '*');
+	}
+
+	init();
+	</script>
+
+</body>
+</html>
