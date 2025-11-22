@@ -163,6 +163,7 @@ let state = {
 			this.log(page.name + " Quiz was submitted");
 			page.score = this.gradeQuizQuestions(page.questions, event.data.message);
 			this.finalizePage();
+			this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_INFO", score: page.score, maxAttempts: page.completionRules.attempts - ++page.attempts  }, '*');
 		} else if(event.data.type === "QUIZ_ADD_QUESTIONS"){
 			// Page requests the quiz to be rendered from the JSON, and gets the rendered HTML returned
 			this.log(page.name + " Quiz questions added");
@@ -233,7 +234,7 @@ let state = {
 	},
 
 	gradeQuizQuestions2: function(questions, responses){
-
+		// NOTE not currently used. Goal is to check functional vs procedural attempts. Does not currently work
 		let score = 0.0;
 		let maxPoints = 0.0;
 		for(let i = 0; i < questions.length; i++){
@@ -270,6 +271,10 @@ let state = {
 		let QUIZ_QUESTIONS = this.data.pages[index].questions;
 		console.log(QUIZ_QUESTIONS);
 		let html = "";
+
+		// add feedback div to show submission and test score
+		html += '<div id="feedback" style="display: none; margin-top: 20px;"><p>Your answer has been submitted to the LMS.</p></div>';
+
 		for(let i = 0; i < QUIZ_QUESTIONS.length; i++){
 		// Render every question in a div
 			if(i % 2 == 0){
@@ -279,7 +284,9 @@ let state = {
 				html += `<div id="Q${i+1}" style="background: white;">`;
 			}
 
+			// Render quiz question and number
 			html += `<h3 id="text">${i+1}. ${QUIZ_QUESTIONS[i].text}</h3>`;
+
 			for(let l = 0; l < QUIZ_QUESTIONS[i].possibleAnswers.length; l++){
 			// Render every choice
 				html += `
@@ -290,6 +297,8 @@ let state = {
 			}
 			html += "</div>";
 		}
+
+		// Render submit button
 		html += "</br><button onclick='submitQuiz()'>Submit</button>";
 		return html;
 	},
@@ -315,7 +324,8 @@ let state = {
 				// TODO make this its own object to compare with completiton rules
 				scrolled: false,
 				score: 0.0,
-				watchTime: 0
+				watchTime: 0,
+				attempts: 0
 
 			}));
 		} catch(error){

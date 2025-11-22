@@ -6,7 +6,8 @@
 	"completionRules": {
 		"watchTime": 5,
 		"score": 0.0,
-		"scrolled": true
+		"scrolled": true,
+		"attempts": 1
 	}
 },
 {
@@ -15,7 +16,8 @@
 	"completionRules": {
 		"watchTime": 0,
 		"score": 0.7,
-		"scrolled": false
+		"scrolled": false,
+		"attempts": 3
 	},
 	"questions": [
 		{

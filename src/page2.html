@@ -10,19 +10,18 @@
 	<h2 id="question-header">Quiz</h2>
 	<div id="question-area"></div>
 
-	<div id="feedback" style="display: none; margin-top: 20px;">
-		<p>Your answer has been submitted to the LMS. You may close this window.</p>
-	</div>
-
 	<script>
 	//to send data to parent:
 	// window.parent.functionName(parameter);
-	const MAX_ATTEMPTS = 3;
+	let MAX_ATTEMPTS = 1;
 	let attempts = 0;
 
 	function submitQuiz(){
+		let feedback = document.getElementById("feedback");
 		if(attempts >= MAX_ATTEMPTS){
 			console.log("Max attempts reached. Ignored submission");
+			feedback.innerHTML = "<p>You have already submitted this quiz the max ammount of times</p>";
+			feedback.style.display = "block";
 			return;
 		}
 		attempts += 1;
@@ -53,6 +52,17 @@
 
 			if(event.data.type === "QUIZ_ADD_QUESTIONS"){
 				document.getElementById("question-area").innerHTML = event.data.message;
+			}
+
+			if(event.data.type === "QUIZ_INFO"){
+				if(!event.data.score && !event.data.maxAttempts){
+					console.error(`API Error, missing required information in quiz --> score=${event.data.score} | maxAttempts=${event.data.maxAttempts}`);
+					return;
+				}
+				MAX_ATTEMPTS = event.data.maxAttempts;
+				feedback.innerHTML = `<p>You scored a ${event.data.score * 100}% and have ${event.data.maxAttempts} attempts left</p>`;
+				feedback.style.display = "block";
+				event.data.message;
 			}
 		});
 		// send questions to the parent
