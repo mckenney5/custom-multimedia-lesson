@@ -1,22 +1,250 @@
 <!DOCTYPE html>
-<!-- This is the first part of a lesson -->
+<!-- This is an example video lesson -->
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Simple Video</title>
+	<meta charset="UTF-8">
+	<title>Simple Video</title>
+	<style>
+		/* The Container for Video + Controls */
+		#video-container {
+			position: relative; /* Allows absolute positioning inside if needed later */
+			width: 100%;
+			max-width: 800px; /* Optional: restricts max width on desktop */
+			margin: 0 auto; /* Centers the player */
+			background: #000; /* Black background for the container itself */
+		}
+
+		/* The Video Element */
+		#course-video {
+			width: 100%;
+			display: block; /* Removes extra space below video */
+		}
+
+		/* The Control Bar */
+		#video-controls {
+			background-color: rgba(0, 0, 0, 0.6); /* Semitransparent Black */
+			padding: 10px;
+			display: flex;
+			justify-content: space-around; /* Spreads buttons out */
+			align-items: center;
+			color: white;
+			position: absolute;
+			bottom: 0;
+			width: 100%;
+			box-sizing: border-box;
+		}
+
+		/* Flat Buttons */
+		#video-controls button {
+			background: transparent;
+			border: none;
+			color: white;
+			cursor: pointer;
+			font-size: 16px;
+			padding: 5px 10px;
+			border-radius: 4px;
+			transition: background 0.3s;
+		}
+
+		/* Visual Feedback on Hover */
+		#video-controls button:hover {
+			background: rgba(255, 255, 255, 0.2);
+		}
+
+		/* Slider Styling */
+		#speed-slider {
+			cursor: pointer;
+			margin: 0 10px;
+		}
+
+		#speed-value {
+			/* 1. Allows the span to accept a width */
+			display: inline-block;
+
+			/* 2. Reserves space for roughly 3-4 characters (e.g., "1.5x") */
+			width: 4ch;
+
+			/* 3. Centers the text inside that reserved space */
+			text-align: center;
+		}
+
+		#play-pause {
+			/* 1. Allows the span to accept a width */
+			display: inline-block;
+
+			/* 2. Reserves space for roughly 4-5 characters with padding (e.g., " Pause ") */
+			width: 7ch;
+
+			/* 3. Centers the text inside that reserved space */
+			text-align: center;
+		}
+
+		#time-display {
+			/* font stack, goes left to right until it finds a font */
+			font-family: "Liberation Mono", monospace;
+
+			/* Keeps numbers the same width */
+			font-variant-numeric: tabular-nums;
+		}
+	</style>
 </head>
 <body>
-    <h1>Page 3</h1></br>
-    <h3>Video</h3>
+	<h1>Page 3</h1></br>
+	<h3>Video</h3>
 
 
-    <div id="feedback" style="display: none; margin-top: 20px;">
-        <p>Your answer has been submitted to the LMS. You may close this window.</p>
-    </div>
+	<div id="video-container">
+		<video id="course-video" src="media/1.mp4"></video>
 
-    <script>
+		<div id="video-controls">
+			<button id="play-pause" type="button">Play</button>
 
-    </script>
+			<button id="rewind" type="button">-5s</button>
+			<button id="forward" type="button">+5s</button>
+
+			<span id="time-display">0:00 / 0:00</span>
+
+			<label for="speed-slider">Speed:</label>
+			<input type="range" id="speed-slider" min="0.5" max="2.0" step="0.1" value="1">
+			<span id="speed-value">1x</span>
+
+			<button id="full-screen" type="button">Full Screen</button>
+		</div>
+	</div>
+
+	<script>
+		// HTML Elements
+		let video = document.getElementById("course-video");
+		let playButton = document.getElementById("play-pause");
+		let rewindButton = document.getElementById("rewind");
+		let forwardButton = document.getElementById("forward");
+		let speedSlider = document.getElementById("speed-slider");
+		let speedSliderSpan = document.getElementById("speed-value");
+		let fullScreenButton = document.getElementById("full-screen");
+		let videoContainer = document.getElementById("video-container");
+		let timeDisplay = document.getElementById("time-display");
+
+		// Stats
+		let videoCompletion = 0;
+		let videoFurthest = 0;
+
+		// Functions
+		function log(message){
+			window.parent.postMessage({ type: 'LOG', message: message }, '*');
+		}
+
+		function secondsToMinutes(seconds){
+		// Makes seconds into a pretty time (like a microwave) including padding 0's
+			let m = Math.floor(seconds / 60); //minutes
+			let s = Math.floor(seconds % 60); //seconds
+			let time = `${m}:${String(s).padStart(2, "0")}`;
+			return time;
+		}
+
+		// Events
+		playButton.addEventListener('click', function() {
+			// Toggles play / pause button
+			if(video.paused){
+				video.play();
+				log("Video playing");
+				playButton.textContent = "Pause";
+			} else {
+				video.pause();
+				log("Video paused");
+				playButton.textContent = "Play";
+			}
+		});
+
+		rewindButton.addEventListener('click', function() {
+			video.pause();
+			log(`Rewinding from ${video.currentTime} to ${video.currentTime-5}`);
+			video.currentTime -= 5;
+			video.play();
+		});
+
+		forwardButton.addEventListener('click', function() {
+			video.pause();
+			log(`Forwarding from ${video.currentTime} to ${video.currentTime+5}`);
+			video.currentTime += 5;
+			video.play();
+		});
+
+		speedSlider.addEventListener('input', function() {
+			speedSliderSpan.textContent = speedSlider.value + "x";
+		});
+
+		speedSlider.addEventListener('change', function() {
+			log(`Playback rate set from ${video.playbackRate} to ${speedSlider.value}`);
+			video.playbackRate = speedSlider.value;
+		});
+
+		fullScreenButton.addEventListener('click', function() {
+		// Toggle full screen
+			!document.fullscreenElement ? videoContainer.requestFullscreen() : document.exitFullscreen();
+		});
+
+		video.addEventListener('timeupdate', function() {
+			let progress = video.currentTime / video.duration;
+			timeDisplay.textContent = `${secondsToMinutes(video.currentTime)} / ${secondsToMinutes(video.duration)}`;
+			if(videoFurthest < progress){
+				videoCompletion = progress;
+				videoFurthest = videoCompletion;
+				window.parent.postMessage({ type: 'VIDEO_PROGRESS', message: videoCompletion }, '*');
+			}
+		});
+
+		video.addEventListener('ended', function() {
+			playButton.textContent = "Play";
+			video.currentTime = 0;
+			if(videoCompletion == 1) return;
+			videoCompletion = 1;
+			videoFurthest = 1;
+			window.parent.postMessage({ type: 'VIDEO_PROGRESS', message: videoCompletion }, '*');
+		});
+
+		videoContainer.addEventListener('fullscreenchange', function() {
+			if (!document.fullscreenElement) {
+				log("Exited full screen");
+				fullScreenButton.textContent = "Full Screen";
+			} else {
+				log("Video at full screen");
+				fullScreenButton.textContent = "Normal Screen";
+			}
+		});
+
+		document.addEventListener('keydown', function(e) {
+		// Handle key presses
+
+			// Disable default keys for ones that need them
+			const preventDefaultKeys = ['Space', 'ArrowRight', 'ArrowLeft', 'KeyM'];
+			if(preventDefaultKeys.includes(e.code)) {
+				e.preventDefault();
+			}
+
+			if(e.repeat){ return; }
+
+			// Check the keys
+			switch(e.code){
+				case 'Space':
+					playButton.click();
+					break;
+				case 'ArrowRight':
+					forwardButton.click();
+					break;
+				case 'ArrowLeft':
+					rewindButton.click();
+					break;
+				case 'KeyM':
+					video.muted = !video.muted;
+					log("Video Muted " + video.muted);
+					break;
+				default:
+					console.log(`Unknown key --> '${e.code}'`)
+					break;
+			}
+		});
+
+	</script>
 
 </body>
 </html>
