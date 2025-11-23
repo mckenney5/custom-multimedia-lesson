@@ -76,7 +76,7 @@ let state = {
 			// Get the new page name
 
 			// Set the iframe source
-			this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].name;
+			this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].path;
 
 		} else {
 			// Show an error
@@ -105,7 +105,7 @@ let state = {
 		}
 
 		// Set the iframe source
-		this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].name;
+		this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].path;
 	},
 
 	save: function(){
@@ -159,8 +159,8 @@ let state = {
 		if(confirmed){
 			this.pauseSave = true;
 			console.log("Resetting progress");
-			this.lessonFrame.src = this.data.pages[0].name + '?_cb=' + Date.now();
 			localStorage.removeItem("courseProgress");
+			this.lessonFrame.src = this.data.pages[0].name + '?_cb=' + Date.now();
 			// TODO check if we are debugging, if so, delete the saved log too
 			window.onbeforeunload = null;
 			window.location.reload();
@@ -368,11 +368,11 @@ let state = {
 			let response = null;
 			if(debugging){
 				console.log("Skipping cache for JSON");
-				response = await fetch("course_data.json", {
+				response = await fetch("lessons/course_data.json", {
 					cache: "no-store"
 				});
 			} else {
-				response = await fetch("course_data.json");
+				response = await fetch("lessons/course_data.json");
 			}
 			console.log("Loaded JSON");
 			const rawPages = await response.json();
@@ -380,6 +380,7 @@ let state = {
 			this.data.pages = rawPages.map(page => ({
 				// take the JSON, make a new object with those attributes (...) AND add others
 				...page,
+				path: `lessons/${page.name}`,
 				completed: false,
 				// TODO make this its own object to compare with completiton rules
 				scrolled: false,
