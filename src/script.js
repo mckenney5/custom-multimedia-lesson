@@ -169,9 +169,13 @@ let state = {
 
 	checkIfComplete: function() {
 		const page = this.data.pages[this.data.currentPageIndex];
+
+		// Calculate score ratio or set to zero (stops / by 0)
+		const score = page.maxScore > 0 ? page.score / page.maxScore : 0;
+
 		return (
 			page.watchTime >= page.completionRules.watchTime &&
-			page.score >= page.completionRules.score &&
+			score >= page.completionRules.score &&
 			page.scrolled === page.completionRules.scrolled &&
 			page.videoProgress >= page.completionRules.videoProgress
 		)
@@ -187,8 +191,13 @@ let state = {
 			if(this.data.progress >= this.data.pages.length){
 				//TODO check each page completion status too
 				pipwerks.SCORM.set("cmi.core.lesson_status", "completed");
-				// pipwerks.SCORM.set("cmi.core.score.raw", "100"); // <-- TODO tally up quiz scores
-				this.log("Course Completed!")
+
+				// Calculate score
+				const earnedScore = this.data.pages.reduce((acc, p) => acc + p.score, 0); // <-- what the user earned
+				const maxScore = this.data.pages.reduce((acc, p) => acc + p.maxScore, 0); // <-- max possible score
+				const grade = String((earnedScore / maxScore) * 100); // <-- percentage grade as a string
+				pipwerks.SCORM.set("cmi.core.score.raw", grade); // <-- Push the score to the LMS
+				this.log("Course Completed with a Grade of ", grade);
 			}
 
 			this.save();
@@ -208,9 +217,11 @@ let state = {
 		}
 		if(event.data.type === "QUIZ_SUBMITTED"){
 			this.log(page.name + " Quiz was submitted");
-			page.score = this.gradeQuizQuestions(page.questions, event.data.message);
+			const grades = this.gradeQuizQuestions(page.questions, event.data.message);
+			page.score = grades.score;
+			page.maxScore = grades.maxScore;
 			this.finalizePage();
-			this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_INFO", score: page.score, maxAttempts: page.completionRules.attempts - ++page.attempts  }, '*');
+			this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_INFO", score: page.score / page.maxScore, maxAttempts: page.completionRules.attempts - ++page.attempts  }, '*');
 		} else if(event.data.type === "QUIZ_ADD_QUESTIONS"){
 			// Page requests the quiz to be rendered from the JSON, and gets the rendered HTML returned
 			this.log(page.name + " Quiz questions added");
@@ -270,16 +281,16 @@ let state = {
 		});
 
 		const score = questions.reduce((acc, q) => acc + (q.isCorrect ? q.pointValue : 0), 0); // <-- check and add every correct answer. Add 0 if not correct
-		const maxPoints = questions.reduce((acc, q) => acc + q.pointValue, 0); // <-- tally all the possible points
+		const maxScore = questions.reduce((acc, q) => acc + q.pointValue, 0); // <-- tally all the possible points
 
-		if(maxPoints <= 0){
-			console.error("Max points set too low --> ", maxPoints);
+		if(maxScore <= 0){
+			console.error("Max score set too low --> ", maxScore);
 			return -1;
 		}
 
 		console.log(questions);
-		console.log(score/maxPoints);
-		return (score / maxPoints);
+		console.log(score/maxScore);
+		return ({score: score, maxScore: maxScore});
 	},
 
 	gradeQuizQuestions2: function(questions, responses){
@@ -375,9 +386,12 @@ let state = {
 				score: 0.0,
 				watchTime: 0,
 				attempts: 0,
-				videoProgress: 0.0
-
+				videoProgress: 0.0,
+				maxScore: page.type === 'quiz' //if it is a quiz, tally up all points
+					? page.questions.reduce((acc, q) => acc + q.pointValue, 0.0)
+					: 0.0
 			}));
+
 		} catch(error){
 			console.error("Failed to load course data: ", error);
 		}

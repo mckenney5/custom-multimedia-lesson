@@ -48,6 +48,15 @@
 			"pointValue": 1,
 			"isCorrect": null,
 			"choices": []
+		},
+		{
+			"id": "Q4",
+			"text": "Which of the following are common does of an Epi Pen?",
+			"correctAnswers": ["0.3mg", "0.15mg"],
+			"possibleAnswers": ["0.15mg", "1mg", "0.3mg", "0.4g"],
+			"pointValue": 0.5,
+			"isCorrect": null,
+			"choices": []
 		}
 	]
 },
