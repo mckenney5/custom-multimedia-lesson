@@ -135,7 +135,8 @@ let state = {
 		return (
 			page.watchTime >= page.completionRules.watchTime &&
 			page.score >= page.completionRules.score &&
-			page.scrolled === page.completionRules.scrolled
+			page.scrolled === page.completionRules.scrolled &&
+			page.videoProgress >= page.completionRules.videoProgress
 		)
 	},
 
@@ -174,8 +175,10 @@ let state = {
 		} else if(event.data.type === "PAGE_SCROLLED"){
 			this.log(page.name + " Page was scrolled all the way down");
 			page.scrolled = event.data.scrolled;
+		} else if(event.data.type === "VIDEO_PROGRESS"){
+			page.videoProgress = event.data.message;
 		} else {
-			console.log("Unknown message");
+			console.log("Unknown message --> ", event.data);
 			return;
 		}
 		this.finalizePage();
@@ -325,7 +328,8 @@ let state = {
 				scrolled: false,
 				score: 0.0,
 				watchTime: 0,
-				attempts: 0
+				attempts: 0,
+				videoProgress: 0.0
 
 			}));
 		} catch(error){

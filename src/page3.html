@@ -195,10 +195,10 @@
 
 		video.addEventListener('ended', function() {
 			playButton.textContent = "Play";
-			video.currentTime = 0;
-			if(videoCompletion == 1) return;
-			videoCompletion = 1;
-			videoFurthest = 1;
+			video.currentTime = 0.0;
+			if(videoCompletion == 1.0) return;
+			videoCompletion = 1.0;
+			videoFurthest = 1.0;
 			window.parent.postMessage({ type: 'VIDEO_PROGRESS', message: videoCompletion }, '*');
 		});
 
