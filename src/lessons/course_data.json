@@ -1,6 +1,18 @@
 [
 {
 	"type": "article",
+	"name": "directions.html",
+	"articleText": "Welcome to the course...",
+	"completionRules": {
+		"watchTime": 5,
+		"score": 0.0,
+		"scrolled": true,
+		"attempts": 1,
+		"videoProgress" : 0.0
+	}
+},
+{
+	"type": "article",
 	"name": "page1.html",
 	"articleText": "Welcome to the course...",
 	"completionRules": {
@@ -93,5 +105,17 @@
 			"choices": []
 		}
 	]
+},
+{
+	"type": "article",
+	"name": "finish.html",
+	"articleText": "Welcome to the course...",
+	"completionRules": {
+		"watchTime": 2,
+		"score": 0.0,
+		"scrolled": false,
+		"attempts": 1,
+		"videoProgress" : 0.0
+	}
 }
 ]

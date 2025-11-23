@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title></title>
+	</head>
+	<body>
+		<h1>Lesson Directions</h1>
+		<main>
+		<h2 id="welcome">
+		Welcome!
+		</h2><br>
+		<p>
+		This is an online interactive course. There are multiple ways you can interact with it.<br>
+		You must scroll to the bottom of the page to continue.
+		<br><br>
+		<h2>Navigation</h2>
+		Use the arrows (&larr; and &rarr;) on the top center of the screen to go back and forth in this course<br>
+		<img id="photo" src="../media/nav.button.png" alt="button with left arrow"><img id="photo" src="../media/nav.button.png" alt="button with right arrow" style="transform: scaleX(-1);">
+		<br><br>
+		Use the Reset button if you want to start over or get stuck<br>
+		<img id="photo" src="../media/reset.button.png" alt="button with reset on it. Looks different from the other buttons">
+		<br><br>
+		Banners will appear to let you know that you are ready to move to the next page or remind you to complete the page.<br>
+		<img id="photo" src="../media/banner.png" alt="A red banner at the top of a page stating 'Please complete all items on the page'">
+		<br><br>
+		<h2>Articles</h2>
+		If your online course has articles, the text will display in the center window. Most articles have rules like 'how long' you have been on the page, and 'did you reach the bottom'? Once these rules are met, you may continue. The course will tell you this with a banner at the top.<br>
+		<video src="../media/article.webm" alt="A video showing that you must read the screen and make it to the bottom" controls width="640" height="360"></video>
+		<br><br>
+		<h2>Quizzes</h2>
+		If your online course has quizzes, questions will be rendered to the screen when you first open the page. You must press submit at the bottom to send your answers for review. Most quizzes have rules like 'minimum score' and 'attempts'. Once you click submit, your score will be displayed on the screen and its value will be saved. Refreshing the page before clicking submit may DELETE the answers you put thus far.<br>
+		<video src="../media/quiz.webm" alt="A video showing that you must read the screen and make it to the bottom" controls width="640" height="360"></video>
+		<br><br>
+		<h2>Videos</h2>
+		If your online course has videos, a special video player (not like the ones you see on this page) will appear on your screen. Videos might have rules like 'how long' you need to be on the page and 'watch completion percentage' to see how much of the video you watched. The controls are similar to other video players, but it does not have a click and drag seek. Certain keyboard shortcuts work on the page like SPACE to play / pause, M to mute, and arrow keys to seek.<br>
+		<video src="../media/videoplayer.webm" alt="A video showing buttons and interactions on the player. Things like play, pause, minus 5 seconds rewind and fastforward, speed, and fullscreen" controls width="640" height="360"></video>
+		<br><br>
+		Good luck and enjoy your course!
+		</p>
+		</main>
+		<footer></footer>
+		<script>
+			window.addEventListener('scroll', function onScroll() {
+			// Tracks if the user has scrolled all the way down
+				if (window.scrollY + window.innerHeight >= document.body.scrollHeight) {
+					window.parent.postMessage({ type: 'PAGE_SCROLLED', scrolled: true }, '*');
+					window.removeEventListener('scroll', onScroll);
+				}
+			});
+			function init(){
+				// Start listening for messages like name and grade
+				window.addEventListener('message', (event) => {
+					if(event.origin != 'localhost'){
+						console.error("Unknown orgin " + event.origin);
+						//return;
+					}
+
+					if(event.data.type === "GET_STUDENT_DATA"){
+						document.getElementById("welcome").innerHTML = `Welcome ${event.data.name}!`;
+					}
+				});
+				// send data requests to the parent
+				window.parent.postMessage({type: 'GET_STUDENT_DATA', message: ""}, '*');
+			}
+
+			init();
+
+	</script>
+	</body>
+</html>

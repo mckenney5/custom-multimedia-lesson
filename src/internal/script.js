@@ -14,6 +14,7 @@ let state = {
 	infoBanner: null, // Will hold the banner element
 	pauseSave: false, // Flag to pause the save on a reset
 	test: null, // Used for debugging
+	studentName: "",
 
 	init: function(frameId, bannerId) {
 
@@ -23,6 +24,7 @@ let state = {
 		if(lmsConnected){
 			this.log("Connected to the LMS");
 			let status = pipwerks.SCORM.get("cmi.core.lesson_status");
+			this.studentName = pipwerks.SCORM.get("cmi.core.student_name").split(',')[1] || "";
 			if(status === "not attempted" || status === "unknown"){
 				// Tell the LMS that the user just started the lesson
 				pipwerks.SCORM.set("cmi.core.lesson_status", "incomplete");
@@ -38,7 +40,7 @@ let state = {
 		this.infoBanner.addEventListener("click", () => {this.infoBanner.style.display = "none"});
 
 		// load last webpage we were on
-		this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].name;
+		this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].path;
 		setInterval(() => {
 			if(++this.data.totalCourseSeconds % 60 == 0){
 				if(!debugging) this.save();
@@ -68,7 +70,7 @@ let state = {
 			// Check if we are at the end
 			if (this.data.currentPageIndex >= this.data.pages.length) {
 				// We're on the last page, maybe show a "Course Complete" message
-				alert("Congratulations! You have finished the course.");
+				alert("Congratulations! You have finished the course! You may close the window");
 				this.data.currentPageIndex = this.data.pages.length - 1; // Stay on last page
 				return; // Don't try to load a page that doesn't exist
 			}
@@ -234,6 +236,12 @@ let state = {
 			page.scrolled = event.data.scrolled;
 		} else if(event.data.type === "VIDEO_PROGRESS"){
 			page.videoProgress = event.data.message;
+		} else if(event.data.type === "GET_STUDENT_DATA"){
+			// Returns name and current grade so far
+			const earnedScore = this.data.pages.reduce((acc, p) => acc + p.score, 0); // <-- what the user earned
+			const maxScore = this.data.pages.reduce((acc, p) => acc + p.maxScore, 0); // <-- max possible score
+			const grade = String((earnedScore / maxScore) * 100); // <-- percentage grade as a string
+			this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA", name: this.studentName, grade: grade }, '*');
 		} else {
 			console.log("Unknown message --> ", event.data);
 			return;
