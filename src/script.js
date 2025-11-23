@@ -197,7 +197,7 @@ let state = {
 				const maxScore = this.data.pages.reduce((acc, p) => acc + p.maxScore, 0); // <-- max possible score
 				const grade = String((earnedScore / maxScore) * 100); // <-- percentage grade as a string
 				pipwerks.SCORM.set("cmi.core.score.raw", grade); // <-- Push the score to the LMS
-				this.log("Course Completed with a Grade of ", grade);
+				this.log("Course Completed with a Grade of " + grade);
 			}
 
 			this.save();
