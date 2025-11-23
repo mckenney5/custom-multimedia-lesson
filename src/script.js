@@ -16,7 +16,23 @@ let state = {
 	test: null, // Used for debugging
 
 	init: function(frameId, bannerId) {
-	// finds the required iframe and banner
+
+		// Initalize SCORM Connection
+		let lmsConnected = pipwerks.SCORM.init();
+
+		if(lmsConnected){
+			this.log("Connected to the LMS");
+			let status = pipwerks.SCORM.get("cmi.core.lesson_status");
+			if(status === "not attempted" || status === "unknown"){
+				// Tell the LMS that the user just started the lesson
+				pipwerks.SCORM.set("cmi.core.lesson_status", "incomplete");
+				pipwerks.SCORM.save();
+			}
+		} else {
+			this.log("Unable to connect to the LMS! Running in standalone mode");
+		}
+
+		// finds the required iframe and banner
 		this.lessonFrame = document.getElementById(frameId);
 		this.infoBanner = document.getElementById(bannerId);
 		this.infoBanner.addEventListener("click", () => {this.infoBanner.style.display = "none"});
@@ -97,20 +113,41 @@ let state = {
 		if(this.pauseSave){ console.log("Ignoring Save"); return;}
 
 		let stateAsString = JSON.stringify(this.data);
+
+		// Save locally as a back up
 		localStorage.setItem("courseProgress", stateAsString);
-		//TODO save the log as a seperate storage item
-		this.log("Course Progress Saved");
+		this.log("Course Progress Saved Locally");
+
+		// Try to save with the LMS (char limit of 4000)
+		let success = pipwerks.SCORM.set("cmi.suspend_data", stateAsString);
+		if(success){
+			pipwerks.SCORM.save();
+			this.log("Saved progress in LMS");
+		} else {
+			this.log("LMS Save FAILED");
+		}
+
 	},
 
 	loadSave: function(){
 	// loads the state from the local browser
-		let stateAsString = localStorage.getItem("courseProgress");
+		// Try to load from the LMS first
+		let stateAsString = pipwerks.SCORM.get("cmi.suspend_data");
+
+		// If that fails, try local backup
+		if(!stateAsString){
+			stateAsString = localStorage.getItem("courseProgress");
+		}
 
 		if(stateAsString) {
-			let loadedState = JSON.parse(stateAsString);
-			this.log("Loaded progress");
-			//this.data = loadedState;
-			Object.assign(this.data, loadedState); // <-- merge data and the loaded state
+			// If data is there, try to load it
+			try {
+				let loadedState = JSON.parse(stateAsString);
+				this.log("Loaded progress from the LMS/Local Storage");
+				Object.assign(this.data, loadedState); // <-- merge data and the loaded state
+			} catch(e) {
+				console.error("Unable to parse saved data --> ", e);
+			}
 		} else {
 			this.log("Started new course");
 		}
@@ -142,9 +179,18 @@ let state = {
 
 	finalizePage: function(){
 		const page = this.data.pages[this.data.currentPageIndex];
-		if(this.checkIfComplete() && this.data.currentPageIndex == this.data.progress){
+		if(this.checkIfComplete() && this.data.currentPageIndex === this.data.progress){
 			page.completed = true;
 			this.data.progress += 1;
+
+			// Check if the course is done
+			if(this.data.progress >= this.data.pages.length){
+				//TODO check each page completion status too
+				pipwerks.SCORM.set("cmi.core.lesson_status", "completed");
+				// pipwerks.SCORM.set("cmi.core.score.raw", "100"); // <-- TODO tally up quiz scores
+				this.log("Course Completed!")
+			}
+
 			this.save();
 			this.log(`Page ${this.data.currentPageIndex} completed`);
 			this.bannerMessage("This page is completed. You may continue", false);
@@ -357,6 +403,10 @@ window.onbeforeunload = () => {
 	if(!state.data.pages[state.data.currentPageIndex].completed){
 		return "Your progress on the current page my be lost.";
 	}
+};
+
+window.onunload = () => {
+	pipwerks.SCORM.quit();
 };
 
 function test(){
