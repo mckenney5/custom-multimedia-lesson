@@ -16,6 +16,7 @@ This code is licensed under the GNU GPL v3. See 'LICENSE' for details.
 
 ## Compiling and Testing
 Point a web server to index.html
+
 To spin up a quick web server try `python3 -m http.server 8080` in the same folder
 
 
