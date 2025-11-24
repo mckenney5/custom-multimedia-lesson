@@ -38,10 +38,10 @@ To make the package:
 - You now have a zip file called 'test.zip' that that _should_ function as a SCORM 1.2 course
 - Test your course on an LMS
 
-#### Tested LMSs via SCROM 1.2
+#### Tested LMSs via SCORM 1.2
 | LMS         | Status  | Notes     |
 |-------------|:-------:|-----------|
-| SCROM Cloud | Working | Forgiving |
+| SCORM Cloud | Working | Forgiving |
 | Schoology   | Working | Strict    |
 | Moodle      | -       | -         |
 | D2L         | -       | -
