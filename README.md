@@ -16,8 +16,8 @@ This code is licensed under the GNU GPL v3. See 'LICENSE' for details.
 
 ## Compiling and Testing
 Point a web server to index.html. The console will complain of no LMS connection. It will work on stand alone mode.
-You can also package it into a SCORM course.
-To spin up a quick web server try `python3 -m http.server 8080` in the same folder. Can also go into the tool folder and run `bash testing_web_server.sh`
+You can also package it into a [SCORM 1.2](https://scorm.com/scorm-explained/technical-scorm/scorm-12-overview-for-developers/) course.
+To spin up a quick web server try `python3 -m http.server 8080` in the same folder. You can also go into the tool folder and run `bash testing_web_server.sh`
 
 ### SCORM Packaging
 Shared in this repo are tools that will help you package the SCORM course so you do not have to do it by hand.
@@ -36,6 +36,15 @@ To make the package:
 - Place [this SCORM wrapper](https://raw.githubusercontent.com/pipwerks/scorm-api-wrapper/refs/heads/master/src/JavaScript/SCORM_API_wrapper.js) program into the folder
 - Run `bash make.sh`. It will copy the src files and generate the manifest
 - You now have a zip file called 'test.zip' that that _should_ function as a SCORM 1.2 course
+- Test your course on an LMS
+
+#### Tested LMSs via SCROM 1.2
+| LMS         | Status  | Notes     |
+|-------------|:-------:|-----------|
+| SCROM Cloud | Working | Forgiving |
+| Schoology   | Working | Strict    |
+| Moodle      | -       | -         |
+| D2L         | -       | -
 
 
 ## How to Contribute
