@@ -15,6 +15,7 @@ let state = {
 	pauseSave: false, // Flag to pause the save on a reset
 	test: null, // Used for debugging
 	studentName: "",
+	sessionStartTime: 0, // Logs how long the student has been on today
 
 	init: function(frameId, bannerId) {
 		// Set up LMS connection
@@ -22,6 +23,9 @@ let state = {
 
 		// Set the students name
 		this.studentName = lms.getStudentName().split(',')[1] || ""; // returns first name
+
+		// Set the date and time of us starting today. TODO consider not using the user for time
+		this.sessionStartTime = Date.now();
 
 		// finds the required iframe and banner
 		this.lessonFrame = document.getElementById(frameId);
@@ -153,6 +157,16 @@ let state = {
 			window.onbeforeunload = null;
 			window.location.reload();
 		}
+	},
+
+	quit: function(){
+		if(!this.sessionStartTime) return; // <-- if not initialized
+
+		const sessionDuration = Date.now() - this.sessionStartTime;
+
+		lms.setSessionTime(sessionDuration);
+
+		lms.quit();
 	},
 
 	checkIfComplete: function() {
@@ -429,6 +443,11 @@ let lms = {
 		return this.initialized;
 	},
 
+	setSessionTime: function(ms){
+		if(!this.initialized) return false;
+		this.driver.setSessionTime(ms);
+	},
+
 	reset: function(){
 		if(!this.initialized) return false;
 		return this.driver.reset();
@@ -509,6 +528,21 @@ let Scorm12Adapter = {
 		return status ? true : this._throwError();
 	},
 
+	_formatTime: function(ms){
+		// SCORM 1.2 requires HHHH:MM:SS.SS
+		let totalSeconds = ms / 1000;
+		let hh = Math.floor(totalSeconds / 3600);
+		let mm = Math.floor((totalSeconds % 3600) / 60);
+		let ss = (totalSeconds % 60).toFixed(2);
+
+		if(hh < 1000) hh = "00" + hh;
+		if(hh.length > 4) hh = hh.substr(hh.length - 4);
+		if(mm < 10) mm = "0" + mm;
+		if(ss < 10) ss = "0" + ss;
+
+		return `${hh}:${mm}:${ss}`;
+	},
+
 	// --- PUBLIC API ---
 	init: function(){
 		// Initalize SCORM Connection
@@ -519,6 +553,11 @@ let Scorm12Adapter = {
 			this._commit();
 		}
 		this.initialized = true;
+	},
+
+	setSessionTime: function(ms){
+		this._set("cmi.core.session_time", this._formatTime(ms));
+		// This is usually run before the quit function, so no commit here
 	},
 
 	reset: function(){
@@ -617,6 +656,10 @@ let LocalStorageAdapter = {
 		this.initialized = true;
 	},
 
+	setSessionTime: function(ms){
+		this._set("Session Time", `${(ms/1000).toFixed(2)}s`);
+	},
+
 	reset: function(){
 		this._log("Clearing all saved data");
 		Object.keys(localStorage).forEach(k => {
@@ -679,7 +722,9 @@ window.onbeforeunload = () => {
 };
 
 window.onunload = () => {
-	lms.quit();
+	// TODO handle this better with mobile
+	// See: https://developer.mozilla.org/en-US/docs/Web/API/Window/unload_event
+	state.quit();
 };
 
 function test(){
