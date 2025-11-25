@@ -1,4 +1,4 @@
-let debugging = true;
+const debugging = true;
 let state = {
 	// --- Properties (Data) ---
 	data: {
@@ -17,22 +17,11 @@ let state = {
 	studentName: "",
 
 	init: function(frameId, bannerId) {
+		// Set up LMS connection
+		if(!lms.initialized) lms.init();
 
-		// Initalize SCORM Connection
-		let lmsConnected = pipwerks.SCORM.init();
-
-		if(lmsConnected){
-			this.log("Connected to the LMS");
-			let status = pipwerks.SCORM.get("cmi.core.lesson_status");
-			this.studentName = pipwerks.SCORM.get("cmi.core.student_name").split(',')[1] || "";
-			if(status === "not attempted" || status === "unknown"){
-				// Tell the LMS that the user just started the lesson
-				pipwerks.SCORM.set("cmi.core.lesson_status", "incomplete");
-				pipwerks.SCORM.save();
-			}
-		} else {
-			this.log("Unable to connect to the LMS! Running in standalone mode");
-		}
+		// Set the students name
+		this.studentName = lms.getStudentName().split(',')[1] || ""; // returns first name
 
 		// finds the required iframe and banner
 		this.lessonFrame = document.getElementById(frameId);
@@ -41,6 +30,8 @@ let state = {
 
 		// load last webpage we were on
 		this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].path;
+
+		// track the time in the course and page
 		setInterval(() => {
 			if(++this.data.totalCourseSeconds % 60 == 0){
 				if(!debugging) this.save();
@@ -116,30 +107,24 @@ let state = {
 
 		let stateAsString = JSON.stringify(this.data);
 
-		// Save locally as a back up
-		localStorage.setItem("courseProgress", stateAsString);
-		this.log("Course Progress Saved Locally");
+		// Save locally as a back up TODO see if still needed
+		//localStorage.setItem("courseProgress", stateAsString);
+		//this.log("Course Progress Saved Locally");
 
-		// Try to save with the LMS (char limit of 4000)
-		let success = pipwerks.SCORM.set("cmi.suspend_data", stateAsString);
-		if(success){
-			pipwerks.SCORM.save();
-			this.log("Saved progress in LMS");
-		} else {
-			this.log("LMS Save FAILED");
-		}
+		// Try to save with the LMS
+		lms.saveData(stateAsString);
 
 	},
 
 	loadSave: function(){
 	// loads the state from the local browser
 		// Try to load from the LMS first
-		let stateAsString = pipwerks.SCORM.get("cmi.suspend_data");
+		let stateAsString = lms.loadData();
 
 		// If that fails, try local backup
-		if(!stateAsString){
+		/*if(!stateAsString){
 			stateAsString = localStorage.getItem("courseProgress");
-		}
+		}*/
 
 		if(stateAsString) {
 			// If data is there, try to load it
@@ -161,7 +146,8 @@ let state = {
 		if(confirmed){
 			this.pauseSave = true;
 			console.log("Resetting progress");
-			localStorage.removeItem("courseProgress");
+			//localStorage.removeItem("courseProgress");
+			lms.reset(); // <-- set the saved data to nothing
 			this.lessonFrame.src = this.data.pages[0].name + '?_cb=' + Date.now();
 			// TODO check if we are debugging, if so, delete the saved log too
 			window.onbeforeunload = null;
@@ -192,13 +178,13 @@ let state = {
 			// Check if the course is done
 			if(this.data.progress >= this.data.pages.length){
 				//TODO check each page completion status too
-				pipwerks.SCORM.set("cmi.core.lesson_status", "completed");
+				lms.setStatus("completed");
 
 				// Calculate score
 				const earnedScore = this.data.pages.reduce((acc, p) => acc + p.score, 0); // <-- what the user earned
 				const maxScore = this.data.pages.reduce((acc, p) => acc + p.maxScore, 0); // <-- max possible score
 				const grade = String((earnedScore / maxScore) * 100); // <-- percentage grade as a string
-				pipwerks.SCORM.set("cmi.core.score.raw", grade); // <-- Push the score to the LMS
+				lms.setScore(earnedScore, maxScore); // <-- send course score to the LMS
 				this.log("Course Completed with a Grade of " + grade);
 			}
 
@@ -210,7 +196,7 @@ let state = {
 		return false;
 	},
 
-	handleMessage: function(){
+	handleMessage: function(event){
 		//console.log(event);
 		const page = this.data.pages[this.data.currentPageIndex];
 		if(event.origin != window.location.origin){
@@ -275,7 +261,7 @@ let state = {
 		//compares answers to response, marks them correct or incorrect, adds up points of the correct ones, adds up total points, returns the score
 		// questions is an object, responses are a 2D array of strings
 		this.test = responses;
-		questions.forEach((q, i) => q.choices = responses[q.id] || []); // <-- add responses to the question to save for later TODO check if choices[i] is needed
+		questions.forEach(q => q.choices = responses[q.id] || []); // <-- add responses to the question to save for later TODO check if choices[i] is needed
 		//TODO consider merging both lists and seeing if the neighbor element is the same?
 		const sortAndLower = arr => // <-- takes in an array (arr), returns either the sorted lowercase array (arr) or empty []. slice makes a new copy, map makes all time change
 			(arr || []).slice().map(s => String(s).toLowerCase()).sort();
@@ -407,9 +393,273 @@ let state = {
 	}
 };
 
-// --- End of State Object ---
+let lms = {
+	// Generic object that helps translate LMS actions to their own API
+	initialized: false,
+	driver: null,
+
+	init: function(lmsType="detect") {
+		// set or detects the LMS type
+		if(lmsType === "detect"){
+			let connected = false;
+			if(window.pipwerks){
+				// if pipwerks wrapper is loaded
+					connected = pipwerks.SCORM.init();
+			}
+			if(connected){
+				const version = pipwerks.SCORM.version; // "1.2" or "2004"
+				return this.init(`SCORM ${version}`); // if version is null it goes to the else statement
+			} else {
+					return this.init("standalone");
+			}
+		} else if(lmsType == "SCORM 1.2"){
+			this.driver = Scorm12Adapter;
+			this.driver.init();
+			this.initialized = true;
+		} else if(lmsType == "SCORM 2004"){
+			console.warn("SCORM 2004 is not supported yet. Reverting to standalone.");
+			this.init("standalone");
+		} else {
+			// Do standalone mode - no LMS
+			this.driver = LocalStorageAdapter;
+			this.driver.init();
+			this.initialized = true;
+		}
+		console.log(`LMS initialized using ${this.driver.name} driver.`);
+		return this.initialized;
+	},
+
+	reset: function(){
+		if(!this.initialized) return false;
+		return this.driver.reset();
+	},
+
+	getStudentName: function(){
+		if(!this.initialized) return false;
+		return this.driver.getStudentName();
+	},
+
+	saveData: function(dataString){
+		if(!this.initialized) return false;
+		return this.driver.saveData(dataString);
+	},
+
+	loadData: function(){
+		if(!this.initialized) return null;
+		return this.driver.loadData();
+	},
+
+	setScore: function(score, maxScore){
+		if(!this.initialized) return false;
+		this.driver.setScore(score, maxScore);
+	},
+
+	setStatus: function(status){
+		// status: "passed", "failed", "completed", "incomplete"
+		if(!this.initialized) return false;
+		this.driver.setStatus(status);
+	},
+
+	quit: function(){
+		if(!this.initialized) return false;
+		this.driver.quit();
+	}
+
+};
+
+let Scorm12Adapter = {
+	// converts commands to SCORM 1.2
+	name: "SCORM 1.2",
+	initialized: false,
+
+	// --- Private Properties ---
+	_saveLimit: 4095, // <-- how many chars the suspend data can be
+	_validStatusValues : ["passed", "completed", "failed", "incomplete", "browsed", "not attempted"],
+
+	// --- Private Methods ---
+	_throwError: function(){
+		let errCode = pipwerks.SCORM.debug.getCode();
+		let errInfo = pipwerks.SCORM.debug.getInfo(errCode);
+		let errDiag = pipwerks.SCORM.debug.getDiagnosticInfo(errCode);
+		const err = new Error(`${this.name} LMS Errror [${errCode}] '${errInfo}'. Diagnostic Details: '${errDiag}'.`);
+		console.error(`${err}\nStack --> ${err.stack}`);
+		return (errCode == "0"); //return true on no error
+	},
+
+	_dataOverLimit: function(data, limit){
+		if(data.length > limit){
+			console.error(`Save data over the limit of ${limit}! Save rejected.`);
+			return true;
+		} else if(data.length >= (limit * 0.9)){
+			console.warn(`Saved data within ${limit - data.length} chars of the max size of ${limit}`);
+		}
+		return false;
+	},
+
+	_commit: function(){
+		if(debugging) console.log("Sending changes to LMS");
+		const status = pipwerks.SCORM.save();
+		if(!status) this._throwError();
+		return status;
+	},
+
+	_set: function(key, value){
+		// does error handling for setting data. Returns true on no error
+		const status = pipwerks.SCORM.set(key, value);
+		return status ? true : this._throwError();
+	},
+
+	// --- PUBLIC API ---
+	init: function(){
+		// Initalize SCORM Connection
+		let status = pipwerks.SCORM.get("cmi.core.lesson_status");
+		if(status === "not attempted" || status === "unknown"){
+			// Tell the LMS that the user just started the lesson
+			this._set("cmi.core.lesson_status", "incomplete");
+			this._commit();
+		}
+		this.initialized = true;
+	},
+
+	reset: function(){
+		console.log("Reseting SCORM variables...");
+
+		// 1. Wipe the course data
+		this._set("cmi.suspend_data", "");
+
+		// 2. Reset Status to "incomplete" (Removes the 'Completed' checkmark)
+		// Note: Some LMSs prefer "not attempted", but "incomplete" is safer while the window is open.
+		this._set("cmi.core.lesson_status", "incomplete");
+
+		// 3. Wipe the Score
+		this._set("cmi.core.score.raw", "");
+		this._set("cmi.core.score.max", "");
+		this._set("cmi.core.score.min", "");
+
+		// 4. Clear the "Exit" state so the LMS doesn't try to resume next time
+		this._set("cmi.core.exit", "");
+
+		// 5. Force the LMS to save these changes immediately
+		return this._commit();
+	},
+
+	getStudentName: function() {
+		return pipwerks.SCORM.get("cmi.core.student_name");
+	},
+
+	saveData: function(data){
+		// cmi.suspend_data limit is ~4096 chars
+		if(this._dataOverLimit(data, this._saveLimit)){ // check data size and truncate
+			return false;
+		}
+		let success = this._set("cmi.suspend_data", data);
+		if(success) this._commit();
+		return success;
+	},
+
+	loadData: function(){
+			return pipwerks.SCORM.get("cmi.suspend_data");
+	},
+
+	setScore: function(score, maxScore){
+		// SCORM 1.2 expects an int (percent), not a float
+		// Input: 0.85, 1.0 -> Output: 85
+		let raw = Math.round((score / maxScore) * 100);
+		this._set("cmi.core.score.raw", raw);
+		this._set("cmi.core.score.max", 100);
+		this._set("cmi.core.score.min", 0);
+		this._commit();
+	},
+
+	setStatus: function(status){
+		// SCORM 1.2 uses cmi.core.lesson_status
+		// Valid values: "passed", "completed", "failed", "incomplete", "browsed", "not attempted"
+		if(!this._validStatusValues.includes(status)){
+			console.error(`Invalid Lesson Status '${status}'. Valid Status --> `, this._validStatusValues);
+			return false;
+		}
+		let success = this._set("cmi.core.lesson_status", status);
+		if(success) this._commit();
+		return success;
+	},
+
+	quit: function(){
+		pipwerks.SCORM.quit();
+		console.log("Disconnected from the LMS");
+	}
+};
+
+let LocalStorageAdapter = {
+	// Adapter for running without an LMS (Standalone Mode)
+	name: "Local Storage",
+	initialized: false,
+
+	// --- Private Properties ---
+	_prefix: "course_data_", // Helps avoid conflicts with other websites
+
+	// --- Private Methods ---
+	_log: function(msg){
+		console.log(`[${this.name}] ${msg}`);
+	},
+
+	_set: function(key, value){
+		try {
+			localStorage.setItem(this._prefix + key, value);
+		} catch(e) {
+			console.error(e);
+			return false;
+		}
+		return true;
+	},
+
+	// --- PUBLIC API ---
+	init: function(){
+		this.initialized = true;
+	},
+
+	reset: function(){
+		this._log("Clearing all saved data");
+		Object.keys(localStorage).forEach(k => {
+			if(k.startsWith(this._prefix)){
+					localStorage.removeItem(k);
+			}
+		});
+	},
+
+	getStudentName: function() {
+		return "";
+	},
+
+	saveData: function(data){
+		this._log("Saving data to local browser storage...");
+		return this._set("suspend_data", data);
+	},
+
+	loadData: function(){
+		this._log("Loading data...");
+		return localStorage.getItem(this._prefix + "suspend_data");
+	},
+
+	setScore: function(score, maxScore){
+		this._log(`Setting Score: ${score}/${maxScore}`);
+		this._set("score", score);
+	},
+
+	setStatus: function(status){
+		this._log(`Setting Status: ${status}`);
+		this._set("status", status);
+		return true;
+	},
+
+	quit: function(){
+		this._log("Session ended");
+	}
+};
+
+// --- End of Objects ---
 
 window.onload = async () => {
+	lms.init();
 	await state.loadCourseData();
 	state.loadSave();
 	state.init("lesson-frame", "info-banner");
@@ -417,7 +667,7 @@ window.onload = async () => {
 };
 
 window.onbeforeunload = () => {
-	if(state.data.pages || state.data.pages.length === 0){
+	if(!state.data.pages || state.data.pages.length === 0){
 		console.log("pages not loaded");
 		state.save();
 		return;
@@ -429,7 +679,7 @@ window.onbeforeunload = () => {
 };
 
 window.onunload = () => {
-	pipwerks.SCORM.quit();
+	lms.quit();
 };
 
 function test(){
