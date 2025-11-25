@@ -488,7 +488,7 @@ let Scorm12Adapter = {
 
 	_dataOverLimit: function(data, limit){
 		if(data.length > limit){
-			console.error(`Save data over the limit of ${limit}! Save rejected.`);
+			console.error(`Save data of ${data.length} chars is over the limit of ${limit}! Save rejected.`);
 			return true;
 		} else if(data.length >= (limit * 0.9)){
 			console.warn(`Saved data within ${limit - data.length} chars of the max size of ${limit}`);
