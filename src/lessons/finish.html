@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title></title>
+	</head>
+	<body>
+		<h1>Congrats!</h1>
+		<main>
+		<h2 id="welcome">
+		You completed the course! Good job!
+		</h2><br>
+		<p>
+		It is safe to close this window.
+		<br><br>
+		</main>
+		<footer></footer>
+		<script>
+	function init(){
+		// Start listening for messages like name and grade
+		window.addEventListener('message', (event) => {
+			if(event.origin != 'localhost'){
+				console.error("Unknown orgin " + event.origin);
+				//return;
+			}
+
+			if(event.data.type === "GET_STUDENT_DATA"){
+				document.getElementById("welcome").innerHTML = `You completed the course with a ${Math.floor(event.data.grade)}%!<br>Good job ${event.data.name}!`;
+			}
+		});
+		// send data requests to the parent
+		window.parent.postMessage({type: 'GET_STUDENT_DATA', message: ""}, '*');
+	}
+
+	init();
+		</script>
+	</body>
+</html>
