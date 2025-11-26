@@ -6,6 +6,8 @@ let state = {
 		currentPageIndex: 0,
 		progress: 0, // Sets the furthest we have been
 		totalCourseSeconds: 0,
+		courseRules: {}, // Holds overall course rules like miniumum time, passing grade or just 'mark complete'
+
 		log: [],
 	},
 	// --
@@ -16,6 +18,7 @@ let state = {
 	test: null, // Used for debugging
 	studentName: "",
 	sessionStartTime: 0, // Logs how long the student has been on today
+	initialized: false,
 
 	init: function(frameId, bannerId) {
 		// Set up LMS connection
@@ -45,39 +48,105 @@ let state = {
 			this.finalizePage();
 
 		}, 1000);
+		this.initialized = true;
+	},
+
+	handleLastPage: function(){
+		if(this.checkCourseCompletion()){
+			// if all the course rules are met
+
+			// Calculate score
+			const grade = this.calculateOverallGrade();
+			const gradeString = String(grade.ratio * 100); // <-- percentage grade as a string
+			this.log("Course finished with a Grade of " + gradeString);
+
+			lms.setScore(grade.earnedScore, grade.maxScore); // <-- send course score to the LMS
+
+			const minimumGrade = this.data.courseRules.minimumGrade;
+			const completeOnly = this.data.courseRules.completeOnly;
+			const studentsCanFail = this.data.courseRules.studentsCanFail;
+
+			if(completeOnly){
+				lms.setStatus("completed");
+			} else if(studentsCanFail){
+				if(grade.ratio < minimumGrade){
+					lms.setStatus("failed");
+				} else {
+					lms.setStatus("passed");
+				}
+			} else {
+				// we made it to the end and the student did not do well enough
+				// break the sad news, restart the course
+				alert(`You did not score high enough (you got a ${gradeString}% and needed a ${grade.ratio * 100}%). Click okay to retry`);
+				this.reset(); // TODO find a nicer way to do this and probably log attempts
+			}
+
+			// Show the last page
+			this.data.currentPageIndex = this.data.pages.length -1 ;
+			this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].path;
+			return true;
+		} else {
+			return false;
+		}
+	},
+
+	finalizePage: function(){
+		const page = this.data.pages[this.data.currentPageIndex];
+		if(this.checkIfComplete() && this.data.currentPageIndex === this.data.progress && page.completed === false){
+			page.completed = true;
+			this.data.progress += 1;
+			this.save();
+			this.log(`Page ${this.data.currentPageIndex} completed`);
+			this.bannerMessage("This page is completed. You may continue", false);
+		} else {
+			return false;
+		}
+		return false;
+	},
+
+	advancePage: function(){
+		// Can you tell I had so many off by one bugs?
+		const lastPage = this.data.pages.length-1;
+		const secondToLastPage = lastPage -1;
+		const currentPage = this.data.currentPageIndex
+
+		if(currentPage === secondToLastPage){
+			// see if we can finish the course
+			if(this.checkCourseCompletion()){
+				this.handleLastPage();
+			} else {
+				this.bannerMessage("You have not finished all course requirements. Review your work and try again");
+			}
+		} else if(currentPage === lastPage){
+			// recheck the final course completion
+		} else {
+			// if the next page is just another page
+			this.data.currentPageIndex += 1;
+			this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].path;
+		}
 	},
 
 	next: function() {
-	// Trys to go to the next page and update progress
-		if (!this.lessonFrame || !this.infoBanner) {
-			console.error("State not initialized. Call state.init() first.");
-			return;
+		if(this.initialized === false){
+			console.error("Cannot go to next page until the state is initialized. Run state.init() first");
+			return false;
 		}
-		this.finalizePage(); //check progress
+		this.infoBanner.style.display = ""; //reset banner
+
 		const page = this.data.pages[this.data.currentPageIndex];
-		if (page.completed) {
-			// Hide any old errors
-			this.infoBanner.style.display = "none";
 
-			// Increment index
-			this.data.currentPageIndex++;
-
-			// Check if we are at the end
-			if (this.data.currentPageIndex >= this.data.pages.length) {
-				// We're on the last page, maybe show a "Course Complete" message
-				alert("Congratulations! You have finished the course! You may close the window");
-				this.data.currentPageIndex = this.data.pages.length - 1; // Stay on last page
-				return; // Don't try to load a page that doesn't exist
-			}
-
-			// Get the new page name
-
-			// Set the iframe source
-			this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].path;
-
+		if(this.checkIfComplete() && !page.completed){
+			// if we just completed the page
+			page.completed = true;
+			this.log(`Page ${this.data.currentPageIndex} completed`);
+			this.advancePage();
+		} else if(page.completed) {
+			//if we are on a completed page
+			// see if we can go next
+			this.advancePage();
 		} else {
-			// Show an error
-			this.bannerMessage("Please complete all items on the page");
+			// if we did not complete the page
+			this.bannerMessage("You must complete the current page to continue");
 		}
 	},
 
@@ -183,31 +252,26 @@ let state = {
 		)
 	},
 
-	finalizePage: function(){
-		const page = this.data.pages[this.data.currentPageIndex];
-		if(this.checkIfComplete() && this.data.currentPageIndex === this.data.progress){
-			page.completed = true;
-			this.data.progress += 1;
+	calculateOverallGrade: function (){
+		// Calculate score dynamically
+		const earnedScore = this.data.pages.reduce((acc, p) => acc + p.score, 0); // <-- what the user earned
+		const maxScore = this.data.pages.reduce((acc, p) => acc + p.maxScore, 0);
+		return ({ratio: earnedScore / maxScore, earnedScore: earnedScore, maxScore: maxScore});
+	},
 
-			// Check if the course is done
-			if(this.data.progress >= this.data.pages.length){
-				//TODO check each page completion status too
-				lms.setStatus("completed");
+	checkCourseCompletion: function(){
+		const isTimeRequirementMet = (this.data.courseRules.minimumMinutes * 60) <= this.data.totalCourseSeconds;
+		const isScoreMet = this.data.courseRules.minimumGrade <= this.calculateOverallGrade().ratio;
+		const studentsCanFail = this.data.courseRules.studentsCanFail;
 
-				// Calculate score
-				const earnedScore = this.data.pages.reduce((acc, p) => acc + p.score, 0); // <-- what the user earned
-				const maxScore = this.data.pages.reduce((acc, p) => acc + p.maxScore, 0); // <-- max possible score
-				const grade = String((earnedScore / maxScore) * 100); // <-- percentage grade as a string
-				lms.setScore(earnedScore, maxScore); // <-- send course score to the LMS
-				this.log("Course Completed with a Grade of " + grade);
-			}
-
-			this.save();
-			this.log(`Page ${this.data.currentPageIndex} completed`);
-			this.bannerMessage("This page is completed. You may continue", false);
-			return true;
+		if(isTimeRequirementMet && (isScoreMet || studentsCanFail)){
+			this.data.pages[this.data.pages.length-1].completed = true;
+			// set the good bye page to completed since the important course information is done
+			// this also allows us to check all the other ones
 		}
-		return false;
+		const isEveryPageComplete = this.data.pages.every(p => p.completed);
+		//return (isLastPage && isTimeRequirementMet && isScoreMet && isEveryPageComplete);
+		return (isTimeRequirementMet && (isScoreMet || studentsCanFail) && isEveryPageComplete);
 	},
 
 	handleMessage: function(event){
@@ -383,9 +447,13 @@ let state = {
 				response = await fetch("lessons/course_data.json");
 			}
 			console.log("Loaded JSON");
-			const rawPages = await response.json();
+			const rawData = await response.json();
 
-			this.data.pages = rawPages.map(page => ({
+			// Save course rules
+			this.data.courseRules = rawData.courseRules || {};
+
+			// Load the learning pages
+			this.data.pages = rawData.pages.map(page => ({
 				// take the JSON, make a new object with those attributes (...) AND add others
 				...page,
 				path: `lessons/${page.name}`,
