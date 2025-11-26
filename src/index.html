@@ -11,17 +11,25 @@
 	<script src="internal/SCORM_API_wrapper.js"></script>
 </head>
 <body id="course-body">
-	<h2>My Course Module</h2>
-	<div id="info-banner"></div>
+	<header id="top-bar">
+		<div class="course-title" id="course-title">My Course Module</div>
+		<div class="user-info">
+			Student: <span id="display-name">Guest</span>
+		</div>
+	</header>
+
 	<div id="lesson-content">
 		<nav id="course-nav">
 			<button id="prev" class="nav-arrow" onclick="state.prev()">&larr;</button>
 			<button id="next" class="nav-arrow" onclick="state.next()">&rarr;</button>
-			<button id="reset" onclick="state.reset()">Reset</button>
-			<button id="reset" onclick="test()">Test</button>
-		</nav>
-		<iframe id="lesson-frame" src="about:blank" style="border:1px solid #ccc;"></iframe>
+			<div class="spacer"></div> <button id="reset" onclick="state.reset()">Reset</button>
+			<button id="test" onclick="test()">Test</button> </nav>
+		<div id="stage-area">
+			<div id="info-banner"></div>
+			<iframe id="lesson-frame" src="about:blank"></iframe>
+		</div>
 	</div>
+	<div id="info-bar" class="info-bar" role="status">...</div>
 	<script src="internal/script.js"></script>
 </body>
 </html>

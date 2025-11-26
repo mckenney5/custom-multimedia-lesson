@@ -1,70 +1,228 @@
-#lesson-content {
-	background: linear-gradient(to top, #f5f5f5, #e0e0e0);
-	border-top-left-radius: 1.5rem;
-	border-top-right-radius: 1.5rem;
+
+/* Reset margins to prevent white gaps */
+body {
+	margin: 0;
+	font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Clean font */
+	height: 100vh; /* Force body to match screen height exactly */
+	display: flex; /* Turn body into a layout engine */
+	flex-direction: column; /* Stack items: Header -> Content -> Footer */
+	overflow: hidden; /* Disable scrollbar on the body itself */
 }
 
-#course-nav {
-	padding: 0.5% 0px;
-	width: 99%;
-	margin: 0 auto;
+:root{
+	--h: 120;
+	--s: 20%;
+	--l-base: 38%;
+	--brand-800: hsl(var(--h) var(--s) calc(var(--l-base) - 18%));
+	--brand-700: hsl(var(--h) var(--s) calc(var(--l-base) - 8%));
+	--brand: hsl(var(--h) var(--s) var(--l-base));
+	--brand-100: hsl(var(--h) var(--s) calc(var(--l-base) + 32%));
+	--brand-50:  hsl(var(--h) var(--s) calc(var(--l-base) + 62%));
+	--brand-text: #ffffff
 }
 
-#course-nav button {
-	background-color: #007bff;
-	color: white;
-	border: none;
-	border-radius: 5px;
-	cursor: pointer;
-	margin-left: 5px;
-	margin-right: 5px;
+/* The Professional Header */
+#top-bar {
+	flex: 0 0 60px; /* Don't grow, Don't shrink, 60px tall */
+	background-color: var(--brand);
+	display: flex;
+	justify-content: space-between; /* Pushes items to far left and right */
+	align-items: center; /* Vertically centers text */
+	padding: 0 20px; /* Breathing room on sides */
+	box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* Subtle depth shadow */
+	z-index: 10; /* Ensure shadow sits on top */
 }
 
-#course-nav #reset {
-	background-color: red;
-	font-size: 1.5rem;
-	width: 6.25rem;
-	height: 2.5rem;
-	line-height: 2.5rem;
-	padding: 0;
+.course-title {
+	font-size: 1.2rem;
+	font-weight: bold;
+	color: var(--brand-text)
 }
 
-/* The hover effect for the button */
-#course-nav button:hover {
-	background-color: #0056b3;
-}
-
-/* The error banner (hidden by default) */
-#info-banner {
-	display: none;
-	background-color: #f8d7da;
-	color: #721c24;
-	padding: 10px;
-	border-radius: 5px;
-	margin-top: 15px;
-	cursor: pointer;
-}
-
-#lesson-frame {
-	width: 98%;
-	height: 90vh;
-	margin: 0 auto;
-	background: white;
-	box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.5);
-	border-top-left-radius: 1.5rem;
-	border-top-right-radius: 1.5rem;
+.user-info {
+	font-size: 0.9rem;
+	color: #666;
+	background: #ffffff;
+	padding: 5px 15px;
+	border-radius: 20px; /* Pill shape */
 }
 
 #course-body {
-	margin: 0px 8px;
-	text-align: center;
+	text-align: left;
 	background: #f7f7f7;
+	/* Removed margin-bottom; Flexbox handles spacing now */
 }
 
-#course-nav button.nav-arrow {
-	font-size: 1.5rem;
-	width: 3.125rem;
-	height: 2.5rem;
-	line-height: 2.5rem;
-	padding: 0;
+/* Main Container: Acts as the Flex Parent */
+/* Main Container */
+#lesson-content {
+	flex: 1 1 auto;
+	background: linear-gradient(to right, #f5f5f5, #e0e0e0);
+	display: flex;
+	flex-direction: row-reverse;
+
+	/* RESTORED: Rounded Corners */
+	border-radius: 1.5rem;
+
+	/* CRITICAL: This cuts off the square corners of the sidebar/iframe inside */
+	overflow: hidden;
+
+	border: 1px solid #ccc;
+	margin: 10px; /* Keeps it floating so the curves are visible */
+
+	/* Optional: Add a shadow to emphasize the "floating card" effect */
+	box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+#course-nav {
+	display: flex;
+	flex-direction: column; /* Stacks buttons vertically */
+	justify-content: flex-start; /* Aligns buttons to top */
+	align-items: center; /* Centers buttons horizontally */
+	width: 80px; /* Fixed sidebar width */
+	padding: 20px 5px;
+	background-color: #ffffff; /* Dark sidebar looks professional */
+	flex-shrink: 0; /* Prevents sidebar from squishing */
+	border-left: 1px solid #ddd; /* Subtle divider */
+
+	/* Accessibility: Allow internal scrolling if buttons overflow */
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+
+/* Left Side (Banner + Iframe) */
+#stage-area {
+	flex-grow: 1; /* Takes up all remaining width */
+	display: flex;
+	flex-direction: column; /* Stacks Banner on top of Iframe */
+	background: white;
+	position: relative;
+	overflow: hidden; /* Stop the stage from scrolling, let iframe handle it */
+}
+
+/* Buttons */
+#course-nav button {
+	background-color: var(--brand);
+	color: var(--brand-text);
+	border: none;
+	border-radius: 50%; /* Circular buttons look nice in vertical bars */
+	cursor: pointer;
+	margin-bottom: 15px; /* Vertical spacing */
+	transition: transform 0.2s;
+	width: 50px;
+	height: 50px;
+	font-size: 1.2rem;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+#course-nav button:hover {
+	background-color: var(--brand-800);
+	transform: scale(1.1);
+}
+
+/* Specific styling for the Reset/Test buttons (Rectangles) */
+#course-nav #reset,
+#course-nav #test {
+	background-color: #dc3545; /* Red for reset */
+	border-radius: 8px;
+	width: 60px;
+	height: auto;
+	padding: 8px 0;
+	font-size: 0.9rem;
+}
+
+#course-nav #test {
+	background-color: #6c757d; /* Grey for test */
+}
+
+/* Push Reset button to the bottom of the bar using margin-top: auto */
+.spacer {
+	flex-grow: 1; /* Pushes Reset/Test to bottom */
+}
+
+/* The Iframe */
+#lesson-frame {
+	width: 100%;
+	height: 100%; /* Fill the stage-area */
+	border: none;
+}
+
+/* The Banner */
+#info-banner {
+	display: none; /* Toggled by JS */
+	background-color: #f8d7da;
+	color: #721c24;
+	padding: 10px;
+	text-align: center;
+	border-bottom: 1px solid #f5c6cb;
+	animation: slideDown 0.3s ease;
+}
+
+#info-bar {
+	flex: 0 0 40px; /* Don't grow, Don't shrink, 40px tall */
+	width: 100%;
+
+	/* Styling to make it visible */
+	background-color: #333; /* Dark background */
+	color: white; /* White text */
+	display: flex; /* Flexbox makes aligning text easy */
+	align-items: center; /* Vertically center the text */
+	padding: 0 20px; /* Add side padding */
+	box-sizing: border-box; /* Ensures padding doesn't widen the bar */
+	z-index: 1000; /* Ensures it sits on top of everything */
+
+	/* Removed position: fixed logic */
+}
+
+
+/* --- MOBILE RESPONSIVENESS & ZOOM ACCESSIBILITY --- */
+/* Trigger if screen is narrow OR if screen is short (zoomed in) */
+@media (max-width: 768px), (max-height: 600px) {
+
+	/* 1. Un-fix the body height so scrolling works */
+	body {
+		height: auto;
+		overflow: auto;
+		display: block;
+	}
+
+	/* 2. Let content flow naturally */
+	#lesson-content {
+			flex-direction: column;
+			height: auto;
+			border-radius: 0;
+			border: none;
+			margin: 0;
+	}
+
+	/* 3. Reset Nav to Horizontal Row */
+	#course-nav {
+			flex-direction: row;
+			width: 100%;
+			height: auto;
+			justify-content: center;
+			padding: 10px;
+			border-left: none;
+			border-bottom: 1px solid #ddd;
+			overflow-y: visible;
+	}
+	#course-nav button {
+			margin: 0 10px;
+			margin-bottom: 0;
+	}
+
+	/* 4. Ensure iframe is readable */
+	#lesson-frame {
+			height: 600px;
+			min-height: 50vh;
+	}
+
+	/* 5. Let bars flow naturally */
+	#top-bar, #info-bar {
+		flex: none;
+		position: static;
+	}
 }

@@ -14,13 +14,14 @@ let state = {
 
 	lessonFrame: null,	 // Will hold the iframe element
 	infoBanner: null, // Will hold the banner element
+	infoBar: null, // Will hold progress for the user and other info
 	pauseSave: false, // Flag to pause the save on a reset
 	test: null, // Used for debugging
 	studentName: "",
 	sessionStartTime: 0, // Logs how long the student has been on today
 	initialized: false,
 
-	init: function(frameId, bannerId) {
+	init: function(frameId, bannerId, infoBar) {
 		// Set up LMS connection
 		if(!lms.initialized) lms.init();
 
@@ -34,6 +35,7 @@ let state = {
 		this.lessonFrame = document.getElementById(frameId);
 		this.infoBanner = document.getElementById(bannerId);
 		this.infoBanner.addEventListener("click", () => {this.infoBanner.style.display = "none"});
+		this.infoBar = document.getElementById(infoBar);
 
 		// load last webpage we were on
 		this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].path;
@@ -48,12 +50,25 @@ let state = {
 			this.finalizePage();
 
 		}, 1000);
+		this.updateInfo();
 		this.initialized = true;
+	},
+
+	updateInfo: function (){
+		// updates the info bar on the bottom of the UI
+		const currentPage = this.data.currentPageIndex+1;
+		const pageCount = this.data.pages.length;
+		const progress = Math.round((this.data.progress/(this.data.pages.length-1))*100);
+
+		this.infoBar.innerHTML = `<p>Page: ${currentPage}/${pageCount} (${progress}%)</p>`;
 	},
 
 	handleLastPage: function(){
 		if(this.checkCourseCompletion()){
 			// if all the course rules are met
+
+			// Update user progress
+			//this.data.progress = this.data.pages.length;
 
 			// Calculate score
 			const grade = this.calculateOverallGrade();
@@ -148,6 +163,7 @@ let state = {
 			// if we did not complete the page
 			this.bannerMessage("You must complete the current page to continue");
 		}
+		this.updateInfo();
 	},
 
 	prev: function() {
@@ -172,6 +188,7 @@ let state = {
 
 		// Set the iframe source
 		this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].path;
+		this.updateInfo();
 	},
 
 	save: function(){
@@ -481,7 +498,7 @@ window.onload = async () => {
 	lms.init();
 	await state.loadCourseData();
 	state.loadSave();
-	state.init("lesson-frame", "info-banner");
+	state.init("lesson-frame", "info-banner", "info-bar");
 	window.addEventListener('message', state.handleMessage.bind(state));
 };
 
