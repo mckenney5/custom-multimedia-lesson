@@ -49,6 +49,11 @@ let lms = {
 		return this.driver.getStudentName();
 	},
 
+	getStudentID: function(){
+		if(!this.initialized) return false;
+		return this.driver.getStudentID();
+	},
+
 	saveData: function(dataString){
 		if(!this.initialized) return false;
 		return this.driver.saveData(dataString);
@@ -177,6 +182,10 @@ let Scorm12Adapter = {
 		return pipwerks.SCORM.get("cmi.core.student_name");
 	},
 
+	getStudentID: function() {
+		return pipwerks.SCORM.get("cmi.core.student_id");
+	},
+
 	saveData: function(data){
 		// cmi.suspend_data limit is ~4096 chars
 		if(this._dataOverLimit(data, this._saveLimit)){ // check data size and truncate
@@ -261,7 +270,11 @@ let LocalStorageAdapter = {
 	},
 
 	getStudentName: function() {
-		return "";
+		return "Student";
+	},
+
+	getStudentID: function() {
+		return "0000";
 	},
 
 	saveData: function(data){
