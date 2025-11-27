@@ -119,7 +119,7 @@ let telemetry = {
 		const parts = raw.split(this._delimiter);
 
 		// Safety Check: Ensure we have enough parts
-		if(parts.length < 4){
+		if(parts.length < 4 || parts[0] !== this._version){
 				console.error("Save data format invalid.");
 				return null;
 		}
