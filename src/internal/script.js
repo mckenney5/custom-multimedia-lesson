@@ -18,6 +18,7 @@ let state = {
 	pauseSave: false, // Flag to pause the save on a reset
 	test: null, // Used for debugging
 	studentName: "",
+	studentID: "",
 	sessionStartTime: 0, // Logs how long the student has been on today
 	initialized: false,
 
@@ -25,8 +26,11 @@ let state = {
 		// Set up LMS connection
 		if(!lms.initialized) lms.init();
 
-		// Set the students name
-		this.studentName = lms.getStudentName().split(',')[1] || ""; // returns first name
+		// Set the student's name
+		this.studentName = lms.getStudentName().split(',')[1] || ""; // returns first name (Lastname,Firstname)
+
+		// Set the student's ID
+		this.studentID = lms.getStudentID();
 
 		// Set the date and time of us starting today. TODO consider not using the user for time
 		this.sessionStartTime = Date.now();
