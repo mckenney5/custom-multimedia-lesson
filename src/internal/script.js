@@ -3,9 +3,12 @@ let state = {
 	// --- Properties (Data) ---
 	data: {
 		pages: [],
-		currentPageIndex: 0,
-		progress: 0, // Sets the furthest we have been
-		totalCourseSeconds: 0,
+		delta: {
+			currentPageIndex: 0,
+			progress: 0, // Sets the furthest we have been
+			totalCourseSeconds: 0,
+			pagesState: [],
+		},
 		courseRules: {}, // Holds overall course rules like miniumum time, passing grade or just 'mark complete'
 
 		log: [],
@@ -42,14 +45,14 @@ let state = {
 		this.infoBar = document.getElementById(infoBar);
 
 		// load last webpage we were on
-		this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].path;
+		this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
 
 		// track the time in the course and page
 		setInterval(() => {
-			if(++this.data.totalCourseSeconds % 60 == 0){
+			if(++this.data.delta.totalCourseSeconds % 60 == 0){
 				if(!debugging) this.save();
 			}
-			const page = this.data.pages[this.data.currentPageIndex];
+			const page = this.data.delta.pagesState[this.data.delta.currentPageIndex];
 			page.watchTime += 1;
 			this.finalizePage();
 
@@ -60,9 +63,9 @@ let state = {
 
 	updateInfo: function (){
 		// updates the info bar on the bottom of the UI
-		const currentPage = this.data.currentPageIndex+1;
+		const currentPage = this.data.delta.currentPageIndex+1;
 		const pageCount = this.data.pages.length;
-		const progress = Math.round((this.data.progress/(this.data.pages.length-1))*100);
+		const progress = Math.round((this.data.delta.progress/(this.data.pages.length-1))*100);
 
 		this.infoBar.innerHTML = `<p>Page: ${currentPage}/${pageCount} (${progress}%)</p>`;
 	},
@@ -72,7 +75,7 @@ let state = {
 			// if all the course rules are met
 
 			// Update user progress
-			//this.data.progress = this.data.pages.length;
+			//this.data.delta.progress = this.data.pages.length;
 
 			// Calculate score
 			const grade = this.calculateOverallGrade();
@@ -101,8 +104,8 @@ let state = {
 			}
 
 			// Show the last page
-			this.data.currentPageIndex = this.data.pages.length -1 ;
-			this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].path;
+			this.data.delta.currentPageIndex = this.data.pages.length -1 ;
+			this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
 			return true;
 		} else {
 			return false;
@@ -110,12 +113,12 @@ let state = {
 	},
 
 	finalizePage: function(){
-		const page = this.data.pages[this.data.currentPageIndex];
-		if(this.checkIfComplete() && this.data.currentPageIndex === this.data.progress && page.completed === false){
-			page.completed = true;
-			this.data.progress += 1;
+		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
+		if(this.checkIfComplete() && this.data.delta.currentPageIndex === this.data.delta.progress && pageDelta.completed === false){
+			pageDelta.completed = true;
+			this.data.delta.progress += 1;
 			this.save();
-			this.log(`Page ${this.data.currentPageIndex} completed`);
+			this.log(`Page ${this.data.delta.currentPageIndex} completed`);
 			this.bannerMessage("This page is completed. You may continue", false);
 		} else {
 			return false;
@@ -127,7 +130,7 @@ let state = {
 		// Can you tell I had so many off by one bugs?
 		const lastPage = this.data.pages.length-1;
 		const secondToLastPage = lastPage -1;
-		const currentPage = this.data.currentPageIndex
+		const currentPage = this.data.delta.currentPageIndex
 
 		if(currentPage === secondToLastPage){
 			// see if we can finish the course
@@ -137,11 +140,11 @@ let state = {
 				this.bannerMessage("You have not finished all course requirements. Review your work and try again");
 			}
 		} else if(currentPage === lastPage){
-			// recheck the final course completion
+			// Do nothing. We are at the end of the pages
 		} else {
 			// if the next page is just another page
-			this.data.currentPageIndex += 1;
-			this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].path;
+			this.data.delta.currentPageIndex += 1;
+			this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
 		}
 	},
 
@@ -152,14 +155,14 @@ let state = {
 		}
 		this.infoBanner.style.display = ""; //reset banner
 
-		const page = this.data.pages[this.data.currentPageIndex];
+		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
 
-		if(this.checkIfComplete() && !page.completed){
+		if(this.checkIfComplete() && !pageDelta.completed){
 			// if we just completed the page
-			page.completed = true;
-			this.log(`Page ${this.data.currentPageIndex} completed`);
+			pageDelta.completed = true;
+			this.log(`Page ${this.data.delta.currentPageIndex} completed`);
 			this.advancePage();
-		} else if(page.completed) {
+		} else if(pageDelta.completed) {
 			//if we are on a completed page
 			// see if we can go next
 			this.advancePage();
@@ -181,17 +184,17 @@ let state = {
 		this.infoBanner.style.display = "none";
 
 		// Deccrement index
-		this.data.currentPageIndex--;
+		this.data.delta.currentPageIndex--;
 
 		// Check if we are at the end
-		if (this.data.currentPageIndex < 0) {
+		if (this.data.delta.currentPageIndex < 0) {
 			this.bannerMessage("Cannot go back. You are on the first page");
-			this.data.currentPageIndex = 0;
+			this.data.delta.currentPageIndex = 0;
 			return;
 		}
 
 		// Set the iframe source
-		this.lessonFrame.src = this.data.pages[this.data.currentPageIndex].path;
+		this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
 		this.updateInfo();
 	},
 
@@ -260,72 +263,72 @@ let state = {
 	},
 
 	checkIfComplete: function() {
-		const page = this.data.pages[this.data.currentPageIndex];
+		const page = this.data.pages[this.data.delta.currentPageIndex];
+		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
 
 		// Calculate score ratio or set to zero (stops / by 0)
-		const score = page.maxScore > 0 ? page.score / page.maxScore : 0;
+		const score = page.maxScore > 0 ? pageDelta.score / page.maxScore : 0;
 
 		return (
-			page.watchTime >= page.completionRules.watchTime &&
+			pageDelta.watchTime >= page.completionRules.watchTime &&
 			score >= page.completionRules.score &&
-			page.scrolled === page.completionRules.scrolled &&
-			page.videoProgress >= page.completionRules.videoProgress
+			pageDelta.scrolled === page.completionRules.scrolled &&
+			pageDelta.videoProgress >= page.completionRules.videoProgress
 		)
 	},
 
 	calculateOverallGrade: function (){
 		// Calculate score dynamically
-		const earnedScore = this.data.pages.reduce((acc, p) => acc + p.score, 0); // <-- what the user earned
+		const earnedScore = this.data.delta.pagesState.reduce((acc, p) => acc + p.score, 0); // <-- what the user earned
 		const maxScore = this.data.pages.reduce((acc, p) => acc + p.maxScore, 0);
 		return ({ratio: earnedScore / maxScore, earnedScore: earnedScore, maxScore: maxScore});
 	},
 
 	checkCourseCompletion: function(){
-		const isTimeRequirementMet = (this.data.courseRules.minimumMinutes * 60) <= this.data.totalCourseSeconds;
+		const isTimeRequirementMet = (this.data.courseRules.minimumMinutes * 60) <= this.data.delta.totalCourseSeconds;
 		const isScoreMet = this.data.courseRules.minimumGrade <= this.calculateOverallGrade().ratio;
 		const studentsCanFail = this.data.courseRules.studentsCanFail;
 
 		if(isTimeRequirementMet && (isScoreMet || studentsCanFail)){
-			this.data.pages[this.data.pages.length-1].completed = true;
+			this.data.delta.pagesState[this.data.pages.length-1].completed = true;
 			// set the good bye page to completed since the important course information is done
 			// this also allows us to check all the other ones
 		}
-		const isEveryPageComplete = this.data.pages.every(p => p.completed);
+		const isEveryPageComplete = this.data.delta.pagesState.every(p => p.completed);
 		//return (isLastPage && isTimeRequirementMet && isScoreMet && isEveryPageComplete);
 		return (isTimeRequirementMet && (isScoreMet || studentsCanFail) && isEveryPageComplete);
 	},
 
 	handleMessage: function(event){
 		//console.log(event);
-		const page = this.data.pages[this.data.currentPageIndex];
+		const page = this.data.pages[this.data.delta.currentPageIndex];
+		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
 		if(event.origin != window.location.origin){
 			console.log("Unknown Sender!");
 			return;
 		}
 		if(event.data.type === "QUIZ_SUBMITTED"){
 			this.log(page.name + " Quiz was submitted");
+			pageDelta.userAnswers = event.data.message; // <-- push what the user says to the state of the page
 			const grades = this.gradeQuizQuestions(page.questions, event.data.message);
-			page.score = grades.score;
-			page.maxScore = grades.maxScore;
+			pageDelta.score = grades.score;
 			this.finalizePage();
-			this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_INFO", score: page.score / page.maxScore, maxAttempts: page.completionRules.attempts - ++page.attempts  }, '*');
+			this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_INFO", score: pageDelta.score / page.maxScore, maxAttempts: page.completionRules.attempts - ++pageDelta.attempts  }, '*');
 		} else if(event.data.type === "QUIZ_ADD_QUESTIONS"){
 			// Page requests the quiz to be rendered from the JSON, and gets the rendered HTML returned
 			this.log(page.name + " Quiz questions added");
-			//this.setQuizQuestions(String(this.data.currentPageIndex), event.data.message);
-			this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_ADD_QUESTIONS", message: this.renderQuiz(this.data.currentPageIndex)}, '*');
+			//this.setQuizQuestions(String(this.data.delta.currentPageIndex), event.data.message);
+			this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_ADD_QUESTIONS", message: this.renderQuiz(this.data.delta.currentPageIndex)}, '*');
 		} else if(event.data.type === "LOG"){
 			this.log(`${page.name} ${event.data.message}`);
 		} else if(event.data.type === "PAGE_SCROLLED"){
 			this.log(page.name + " Page was scrolled all the way down");
-			page.scrolled = event.data.scrolled;
+			pageDelta.scrolled = event.data.scrolled;
 		} else if(event.data.type === "VIDEO_PROGRESS"){
-			page.videoProgress = event.data.message;
+			pageDelta.videoProgress = event.data.message;
 		} else if(event.data.type === "GET_STUDENT_DATA"){
 			// Returns name and current grade so far
-			const earnedScore = this.data.pages.reduce((acc, p) => acc + p.score, 0); // <-- what the user earned
-			const maxScore = this.data.pages.reduce((acc, p) => acc + p.maxScore, 0); // <-- max possible score
-			const grade = String((earnedScore / maxScore) * 100); // <-- percentage grade as a string
+			const grade = String(Math.floor((this.calculateOverallGrade().ratio * 100)));
 			this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA", name: this.studentName, grade: grade }, '*');
 		} else {
 			console.log("Unknown message --> ", event.data);
@@ -422,7 +425,8 @@ let state = {
 	renderQuiz: function(index){
 		// Puts all of the questions on the screen, in their own DIV
 		let QUIZ_QUESTIONS = this.data.pages[index].questions;
-		console.log(QUIZ_QUESTIONS);
+		let savedAnswers = this.data.delta.pagesState[index].userAnswers;
+
 		let html = "";
 
 		// add feedback div to show submission and test score
@@ -430,6 +434,8 @@ let state = {
 
 		for(let i = 0; i < QUIZ_QUESTIONS.length; i++){
 		// Render every question in a div
+			let qID = QUIZ_QUESTIONS[i].id;
+
 			if(i % 2 == 0){
 			// alternate background colors
 				html += `<div id="Q${i+1}" style="background: lightgray;">`;
@@ -442,9 +448,16 @@ let state = {
 
 			for(let l = 0; l < QUIZ_QUESTIONS[i].possibleAnswers.length; l++){
 			// Render every choice
+				let val = QUIZ_QUESTIONS[i].possibleAnswers[l];
+
+				let isChecked = "";
+				if(savedAnswers[qID] && savedAnswers[qID].includes(val)){
+					isChecked = "checked";
+				}
+
 				html += `
-					<input id="a${l}" type="checkbox" value="${QUIZ_QUESTIONS[i].possibleAnswers[l]}">
-					<label id="a${l}-label" for="a${l}">${QUIZ_QUESTIONS[i].possibleAnswers[l]}</label>
+					<input id="a${l}" type="checkbox" value="${val}" ${isChecked}>
+					<label id="a${l}-label" for="a${l}">${val}</label>
 					</br>
 				`;
 			}
@@ -457,6 +470,10 @@ let state = {
 	},
 
 	loadCourseData: async function(){
+		/* Sets up the state of the program
+		 * Loads and sets up static data objects
+		 * Loads and sets up dynamic data objects
+		 */
 		try {
 			let response = null;
 			if(debugging){
@@ -474,22 +491,33 @@ let state = {
 			this.data.courseRules = rawData.courseRules || {};
 
 			// Load the learning pages
-			this.data.pages = rawData.pages.map(page => ({
-				// take the JSON, make a new object with those attributes (...) AND add others
-				...page,
-				path: `lessons/${page.name}`,
-				completed: false,
-				// TODO make this its own object to compare with completiton rules
-				scrolled: false,
-				score: 0.0,
-				watchTime: 0,
-				attempts: 0,
-				videoProgress: 0.0,
-				maxScore: page.type === 'quiz' //if it is a quiz, tally up all points
-					? page.questions.reduce((acc, q) => acc + q.pointValue, 0.0)
-					: 0.0
-			}));
+			this.data.delta.pagesState = []; // <-- reset page states
 
+			// Load the learning pages AND generate initial state
+			this.data.pages = rawData.pages.map(page => {
+
+			// Create state object
+				const pageState = {
+					completed: false,
+					scrolled: false,
+					score: 0.0,
+					watchTime: 0,
+					attempts: 0,
+					videoProgress: 0.0,
+					userAnswers: {}
+				};
+				this.data.delta.pagesState.push(pageState);
+
+				// Return the Static Object
+				return {
+					...page, // id, name, type, questions
+					path: `lessons/${page.name}`,
+					maxScore: page.type === 'quiz'
+							? page.questions.reduce((acc, q) => acc + q.pointValue, 0.0)
+							: 0.0
+				};
+
+			});
 		} catch(error){
 			console.error("Failed to load course data: ", error);
 		}
@@ -513,7 +541,7 @@ window.onbeforeunload = () => {
 		return;
 	}
 	state.save();
-	if(!state.data.pages[state.data.currentPageIndex].completed){
+	if(!state.data.delta.pagesState[state.data.delta.currentPageIndex].completed){
 		return "Your progress on the current page my be lost.";
 	}
 };
