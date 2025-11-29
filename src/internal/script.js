@@ -4,10 +4,12 @@ let state = {
 	data: {
 		pages: [],
 		delta: {
+			// Saved data that changes over time
+			// This schema must be in this order for reference with saving
 			currentPageIndex: 0,
 			progress: 0, // Sets the furthest we have been
 			totalCourseSeconds: 0,
-			pagesState: [],
+			pagesState: [], // <-- watchTime, score, videoProgress, scrolled, completed, userAnswers
 		},
 		courseRules: {}, // Holds overall course rules like miniumum time, passing grade or just 'mark complete'
 
@@ -35,6 +37,9 @@ let state = {
 		// Set the student's ID
 		this.studentID = lms.getStudentID();
 
+		// Set up telemetry
+		if(!telemetry.initialized) telemetry.init();
+
 		// Set the date and time of us starting today. TODO consider not using the user for time
 		this.sessionStartTime = Date.now();
 
@@ -59,6 +64,73 @@ let state = {
 		}, 1000);
 		this.updateInfo();
 		this.initialized = true;
+	},
+
+	serialize: function(){
+		// Takes in the delta and flattens the array
+		// NOTE: Rounds numbers
+		const delta = this.data.delta;
+		let data = [
+			delta.currentPageIndex,
+			delta.progress,
+			delta.totalCourseSeconds
+		];
+
+		// This code must be specific. It was originally converting objects into values and using a switch statement to encode
+		// This cannot work because in 'Object.values(obj)' there is no guarantee that it will be in order...
+		delta.pagesState.slice().forEach(p => {
+			//push each hardcoded key value into the data list
+
+			// Simple round to two decimal points function
+			const roundTo2 = n => Math.round(n*100)/100;
+
+			data.push(p.completed ? 1: 0);
+			data.push(p.scrolled ? 1: 0);
+			data.push(roundTo2(p.score));
+			data.push(p.watchTime); //TODO see if rounding is needed
+			data.push(p.attempts);
+			data.push(roundTo2(p.videoProgress));
+
+			// Convert user answers to a string and sanitize it
+			data.push(telemetry.sanitize(JSON.stringify(p.userAnswers || {})));
+
+		});
+
+		return data; // <-- an array of mostly numbers
+	},
+
+	deserialize: function(arr){
+		/*
+		 Logic: Take the array from telemetry.unpack. Read indices 0-2 into the global variables.
+		 Loop through the rest of the array (in chunks based on your page schema size) and assign values back to this.data.delta.pagesState.
+		*/
+		const delta = this.data.delta;
+		delta.currentPageIndex = arr[0];
+		delta.progress = arr[1];
+		delta.totalCourseSeconds = arr[2];
+
+		const GLOBALS_COUNT = 3;
+		const ITEMS_PER_PAGE = 7;
+
+		delta.pagesState = delta.pagesState.map((p, i) => {
+			// Reconstruct the object
+			// math to calculate offsets
+			let base = GLOBALS_COUNT + (i * ITEMS_PER_PAGE);
+
+			// check array size to stop trying to read past the array
+			if(base >= arr.length) return p;
+
+			return {
+				completed: (arr[base + 0] === 1),
+				scrolled: (arr[base + 1] === 1),
+				score: arr[base + 2],
+				watchTime: arr[base + 3],
+				attempts: arr[base + 4],
+				videoProgress: arr[base + 5],
+				userAnswers: JSON.parse(arr[base + 6] || "{}")
+			};
+		});
+
 	},
 
 	updateInfo: function (){
@@ -198,39 +270,36 @@ let state = {
 		this.updateInfo();
 	},
 
-	save: function(){
+	save: async function(){
 	// saves the state to the local browser storage
 		if(this.pauseSave){ console.log("Ignoring Save"); return;}
 
-		let stateAsString = JSON.stringify(this.data);
+		let saveData = this.serialize();
 
-		// Save locally as a back up TODO see if still needed
-		//localStorage.setItem("courseProgress", stateAsString);
-		//this.log("Course Progress Saved Locally");
+		let compressed = await telemetry.pack(saveData);
 
 		// Try to save with the LMS
-		lms.saveData(stateAsString);
+		if(compressed) lms.saveData(compressed);
 
 	},
 
-	loadSave: function(){
+	loadSave: async function(){
 	// loads the state from the local browser
 		// Try to load from the LMS first
-		let stateAsString = lms.loadData();
+		const data = await telemetry.unpack(lms.loadData());
+		//let stateAsString = lms.loadData();
 
 		// If that fails, try local backup
 		/*if(!stateAsString){
 			stateAsString = localStorage.getItem("courseProgress");
 		}*/
 
-		if(stateAsString) {
+		if(data) {
 			// If data is there, try to load it
 			try {
-				let loadedState = JSON.parse(stateAsString);
-				this.log("Loaded progress from the LMS/Local Storage");
-				Object.assign(this.data, loadedState); // <-- merge data and the loaded state
+				this.deserialize(data.delta);
 			} catch(e) {
-				console.error("Unable to parse saved data --> ", e);
+				console.error(`loadSave: Unable to parse saved data of \n${stateAsString}\n --> ${e}`);
 			}
 		} else {
 			this.log("Started new course");
@@ -348,8 +417,7 @@ let state = {
 	},
 
 	log: function(message){
-		this.data.log.push(`[${new Date().toLocaleTimeString()}] ${message}`);
-		if(debugging) console.log("log --> " + message);
+		telemetry.log("GENERAL", message);
 	},
 
 	setQuizQuestions: function(pageName, data){
@@ -387,39 +455,6 @@ let state = {
 		console.log(questions);
 		console.log(score/maxScore);
 		return ({score: score, maxScore: maxScore});
-	},
-
-	gradeQuizQuestions2: function(questions, responses){
-		// NOTE not currently used. Goal is to check functional vs procedural attempts. Does not currently work
-		let score = 0.0;
-		let maxPoints = 0.0;
-		for(let i = 0; i < questions.length; i++){
-			questions[i].choices = responses[questions[i].id].slice().sort();
-
-			for(let l = 0; l < questions[i].correctAnswers.length; l++){
-				questions[i].correctAnswers[l] = questions[i].correctAnswers[l].toLowerCase();
-			}
-			for(let l = 0; l < questions[i].choices.length; l++){
-				questions[i].choices[l] = questions[i].choices[l].toLowerCase();
-			}
-			questions[i].isCorrect = (
-				questions[i].correctAnswers.length === questions[i].choices.length &&
-				questions[i].correctAnswers.sort() === questions[i].choices.sort() //<-- this needs its own for loop and string conversion to compare
-			);
-			console.log(`length --> ${questions[i].correctAnswers.length} ${questions[i].choices.length} | items --> ${questions[i].correctAnswers} ${questions[i].choices}`);
-			console.log(`len eval --> ${questions[i].correctAnswers.length === questions[i].choices.length} | ans eval --> ${questions[i].correctAnswers.sort() === questions[i].choices.sort()}`);
-			if(questions[i].isCorrect){
-				score += questions[i].pointValue;
-			}
-			maxPoints += questions[i].pointValue;
-		}
-		if(maxPoints <= 0){
-			console.error("Max points set too low --> ", maxPoints);
-			return -1;
-		}
-		console.log(questions);
-		console.log(score/maxPoints);
-		return (score/maxPoints);
 	},
 
 	renderQuiz: function(index){

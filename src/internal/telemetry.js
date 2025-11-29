@@ -5,9 +5,64 @@ let telemetry = {
 	_useCompression: false,
 	_compressionPrefix: "CGZ", //how we can tell the data is compressed. the string starts with CGZ
 	_logDelimiter: '~',
+	_logHeadDelimiter: '`',
 	_version: "v1",
 	_startTime: null,
 	_eventBuffer: [], //logs that have not been saved yet
+
+	_encoding: {
+		"COURSE_COMPLETE" : "0",
+		"PAGE_COMPLETE" : "1",
+		"COURSE_LOADED" : "2",
+		"STARTED_NEW_COURSE" : "3",
+		"QUIZ_SUBMITTED" : "4",
+		"QUESTIONS_RENDERED" : "5",
+		"GENERAL" : "6",
+		"SCROLLED" : "7",
+		"PAGE_NEXT" : "8",
+		"PAGE_PREV" : "9",
+		"VIDEO_PLAY" : "a",
+		"VIDEO_PAUSED" : "b",
+		"VIDEO_FORWARD" : "c",
+		"VIDEO_REWIND" : "d",
+		"VIDEO_SPEED_CHANGE" : "e",
+		"VIDEO_FULL_SCREEN" : "f",
+		"VIDEO_NORMAL_SCREEN" : "g",
+		"VIDEO_PROGRESS" : "h",
+		"VIDEO_HEARTBEAT" : "i",
+		"VISIBILITY_HIDDEN": "j",
+		"VISIBILITY_VISIBLE" : "k",
+		"USER_IDLE" : "l",
+		"USER_ACTIVE" : "m"
+	},
+
+	_decoding: {
+		"0": "COURSE_COMPLETE",
+		"1": "PAGE_COMPLETE",
+		"2": "COURSE_LOADED",
+		"3": "STARTED_NEW_COURSE",
+		"4": "QUIZ_SUBMITTED",
+		"5": "QUESTIONS_RENDERED",
+		"6": "GENERAL",
+		"7": "SCROLLED",
+		"8": "PAGE_NEXT",
+		"9": "PAGE_PREV",
+		"a": "VIDEO_PLAY",
+		"b": "VIDEO_PAUSED",
+		"c": "VIDEO_FORWARD",
+		"d": "VIDEO_REWIND",
+		"e": "VIDEO_SPEED_CHANGE",
+		"f": "VIDEO_FULL_SCREEN",
+		"g": "VIDEO_NORMAL_SCREEN",
+		"h": "VIDEO_PROGRESS",
+		"i": "VIDEO_HEARTBEAT",
+		"j": "VISIBILITY_HIDDEN",
+		"k": "VISIBILITY_VISIBLE",
+		"l": "USER_IDLE",
+		"m": "USER_ACTIVE"
+	},
+
+	initialzed: false,
 
 	// Data structure: Version ^ UserID ^ SessionStart ^ [Delta_Data] ^ [Interaction_Log]
 
@@ -16,6 +71,7 @@ let telemetry = {
 		this._startTime = Date.now();
 		this._eventBuffer = [];
 		this._supportsCompression = (typeof CompressionStream != 'undefined');
+		this.initialzed = true;
 	},
 
 	_toBase36: function(num){
@@ -47,13 +103,18 @@ let telemetry = {
 	},
 
 	_compressGzip: async function(str){
-		const encoder = new TextEncoder();
-		const cs = new CompressionStream('gzip'); // or 'deflate'
-		const writer = cs.writable.getWriter();
-		writer.write(encoder.encode(str));
-		writer.close();
-		const compressed = await new Response(cs.readable).arrayBuffer();
-		return this._uint8ToBase64(new Uint8Array(compressed));
+		try {
+			const encoder = new TextEncoder();
+			const cs = new CompressionStream('gzip'); // or 'deflate'
+			const writer = cs.writable.getWriter();
+			writer.write(encoder.encode(str));
+			writer.close();
+			const compressed = await new Response(cs.readable).arrayBuffer();
+			return this._uint8ToBase64(new Uint8Array(compressed));
+		} catch (e) {
+			console.error(`telemetry._compressGzip: error while compressing '${str}' --> ${e}`);
+			return "";
+		}
 	},
 
 	_decompressGzip: async function(b64){
@@ -77,10 +138,33 @@ let telemetry = {
 
 	log: function(action, value){
 		/* The Main Recorder. Accepts a code (e.g., "NAV") and a value (e.g., "2"). Automatically calculates the time offset and pushes the compressed string to the buffer. */
-		const timeStamp = this._getOffest();
-		const message = `${timeStamp},${action},${value}`;
+		const timeStamp = this._toBase36(this._getOffest());
+		const encoded = this._encoding[action];
+		//If the encoding is wrong, log it for examination
+		const message = encoded ? `${timeStamp},${encoded},${value}` : `${timeStamp},${this._encoding["GENERAL"]},${action} ${value}`;
 		this._eventBuffer.push(message);
 		console.log(`encoder.log --> '${message}'`);
+	},
+
+	report: function(str){
+		/* takes in a string, splits, decodes, and returns a list of events */
+
+		let log = [];
+		return log;
+	},
+
+	sanitize: function(str){
+		// Removes delimiters from the string
+		// Currently replaces them with nothing
+		const filter = [this._delimiter, this._logDelimiter, this._logHeadDelimiter];
+
+		let clean = "";
+		for(let i = 0; i < str.length; i++){
+			if(!filter.includes(str[i])){
+				clean += str[i];
+			}
+		}
+		return clean;
 	},
 
 	pack: async function(deltaArray){
@@ -90,13 +174,15 @@ let telemetry = {
 				this._version,
 				this._userID,
 				this._toBase36(this._startTime),
-				...deltaArray.map(d => this._toBase36(d)), // Convert all deltas to Base36 to save space
+				...deltaArray.map(d => typeof d === "number" ? this._toBase36(d) : d), // Convert all deltas to Base36 to save space, or keep as string
 				this._eventBuffer.join(this._logDelimiter)
 		].join(this._delimiter);
 
-		// 2. Compress
+		// 2. Compress (TODO handle here if compression is disabled)
 		const compressed = await this._compressGzip(raw);
-		return compressed;
+
+		// If compression fails (like no support), send the raw encoding instead
+		return compressed ? compressed : raw;
 	},
 
 	unpack: async function(saveString){
@@ -141,8 +227,11 @@ let telemetry = {
 		const logRaw = parts[parts.length - 1];
 		const deltaRaw = parts.slice(3, parts.length - 1);
 
-		// 4. Process Delta (Base36 -> Numbers)
-		const deltaArray = deltaRaw.map(val => this._fromBase36(val));
+		// 4. Process Delta (Base36 -> Numbers or keep it if its a string)
+		const deltaArray = deltaRaw.map(val => {
+			const decoded = this._fromBase36(val);
+			return isNaN(decoded) ? val : decoded;
+		});
 
 		// 5. Process Log (Split by ~)
 		const logArray = logRaw.length > 0 ? logRaw.split(this._logDelimiter) : [];
