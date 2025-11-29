@@ -77,19 +77,19 @@ let state = {
 		];
 
 		// This code must be specific. It was originally converting objects into values and using a switch statement to encode
-		// This cannot work because in 'Object.values(obj)' there is no guarantee that it will be in order...
+		// This cannot work because in 'Object.values(obj)' there is NO guarantee that it will be in order...
 		delta.pagesState.slice().forEach(p => {
 			//push each hardcoded key value into the data list
 
-			// Simple round to two decimal points function
-			const roundTo2 = n => Math.round(n*100)/100;
+			// Simple round to two decimal points, and make it an int (we will make it a float again in deserialize)
+			const roundFloatTo2Int = n => Math.round(n*100);
 
 			data.push(p.completed ? 1: 0);
 			data.push(p.scrolled ? 1: 0);
-			data.push(roundTo2(p.score));
+			data.push(roundFloatTo2Int(p.score));
 			data.push(p.watchTime); //TODO see if rounding is needed
 			data.push(p.attempts);
-			data.push(roundTo2(p.videoProgress));
+			data.push(roundFloatTo2Int(p.videoProgress));
 
 			// Convert user answers to a string and sanitize it
 			data.push(telemetry.sanitize(JSON.stringify(p.userAnswers || {})));
@@ -102,7 +102,7 @@ let state = {
 	deserialize: function(arr){
 		/*
 		 Logic: Take the array from telemetry.unpack. Read indices 0-2 into the global variables.
-		 Loop through the rest of the array (in chunks based on your page schema size) and assign values back to this.data.delta.pagesState.
+		 Loop through the rest of the array (in chunks based on the page schema size) and assign values back to this.data.delta.pagesState.
 		*/
 		const delta = this.data.delta;
 		delta.currentPageIndex = arr[0];
@@ -123,10 +123,10 @@ let state = {
 			return {
 				completed: (arr[base + 0] === 1),
 				scrolled: (arr[base + 1] === 1),
-				score: arr[base + 2],
+				score: arr[base + 2]/100, // <-- convert back to float
 				watchTime: arr[base + 3],
 				attempts: arr[base + 4],
-				videoProgress: arr[base + 5],
+				videoProgress: arr[base + 5]/100, // <-- convert back to float
 				userAnswers: JSON.parse(arr[base + 6] || "{}")
 			};
 		});
@@ -146,13 +146,10 @@ let state = {
 		if(this.checkCourseCompletion()){
 			// if all the course rules are met
 
-			// Update user progress
-			//this.data.delta.progress = this.data.pages.length;
-
 			// Calculate score
 			const grade = this.calculateOverallGrade();
 			const gradeString = String(grade.ratio * 100); // <-- percentage grade as a string
-			this.log("Course finished with a Grade of " + gradeString);
+			telemetry.log("COURSE_COMPLETE", gradeString);
 
 			lms.setScore(grade.earnedScore, grade.maxScore); // <-- send course score to the LMS
 
@@ -172,7 +169,7 @@ let state = {
 				// we made it to the end and the student did not do well enough
 				// break the sad news, restart the course
 				alert(`You did not score high enough (you got a ${gradeString}% and needed a ${grade.ratio * 100}%). Click okay to retry`);
-				this.reset(); // TODO find a nicer way to do this and probably log attempts
+				this.reset(); // TODO find a nicer way to do this and probably log attempts, like a soft reset
 			}
 
 			// Show the last page
@@ -191,6 +188,7 @@ let state = {
 			this.data.delta.progress += 1;
 			this.save();
 			this.log(`Page ${this.data.delta.currentPageIndex} completed`);
+			telemetry.log("PAGE_COMPLETE", this.data.delta.currentPageIndex);
 			this.bannerMessage("This page is completed. You may continue", false);
 		} else {
 			return false;
@@ -279,7 +277,11 @@ let state = {
 		let compressed = await telemetry.pack(saveData);
 
 		// Try to save with the LMS
-		if(compressed) lms.saveData(compressed);
+		if(compressed){
+			lms.saveData(compressed);
+		} else {
+			console.error(`state.save: unable to save to save the data '${saveData}'. Compressed returned '${compressed}'`);
+		}
 
 	},
 
@@ -287,7 +289,6 @@ let state = {
 	// loads the state from the local browser
 		// Try to load from the LMS first
 		const data = await telemetry.unpack(lms.loadData());
-		//let stateAsString = lms.loadData();
 
 		// If that fails, try local backup
 		/*if(!stateAsString){
@@ -302,7 +303,7 @@ let state = {
 				console.error(`loadSave: Unable to parse saved data of \n${stateAsString}\n --> ${e}`);
 			}
 		} else {
-			this.log("Started new course");
+			telemetry.log("STARTED_NEW_COURSE", "");
 		}
 	},
 
@@ -317,6 +318,7 @@ let state = {
 			this.lessonFrame.src = this.data.pages[0].name + '?_cb=' + Date.now();
 			// TODO check if we are debugging, if so, delete the saved log too
 			window.onbeforeunload = null;
+			// TODO consider saving telemetry logs and loading them
 			window.location.reload();
 		}
 	},
@@ -370,38 +372,59 @@ let state = {
 
 	handleMessage: function(event){
 		//console.log(event);
-		const page = this.data.pages[this.data.delta.currentPageIndex];
+		const index = this.data.delta.currentPageIndex;
+		const page = this.data.pages[index];
 		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
+		const name = this.handleMessage.name;
 		if(event.origin != window.location.origin){
-			console.log("Unknown Sender!");
+			console.error(`${name}: Unknown message sender! --> ${event}`);
 			return;
 		}
-		if(event.data.type === "QUIZ_SUBMITTED"){
-			this.log(page.name + " Quiz was submitted");
-			pageDelta.userAnswers = event.data.message; // <-- push what the user says to the state of the page
-			const grades = this.gradeQuizQuestions(page.questions, event.data.message);
-			pageDelta.score = grades.score;
-			this.finalizePage();
-			this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_INFO", score: pageDelta.score / page.maxScore, maxAttempts: page.completionRules.attempts - ++pageDelta.attempts  }, '*');
-		} else if(event.data.type === "QUIZ_ADD_QUESTIONS"){
-			// Page requests the quiz to be rendered from the JSON, and gets the rendered HTML returned
-			this.log(page.name + " Quiz questions added");
-			//this.setQuizQuestions(String(this.data.delta.currentPageIndex), event.data.message);
-			this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_ADD_QUESTIONS", message: this.renderQuiz(this.data.delta.currentPageIndex)}, '*');
-		} else if(event.data.type === "LOG"){
-			this.log(`${page.name} ${event.data.message}`);
-		} else if(event.data.type === "PAGE_SCROLLED"){
-			this.log(page.name + " Page was scrolled all the way down");
-			pageDelta.scrolled = event.data.scrolled;
-		} else if(event.data.type === "VIDEO_PROGRESS"){
-			pageDelta.videoProgress = event.data.message;
-		} else if(event.data.type === "GET_STUDENT_DATA"){
-			// Returns name and current grade so far
-			const grade = String(Math.floor((this.calculateOverallGrade().ratio * 100)));
-			this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA", name: this.studentName, grade: grade }, '*');
-		} else {
-			console.log("Unknown message --> ", event.data);
-			return;
+
+		switch(event.data.type){
+			case "QUIZ_SUBMITTED":
+				telemetry.log("QUIZ_SUBMITTED", index);
+				pageDelta.userAnswers = event.data.message; // <-- push what the user says to the state of the page
+				const grades = this.gradeQuizQuestions(page.questions, event.data.message);
+				pageDelta.score = grades.score;
+				this.finalizePage(); // <-- do a page completion check
+				this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_INFO",
+					score: pageDelta.score / page.maxScore,
+					maxAttempts: page.completionRules.attempts - ++pageDelta.attempts },
+					'*');
+				break;
+
+			case "QUIZ_ADD_QUESTIONS":
+				// Page requests the quiz to be rendered from the JSON, and gets the rendered HTML returned
+				this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_ADD_QUESTIONS", message: this.renderQuiz(this.data.delta.currentPageIndex)}, '*');
+				telemetry.log("QUESTIONS_RENDERED", index);
+				break;
+
+			case "LOG":
+				telemetry.log("GENERAL", `${index} ${event.data.message}`);
+				break;
+
+			case "PAGE_SCROLLED":
+				pageDelta.scrolled = event.data.scrolled;
+				telemetry.log("SCROLLED", index);
+				break;
+
+			case "VIDEO_PROGRESS":
+				pageDelta.videoProgress = event.data.message;
+				//log progress every 5%
+				if(event.data.message % 0.05 === 0) telemetry.log("VIDEO_PROGRESS", index);
+				break;
+
+			case "GET_STUDENT_DATA":
+				// Returns name and current grade so far
+				const grade = String(Math.floor((this.calculateOverallGrade().ratio * 100)));
+				this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA", name: this.studentName, grade: grade }, '*');
+				telemetry.log("GENERAL", "student info requested, page " + String(index));
+				break;
+
+			default:
+				console.error(`${name}: Unknown / unimplemented message! --> ${event}`);
+				break;
 		}
 		this.finalizePage();
 	},
@@ -448,12 +471,9 @@ let state = {
 		const maxScore = questions.reduce((acc, q) => acc + q.pointValue, 0); // <-- tally all the possible points
 
 		if(maxScore <= 0){
-			console.error("Max score set too low --> ", maxScore);
+			console.error("state.gradeQuizQuestions: Max score set too low --> ", maxScore);
 			return -1;
 		}
-
-		console.log(questions);
-		console.log(score/maxScore);
 		return ({score: score, maxScore: maxScore});
 	},
 
@@ -486,7 +506,7 @@ let state = {
 				let val = QUIZ_QUESTIONS[i].possibleAnswers[l];
 
 				let isChecked = "";
-				if(savedAnswers[qID] && savedAnswers[qID].includes(val)){
+				if(savedAnswers && savedAnswers[qID] && savedAnswers[qID].includes(val)){
 					isChecked = "checked";
 				}
 
@@ -519,7 +539,7 @@ let state = {
 			} else {
 				response = await fetch("lessons/course_data.json");
 			}
-			console.log("Loaded JSON");
+			console.log("Loaded course_data.json");
 			const rawData = await response.json();
 
 			// Save course rules

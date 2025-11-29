@@ -33,7 +33,8 @@ let telemetry = {
 		"VISIBILITY_HIDDEN": "j",
 		"VISIBILITY_VISIBLE" : "k",
 		"USER_IDLE" : "l",
-		"USER_ACTIVE" : "m"
+		"USER_ACTIVE" : "m",
+		"DIAGNOSTIC" : "n"
 	},
 
 	_decoding: {
@@ -59,10 +60,11 @@ let telemetry = {
 		"j": "VISIBILITY_HIDDEN",
 		"k": "VISIBILITY_VISIBLE",
 		"l": "USER_IDLE",
-		"m": "USER_ACTIVE"
+		"m": "USER_ACTIVE",
+		"n": "DIAGNOSTIC"
 	},
 
-	initialzed: false,
+	initialized: false,
 
 	// Data structure: Version ^ UserID ^ SessionStart ^ [Delta_Data] ^ [Interaction_Log]
 
@@ -71,7 +73,7 @@ let telemetry = {
 		this._startTime = Date.now();
 		this._eventBuffer = [];
 		this._supportsCompression = (typeof CompressionStream != 'undefined');
-		this.initialzed = true;
+		this.initialized = true;
 	},
 
 	_toBase36: function(num){
@@ -131,7 +133,7 @@ let telemetry = {
 		/* Calculates Date.now() - _startTime, converts it to seconds, and returns it as a Base36 string. Used for logging timestamps. */
 		const offsetMS = Date.now() - this._startTime;
 		const offsetS = Math.floor(offsetMS/1000);
-		return(this._toBase36(offsetS));
+		return offsetS;
 	},
 
 	// --- Public API ---
@@ -141,7 +143,8 @@ let telemetry = {
 		const timeStamp = this._toBase36(this._getOffest());
 		const encoded = this._encoding[action];
 		//If the encoding is wrong, log it for examination
-		const message = encoded ? `${timeStamp},${encoded},${value}` : `${timeStamp},${this._encoding["GENERAL"]},${action} ${value}`;
+		const message = encoded ? `${timeStamp},${encoded},${String(value)}` :
+			`${timeStamp},${this._encoding["DIAGNOSTIC"]}, Unknown action '${action}' ${String(value)}`;
 		this._eventBuffer.push(message);
 		console.log(`encoder.log --> '${message}'`);
 	},
@@ -237,7 +240,7 @@ let telemetry = {
 		const logArray = logRaw.length > 0 ? logRaw.split(this._logDelimiter) : [];
 
 		// 6. Return the clean object
-		return {
+		const cleanObject = {
 				meta: {
 						version: version,
 						userID: userID,
@@ -246,6 +249,8 @@ let telemetry = {
 				delta: deltaArray,
 				log: logArray
 		};
+		console.log(cleanObject);
+		return cleanObject;
 	},
 
 	getHumanTime: function(offset){
