@@ -26,6 +26,7 @@ let state = {
 	studentID: "",
 	sessionStartTime: 0, // Logs how long the student has been on today
 	isIdle: false, // Tracks if the user is idle on the site to help balance logs
+	focusTimer: null, // handles timing between focus checks
 	initialized: false,
 
 	init: async function(frameId, bannerId, infoBar) {
@@ -47,7 +48,6 @@ let state = {
 		// finds the required iframe and banner
 		this.lessonFrame = document.getElementById(frameId);
 		this.infoBanner = document.getElementById(bannerId);
-		this.infoBanner.addEventListener("click", () => {this.infoBanner.style.display = "none"});
 		this.infoBar = document.getElementById(infoBar);
 
 		// attempt to load the course
@@ -59,33 +59,72 @@ let state = {
 		// load last webpage we were on
 		this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
 
+		// start event listeners and timers
+		this.startEventListeners();
+
+		// update the UI bar
+		this.updateInfo();
+
+		// mark done
+		this.initialized = true;
+	},
+
+	startEventListeners: function(){
+
+		// make infoBanner close on click
+		this.infoBanner.addEventListener("click", () => {this.infoBanner.style.display = "none"});
+
 		// turn on visibility tracking
 		document.addEventListener("visibilitychange", () => {
 			const type = document.hidden ?  "VISIBILITY_HIDDEN" : "VISIBILITY_VISIBLE";
 			telemetry.log(type, this.data.delta.currentPageIndex);
 		});
 
-		// turn on focus tracking
-		/*
-		document.addEventListener("blur", () => {
-			// ignore clicks to the iframe
-			setTimeout(() => {
-				// needs a timeout to prevent race condition in the DOM
-				if(document.activeElement === this.lessonFrame) return;
+		// create focus and blur function for both parent and iframe
+		const onFocus = () => {
+			if(this.focusTimer){
+				clearTimeout(this.focusTimer);
+				this.focusTimer = null;
+			}
 
-				// idle check to help stop log spam from iframe to parent
+			if(this.isIdle){
+					this.isIdle = false;
+					telemetry.log("CLICK_BACK", this.data.delta.currentPageIndex);
+			}
+		};
+
+		const onBlur = () => {
+			this.focusTimer = setTimeout(() => {
 				if(!this.isIdle){
 					this.isIdle = true;
 					telemetry.log("CLICK_OFF", this.data.delta.currentPageIndex);
 				}
-			}, 10); // Small delay allows the DOM to settle
-		});
-		document.addEventListener("focus", () => {
-			if(this.isIdle){
-				this.isIdle = false;
-				telemetry.log("CLICK_BACK", this.data.delta.currentPageIndex);
+			}, 100);
+		};
+
+		// assign the focus and blur to parent if possible
+		window.addEventListener("focus", onFocus);
+		window.addEventListener("blur", onBlur);
+
+		// assign the focus and blur to iframe if allowed
+		this.lessonFrame.addEventListener("load", () => {
+			try {
+				const childWindow = this.lessonFrame.contentWindow;
+				childWindow.addEventListener("focus", onFocus);
+				childWindow.addEventListener("blur", onBlur);
+				childWindow.document.addEventListener("click", onFocus);
+
+				// assign the focus and blur to parent if possible
+				// browsers will ignore repeat identical event listeners
+				window.addEventListener("focus", onFocus);
+				window.addEventListener("blur", onBlur);
+			} catch (e) {
+				console.warn(`state.startEventListeners: Unable to add focus/blur --> ${e}`);
+				telemetry.log("GENERAL", "focus/blur events disabled");
+				window.removeEventListener("focus", onFocus);
+				window.removeEventListener("blur", onBlur);
 			}
-		}); */
+		});
 
 		// track the time in the course and page
 		setInterval(() => {
@@ -97,8 +136,7 @@ let state = {
 			this.finalizePage();
 
 		}, 1000);
-		this.updateInfo();
-		this.initialized = true;
+
 	},
 
 	serialize: function(){
