@@ -25,6 +25,7 @@ let state = {
 	studentName: "",
 	studentID: "",
 	sessionStartTime: 0, // Logs how long the student has been on today
+	isIdle: false, // Tracks if the user is idle on the site to help balance logs
 	initialized: false,
 
 	init: async function(frameId, bannerId, infoBar) {
@@ -57,6 +58,34 @@ let state = {
 
 		// load last webpage we were on
 		this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
+
+		// turn on visibility tracking
+		document.addEventListener("visibilitychange", () => {
+			const type = document.hidden ?  "VISIBILITY_HIDDEN" : "VISIBILITY_VISIBLE";
+			telemetry.log(type, this.data.delta.currentPageIndex);
+		});
+
+		// turn on focus tracking
+		/*
+		document.addEventListener("blur", () => {
+			// ignore clicks to the iframe
+			setTimeout(() => {
+				// needs a timeout to prevent race condition in the DOM
+				if(document.activeElement === this.lessonFrame) return;
+
+				// idle check to help stop log spam from iframe to parent
+				if(!this.isIdle){
+					this.isIdle = true;
+					telemetry.log("CLICK_OFF", this.data.delta.currentPageIndex);
+				}
+			}, 10); // Small delay allows the DOM to settle
+		});
+		document.addEventListener("focus", () => {
+			if(this.isIdle){
+				this.isIdle = false;
+				telemetry.log("CLICK_BACK", this.data.delta.currentPageIndex);
+			}
+		}); */
 
 		// track the time in the course and page
 		setInterval(() => {

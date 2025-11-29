@@ -35,7 +35,9 @@ let telemetry = {
 		"USER_IDLE" : "l",
 		"USER_ACTIVE" : "m",
 		"DIAGNOSTIC" : "n",
-		"VIDEO_MUTED" : 'o',
+		"VIDEO_MUTED" : "o",
+		"CLICK_OFF" : "p",
+		"CLICK_BACK" : "q"
 	},
 
 	_decoding: {
@@ -63,7 +65,9 @@ let telemetry = {
 		"l": "USER_IDLE",
 		"m": "USER_ACTIVE",
 		"n": "DIAGNOSTIC",
-		"o": "VIDEO_MUTED"
+		"o": "VIDEO_MUTED",
+		"p": "CLICK_OFF",
+		"q": "CLICK_BACK"
 	},
 
 	initialized: false,
