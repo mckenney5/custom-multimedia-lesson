@@ -27,7 +27,7 @@ let state = {
 	sessionStartTime: 0, // Logs how long the student has been on today
 	initialized: false,
 
-	init: function(frameId, bannerId, infoBar) {
+	init: async function(frameId, bannerId, infoBar) {
 		// Set up LMS connection
 		if(!lms.initialized) lms.init();
 
@@ -48,6 +48,12 @@ let state = {
 		this.infoBanner = document.getElementById(bannerId);
 		this.infoBanner.addEventListener("click", () => {this.infoBanner.style.display = "none"});
 		this.infoBar = document.getElementById(infoBar);
+
+		// attempt to load the course
+		await this.loadCourseData();
+
+		// attempt to load the saved state
+		await this.loadSave();
 
 		// load last webpage we were on
 		this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
@@ -655,10 +661,9 @@ let state = {
 // --- End of Objects ---
 
 window.onload = async () => {
-	lms.init();
-	await state.loadCourseData();
-	state.loadSave();
-	state.init("lesson-frame", "info-banner", "info-bar");
+	await state.init("lesson-frame", "info-banner", "info-bar"); //TODO FIXME there seems to be an error where its unloaded and reloaded it thinks we are broken. maybe init first?
+	//await state.loadCourseData();
+	//await state.loadSave(); // <-- needs to be await to avoid race condition bug where the lessonFrame is the wrong lesson
 	window.addEventListener('message', state.handleMessage.bind(state));
 };
 
