@@ -300,7 +300,7 @@ let state = {
 			try {
 				this.deserialize(data.delta);
 			} catch(e) {
-				console.error(`loadSave: Unable to parse saved data of \n${stateAsString}\n --> ${e}`);
+				console.error(`state.loadSave: Unable to parse saved data of \n${stateAsString}\n --> ${e}`);
 			}
 		} else {
 			telemetry.log("STARTED_NEW_COURSE", "");
@@ -321,6 +321,35 @@ let state = {
 			// TODO consider saving telemetry logs and loading them
 			window.location.reload();
 		}
+	},
+
+	lockDown: function(){
+		//Stops saving and disables the course
+		this.pauseSave = true;
+
+		// disable buttons
+		document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+
+		//clear the screen
+		this.lessonFrame.src = "about:blank";
+
+		// quit
+		this.quit();
+
+		// Inform the user
+		window.document.body.innerHTML = "<h2>Course disabled</h2>"
+
+		// remove event listeners
+		window.onbeforeunload = () => console.log("Stoping prompt");
+		window.onunload = () => console.log("Stoping quit");
+
+		// nuke the state and its modules
+		state = "";
+		telemetry = "";
+		lms = "";
+
+		// now the user cannot destroy their saved file, unless they refresh!
+
 	},
 
 	quit: function(){
@@ -480,6 +509,11 @@ let state = {
 
 	log: function(message){
 		telemetry.log("GENERAL", message);
+	},
+
+	alert: function(message){
+		//handles critical alerts to the user. useful if the calling object does not need a DOM
+		return confirm(message);
 	},
 
 	setQuizQuestions: function(pageName, data){

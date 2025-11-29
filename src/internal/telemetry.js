@@ -2,7 +2,7 @@ let telemetry = {
 	/* Takes in data, encodes, and decodes, and translates */
 	_delimiter: '^',
 	_supportsCompression: false,
-	_useCompression: false,
+	_useCompression: true,
 	_compressionPrefix: "CGZ", //how we can tell the data is compressed. the string starts with CGZ
 	_logDelimiter: '~',
 	_logHeadDelimiter: '`',
@@ -174,8 +174,8 @@ let telemetry = {
 	},
 
 	pack: async function(deltaArray){
-		/* The Serializer. Accepts your specific array of state data (Progress, Score, etc.). Joins Version, UserID, StartTime, DeltaArray, and _eventBuffer into one long string for the LMS.
-		TODO handle no compression of data */
+		/* The Serializer. Accepts the specific array of state data (Progress, Score, etc.).
+		 Joins Version, UserID, StartTime, DeltaArray, and _eventBuffer into one long string for the LMS. */
 		const raw = [
 				this._version,
 				this._userID,
@@ -185,26 +185,45 @@ let telemetry = {
 		].join(this._delimiter);
 
 		// 2. Compress (TODO handle here if compression is disabled)
-		const compressed = await this._compressGzip(raw);
+		let compressed = "";
 
+		if(this._supportsCompression && this._useCompression){
+			compressed = this._compressionPrefix +  await this._compressGzip(raw);
+		}
 		// If compression fails (like no support), send the raw encoding instead
 		return compressed ? compressed : raw;
 	},
 
 	unpack: async function(saveString){
-		/* The Deserializer. Takes the raw string from the LMS, splits it by ^, decodes the numbers, and returns a clean object { state: [], log: [] } for your app to load.
-		 TODO handle non-compressed data */
+		/* The Deserializer. Takes the raw string from the LMS, splits it by ^,
+		 decodes the numbers, and returns a clean object { state: [], log: [] } for the app to load. */
 
 		if (!saveString) return null;
+
+		if(saveString.startsWith(this._compressionPrefix) && !this._supportsCompression){
+			//if the user started this course on a modern browser but loaded progress on an old one...
+			const reset = state.alert("IMPORTANT: Your progress cannot be reloaded on this browser. Continuing will wipe your progress. Are you sure you want to RESTART THE COURSE?");
+			if(!reset){
+				state.lockDown();
+				return null;
+			}
+		}
+
 		let raw = "";
 		try {
-				// 1. Decompress (Await the promise directly)
-				// Check if it looks like Gzip (starts with H4s... usually) or if you used a prefix
-				// For now, assuming all input is Gzip compressed as per your pack method
-				raw = await this._decompressGzip(saveString);
+				if((this._supportsCompression && this._useCompression) || saveString.startsWith(this._compressionPrefix)){
+					raw = await this._decompressGzip(saveString.slice(this._compressionPrefix.length)); // <-- remove the compression prefix and decompress
+				} else {
+					raw = saveString;
+				}
 		} catch (e) {
-				console.error("Decompression failed. Data might be corrupt or uncompressed.", e);
-				return null;
+				if(saveString.startsWith(this._version + this._delimiter)){
+					console.log("User can do compression but saved without it");
+					raw = saveString;
+				} else {
+					console.error(`telemetry.unpack: Decompression failed. Data might be corrupt! saveString: '${saveString}'\n`, e);
+					return null;
+				}
 		}
 
 		// 2. Split by Delimiter (^)
@@ -212,11 +231,11 @@ let telemetry = {
 
 		// Safety Check: Ensure we have enough parts
 		if(parts.length < 4 || parts[0] !== this._version){
-				console.error("Save data format invalid.");
+				console.log(`[DEBUG]telemetry.unpack --> Saved data invalid: '${raw}'`);
 				return null;
 		}
 
-		// 3. Map the Parts (Based on your pack structure)
+		// 3. Map the Parts (Based on the pack structure)
 		// Structure: Version ^ UserID ^ StartTime ^ [Delta...Delta] ^ [Log...Log]
 
 		// Index 0: Version
@@ -252,12 +271,12 @@ let telemetry = {
 				delta: deltaArray,
 				log: logArray
 		};
-		console.log(cleanObject);
+		console.log("[DEBUG]telemetry.unpack --> ", cleanObject);
 		return cleanObject;
 	},
 
 	getHumanTime: function(offset){
-		/* Debug Helper. Converts a raw timestamp (or calculated offset) into a human-readable string (e.g., "10:45 AM") for your console logs or analytics viewer. */
+		/* Debug Helper. Converts a raw timestamp (or calculated offset) into a human-readable string (e.g., "10:45 AM") for the console logs or analytics viewer. */
 		const date = new Date(this._startTime + offset * 1000);
 		return (date.toUTCString());
 
