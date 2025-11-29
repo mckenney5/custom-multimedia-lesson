@@ -661,9 +661,17 @@ let state = {
 // --- End of Objects ---
 
 window.onload = async () => {
-	await state.init("lesson-frame", "info-banner", "info-bar"); //TODO FIXME there seems to be an error where its unloaded and reloaded it thinks we are broken. maybe init first?
-	//await state.loadCourseData();
-	//await state.loadSave(); // <-- needs to be await to avoid race condition bug where the lessonFrame is the wrong lesson
+
+	// Write some loading text into the iframe
+	const iframe = document.getElementById("lesson-frame");
+	iframe.src = 'about:blank';
+	const doc = iframe.contentDocument || iframe.contentWindow.document;
+	doc.open();
+	doc.write('<!doctype html><html lang="en">Loading…</html>');
+	doc.close();
+
+	// Start the web app
+	await state.init("lesson-frame", "info-banner", "info-bar");
 	window.addEventListener('message', state.handleMessage.bind(state));
 };
 
