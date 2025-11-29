@@ -22,7 +22,7 @@ let telemetry = {
 		"PAGE_NEXT" : "8",
 		"PAGE_PREV" : "9",
 		"VIDEO_PLAY" : "a",
-		"VIDEO_PAUSED" : "b",
+		"VIDEO_PAUSE" : "b",
 		"VIDEO_FORWARD" : "c",
 		"VIDEO_REWIND" : "d",
 		"VIDEO_SPEED_CHANGE" : "e",
@@ -34,7 +34,8 @@ let telemetry = {
 		"VISIBILITY_VISIBLE" : "k",
 		"USER_IDLE" : "l",
 		"USER_ACTIVE" : "m",
-		"DIAGNOSTIC" : "n"
+		"DIAGNOSTIC" : "n",
+		"VIDEO_MUTED" : 'o',
 	},
 
 	_decoding: {
@@ -49,7 +50,7 @@ let telemetry = {
 		"8": "PAGE_NEXT",
 		"9": "PAGE_PREV",
 		"a": "VIDEO_PLAY",
-		"b": "VIDEO_PAUSED",
+		"b": "VIDEO_PAUSE",
 		"c": "VIDEO_FORWARD",
 		"d": "VIDEO_REWIND",
 		"e": "VIDEO_SPEED_CHANGE",
@@ -61,10 +62,12 @@ let telemetry = {
 		"k": "VISIBILITY_VISIBLE",
 		"l": "USER_IDLE",
 		"m": "USER_ACTIVE",
-		"n": "DIAGNOSTIC"
+		"n": "DIAGNOSTIC",
+		"o": "VIDEO_MUTED"
 	},
 
 	initialized: false,
+	videoProgressInterval: 5, // <-- request that video progress be updated every 5%
 
 	// Data structure: Version ^ UserID ^ SessionStart ^ [Delta_Data] ^ [Interaction_Log]
 

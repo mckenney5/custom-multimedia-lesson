@@ -376,6 +376,8 @@ let state = {
 		const page = this.data.pages[index];
 		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
 		const name = this.handleMessage.name;
+		const roundTo4 = n => Math.round(n*10000)/10000;
+
 		if(event.origin != window.location.origin){
 			console.error(`${name}: Unknown message sender! --> ${event}`);
 			return;
@@ -396,7 +398,8 @@ let state = {
 
 			case "QUIZ_ADD_QUESTIONS":
 				// Page requests the quiz to be rendered from the JSON, and gets the rendered HTML returned
-				this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_ADD_QUESTIONS", message: this.renderQuiz(this.data.delta.currentPageIndex)}, '*');
+				this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_ADD_QUESTIONS",
+					message: this.renderQuiz(this.data.delta.currentPageIndex)}, '*');
 				telemetry.log("QUESTIONS_RENDERED", index);
 				break;
 
@@ -412,13 +415,49 @@ let state = {
 			case "VIDEO_PROGRESS":
 				pageDelta.videoProgress = event.data.message;
 				//log progress every 5%
-				if(event.data.message % 0.05 === 0) telemetry.log("VIDEO_PROGRESS", index);
+				if(Math.round(event.data.message * 100) % telemetry.videoProgressInterval === 0) telemetry.log("VIDEO_PROGRESS", index);
+				break;
+
+			case "VIDEO_PLAYING":
+				// Logs when the play button was hit, and video percentage at that point
+				telemetry.log("VIDEO_PLAY", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				break;
+
+			case "VIDEO_PAUSED":
+				telemetry.log("VIDEO_PAUSE", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				break;
+
+			case "VIDEO_REWIND":
+				// TODO look into better way of getting rewind to and from
+				telemetry.log("VIDEO_REWIND", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				break;
+
+			case "VIDEO_FORWARD":
+				// TODO look into better way of getting forward to and from
+				telemetry.log("VIDEO_FORWARD", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				break;
+
+			case "VIDEO_SPEED_CHANGE":
+				telemetry.log("VIDEO_SPEED_CHANGE", `${index},${roundTo4(pageDelta.videoProgress)},${event.data.message}`);
+				break;
+
+			case "VIDEO_FULL_SCREEN":
+				telemetry.log("VIDEO_FULL_SCREEN", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				break;
+
+			case "VIDEO_NORMAL_SCREEN":
+				telemetry.log("VIDEO_NORMAL_SCREEN", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				break;
+
+			case "VIDEO_MUTED":
+				telemetry.log("VIDEO_MUTED", `${index},${roundTo4(pageDelta.videoProgress)},${event.data.message}`);
 				break;
 
 			case "GET_STUDENT_DATA":
 				// Returns name and current grade so far
 				const grade = String(Math.floor((this.calculateOverallGrade().ratio * 100)));
-				this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA", name: this.studentName, grade: grade }, '*');
+				this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA",
+					name: this.studentName, grade: grade }, '*');
 				telemetry.log("GENERAL", "student info requested, page " + String(index));
 				break;
 
