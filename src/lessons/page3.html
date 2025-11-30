@@ -90,10 +90,10 @@
 </head>
 <body>
 	<h1>Page 3</h1></br>
-	<h3>Video</h3>
-
+	<h3>Video</h3><br>
 
 	<div id="video-container">
+		<h3 id="muted" style="color: red;"></h3>
 		<video id="course-video" src="../media/1.mp4"></video>
 
 		<div id="video-controls">
@@ -129,8 +129,10 @@
 		let videoFurthest = 0;
 
 		// Functions
-		function log(message){
-			window.parent.postMessage({ type: 'LOG', message: message }, '*');
+		function log(message, type=""){
+			const send = window.parent.postMessage;
+			const t = (type === "") ? "LOG" : type;
+			send({ type: t, message: message }, '*');
 		}
 
 		function secondsToMinutes(seconds){
@@ -146,25 +148,25 @@
 			// Toggles play / pause button
 			if(video.paused){
 				video.play();
-				log("Video playing");
+				log("", "VIDEO_PLAYING");
 				playButton.textContent = "Pause";
 			} else {
 				video.pause();
-				log("Video paused");
+				log("", "VIDEO_PAUSED");
 				playButton.textContent = "Play";
 			}
 		});
 
 		rewindButton.addEventListener('click', function() {
 			video.pause();
-			log(`Rewinding from ${video.currentTime} to ${video.currentTime-5}`);
+			log("", "VIDEO_REWIND");
 			video.currentTime -= 5;
 			video.play();
 		});
 
 		forwardButton.addEventListener('click', function() {
 			video.pause();
-			log(`Forwarding from ${video.currentTime} to ${video.currentTime+5}`);
+			log("", "VIDEO_FORWARD");
 			video.currentTime += 5;
 			video.play();
 		});
@@ -174,7 +176,7 @@
 		});
 
 		speedSlider.addEventListener('change', function() {
-			log(`Playback rate set from ${video.playbackRate} to ${speedSlider.value}`);
+			log(`from ${video.playbackRate} to ${speedSlider.value}`, "VIDEO_SPEED_CHANGE");
 			video.playbackRate = speedSlider.value;
 		});
 
@@ -204,10 +206,10 @@
 
 		videoContainer.addEventListener('fullscreenchange', function() {
 			if (!document.fullscreenElement) {
-				log("Exited full screen");
+				log("", "VIDEO_NORMAL_SCREEN");
 				fullScreenButton.textContent = "Full Screen";
 			} else {
-				log("Video at full screen");
+				log("", "VIDEO_FULL_SCREEN");
 				fullScreenButton.textContent = "Normal Screen";
 			}
 		});
@@ -236,7 +238,9 @@
 					break;
 				case 'KeyM':
 					video.muted = !video.muted;
-					log("Video Muted " + video.muted);
+					log(video.muted, "VIDEO_MUTED");
+					const m = document.getElementById("muted");
+					m.innerHTML = video.muted ? "Video Muted" : "";
 					break;
 				default:
 					console.log(`Unknown key --> '${e.code}'`)
