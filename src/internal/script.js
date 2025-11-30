@@ -50,7 +50,7 @@ let state = {
 		this.infoBanner = document.getElementById(bannerId);
 		this.infoBar = document.getElementById(infoBar);
 
-		// attempt to load the course
+		// attempt to load the course (static data)
 		await this.loadCourseData();
 
 		// attempt to load the saved state
@@ -126,7 +126,7 @@ let state = {
 			}
 		});
 
-		// track the time in the course and page
+		// track the time in the course and the current page
 		setInterval(() => {
 			if(++this.data.delta.totalCourseSeconds % 60 == 0){
 				if(!debugging) this.save();
@@ -517,7 +517,7 @@ let state = {
 			case "VIDEO_PROGRESS":
 				pageDelta.videoProgress = event.data.message;
 				//log progress every 5%
-				if(Math.round(event.data.message * 100) % telemetry.videoProgressInterval === 0) telemetry.log("VIDEO_PROGRESS", index);
+				if(Math.round(event.data.message * 100) % telemetry.videoProgressInterval === 0) telemetry.log("VIDEO_PROGRESS", `${index},${roundTo4(pageDelta.videoProgress)}`);
 				break;
 
 			case "VIDEO_PLAYING":
