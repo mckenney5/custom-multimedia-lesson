@@ -54,20 +54,20 @@ Currently, there is no way to automate course making *yet*.
 Here are the current steps to make your own course:
 
 1. Add HTML files to the lesson folder
-	a. Use the examples in the lesson folder for features
-	b. It is recommended to only use one type of media per page for chunking / segmentation
-	c. Replace links to your media
-	d. Put your media in the media folder
+	1. Use the examples in the lesson folder for features
+	2. It is recommended to only use one type of media per page for chunking / segmentation
+	3. Replace links to your media
+	4. Put your media in the media folder
 2. Update the course_data.json in the lessons folder
-	a. Add overall course rules (see below)
-	b. Copy and paste the course object in sequential order
-	c. Modify the course object with your info (see below)
-	d. Add completion rules per page (see below)
-	e. Keep (or make your own) first and last page, where the first page is directions and the last page a congrats
-	f. Open the course to test for errors in the console log
-	g. Do a dry run of your course from start to finish
-	h. (optional) package your course via `make.sh` in the tools folder
-	i. (optional) upload the SCORM 1.2 package to an LMS for further testing and publication
+	1. Add overall course rules (see below)
+	2. Copy and paste the course object in sequential order
+	3. Modify the course object with your info (see below)
+	4. Add completion rules per page (see below)
+	5. Keep (or make your own) first and last page, where the first page is directions and the last page a congrats
+	6. Open the course to test for errors in the console log
+	7. Do a dry run of your course from start to finish
+	8. (optional) package your course via `make.sh` in the tools folder
+	9. (optional) upload the SCORM 1.2 package to an LMS for further testing and publication
 
 ### Course Rules
 The object looks like this:
@@ -116,20 +116,20 @@ The page object looks like this, not *page order matters* :
 	- Used to convey text to read
 	- Great for directions, signaling key points, objects, etc
 	- Common Completion Rules:
-		- watchTime --> Enough time for a fast reader to read the page
-		- scrolled --> Detects that the user made it to the bottom
+		- watchTime: Enough time for a fast reader to read the page
+		- scrolled: Detects that the user made it to the bottom
 - Video
 	- Used to show a static video with a custom player
 	- Great for complex topics and visual demonstrations
 	- Common Completion Rules:
-		- watchTime --> Enough time to watch 99% of the video
-		- videoProgress --> As much of the video that the student *needs* to watch. Rarely 100%
+		- watchTime: Enough time to watch 99% of the video
+		- videoProgress: As much of the video that the student *needs* to watch. Rarely 100%
 - Quiz
 	- Used to test knowledge (see below about questions)
 	- Great for checking prior knowledge, highlighting key points, checking for understanding, summative knowledge
 	- Common Completion Rules:
-		- score --> The minimum score to move on. Usually 70%
-		- attempts --> How many attempts the student gets before blocking their submission
+		- score: The minimum score to move on. Usually 70%
+		- attempts:  How many attempts the student gets before blocking their submission
 
 #### Questions Object
 Common question set up:
@@ -187,8 +187,8 @@ points of every page and adding the total earned points. Dividing earned / possi
 | `watchTime`        | How long the student must be on that page                                |
 | `score`            | The minimum score to move on (use 0 to disable)                          |
 | `scrolled`         | The student must scroll to the bottom                                    |
-| `attempts`         | The ammount of time the student can submit quiz answers                  |                         |
-| `videoProgress`    | The percentage of the video that must be watched. 1.0 is the whole video |                              |
+| `attempts`         | The ammount of time the student can submit quiz answers                  |
+| `videoProgress`    | The percentage of the video that must be watched. 1.0 is the whole video | 
 
 
 ### Course Check List
