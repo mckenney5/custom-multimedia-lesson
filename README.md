@@ -85,14 +85,14 @@ The object looks like this:
 
 | Property          | Notes                                                                                                  |
 |-------------------|--------------------------------------------------------------------------------------------------------|
-| `minimumMinutes`  | The minimum ammount of time the user must be on the course (in minutes)                                |
+| `minimumMinutes`  | The minimum ammount of time the student must be on the course (in minutes)                             |
 | `minimumGrade`    | The lowest grade to get a pass for the whole course                                                    |
-| `completeOnly`    | Pass the user only if they completed every page. Do not report a grade                                 |
+| `completeOnly`    | Pass the student only if they completed every page. Do not report a grade                              |
 | `studentsCanFail` | A failing grade will be reported to the LMS. If false, students must restart the course if they failed |
 
 
 ### Page Set Up
-The page object looks like this, not *page order matters* :
+The page object looks like this, NOTE: *page order matters* :
 
 ```JSON
 {
@@ -117,13 +117,13 @@ The page object looks like this, not *page order matters* :
 	- Great for directions, signaling key points, objects, etc
 	- Common Completion Rules:
 		- watchTime: Enough time for a fast reader to read the page
-		- scrolled: Detects that the user made it to the bottom
+		- scrolled: Detects that the student made it to the bottom
 - Video
 	- Used to show a static video with a custom player
 	- Great for complex topics and visual demonstrations
 	- Common Completion Rules:
 		- watchTime: Enough time to watch 99% of the video
-		- videoProgress: As much of the video that the student *needs* to watch. Rarely 100%
+		- videoProgress: As much of the video that the student *needs* to watch. _Rarely_ 100%
 - Quiz
 	- Used to test knowledge (see below about questions)
 	- Great for checking prior knowledge, highlighting key points, checking for understanding, summative knowledge
@@ -185,7 +185,7 @@ points of every page and adding the total earned points. Dividing earned / possi
 | Property           | Notes                                                                    |
 |--------------------|--------------------------------------------------------------------------|
 | `watchTime`        | How long the student must be on that page                                |
-| `score`            | The minimum score to move on (use 0 to disable)                          |
+| `score`            | The minimum score to move on to the next page (use 0 to disable)         |
 | `scrolled`         | The student must scroll to the bottom                                    |
 | `attempts`         | The ammount of time the student can submit quiz answers                  |
 | `videoProgress`    | The percentage of the video that must be watched. 1.0 is the whole video | 
