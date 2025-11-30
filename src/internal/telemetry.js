@@ -9,6 +9,8 @@ let telemetry = {
 	_version: "v1",
 	_startTime: null,
 	_eventBuffer: [], //logs that have not been saved yet
+	_currentLog: [], //the complete log
+	_userID: "",
 
 	_encoding: {
 		"COURSE_COMPLETE" : "0",
@@ -149,18 +151,68 @@ let telemetry = {
 		/* The Main Recorder. Accepts a code (e.g., "NAV") and a value (e.g., "2"). Automatically calculates the time offset and pushes the compressed string to the buffer. */
 		const timeStamp = this._toBase36(this._getOffest());
 		const encoded = this._encoding[action];
+
+		// convert the object
+		const v = (typeof value === "object") ? JSON.stringify(value) : String(value);
+
 		//If the encoding is wrong, log it for examination
-		const message = encoded ? `${timeStamp},${encoded},${String(value)}` :
-			`${timeStamp},${this._encoding["DIAGNOSTIC"]}, Unknown action '${action}' ${String(value)}`;
+		const message = encoded ? `${timeStamp},${encoded},${v}` :
+			`${timeStamp},${this._encoding["DIAGNOSTIC"]}, Unknown action '${action}' ${v}`;
+
 		this._eventBuffer.push(message);
 		console.log(`encoder.log --> '${message}'`);
 	},
 
-	report: function(str){
+	report: function(userID, log, sessionStart){
 		/* takes in a string, splits, decodes, and returns a list of events */
+		const heading = ["ID", "Time Stamp", "Event", "Page Index", "Details"];
+		const baseTime = sessionStart || this._startTime;
+		this.startTime = baseTime; //if we are running in stand alone, we need a time ref
+		// TODO calculate start time from the first log entry, that entry should contain the unix time
 
-		let log = [];
-		return log;
+		const rows = log.map(r => {
+			// make the row a list
+			const list = r.split(',');
+
+			// calculate time from offset
+			const offset = this._fromBase36(list[0]);
+			const time = this.getHumanTime(offset);
+
+			// decode event
+			const eventName = this._decoding[list[1]] || "UNKNOWN_EVENT";
+
+			// page index (0 usually directions, last usually a congrats)
+			const page = list[2];
+
+			// combine the rest of the details
+			const details = list.slice(3).join(',');
+
+			return [userID, time, eventName, page, details];
+
+		});
+
+		const csv = [heading, ...rows];
+		return csv;
+	},
+
+	exportCSV: function(csv){
+		// takes in a 2D array formatted as a CSV and saves it
+
+		// puts the text together
+		const text = '\uFEFF' + csv.join("\n");
+
+		// makes the html blob
+		const blob = new Blob([text], {type: 'text/plain;charset=utf-8'});
+		const url = URL.createObjectURL(blob);
+
+		// runs the download code
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${this._userID}.data.csv`;
+		document.body.appendChild(a); // needed in some browsers
+		a.click();
+		a.remove();
+		URL.revokeObjectURL(url);
 	},
 
 	sanitize: function(str){
@@ -188,7 +240,7 @@ let telemetry = {
 				this._eventBuffer.join(this._logDelimiter)
 		].join(this._delimiter);
 
-		// 2. Compress (TODO handle here if compression is disabled)
+		// 2. Compress
 		let compressed = "";
 
 		if(this._supportsCompression && this._useCompression){
@@ -275,14 +327,16 @@ let telemetry = {
 				delta: deltaArray,
 				log: logArray
 		};
-		console.log("[DEBUG]telemetry.unpack --> ", cleanObject);
+		console.log("[DEBUG] telemetry.unpack --> ", cleanObject);
+		this._currentLog = cleanObject.log;
+		this._userID = cleanObject.meta.userID;
 		return cleanObject;
 	},
 
 	getHumanTime: function(offset){
 		/* Debug Helper. Converts a raw timestamp (or calculated offset) into a human-readable string (e.g., "10:45 AM") for the console logs or analytics viewer. */
 		const date = new Date(this._startTime + offset * 1000);
-		return (date.toUTCString());
+		return (date.toString());
 
 	},
 }
