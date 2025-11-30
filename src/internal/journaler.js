@@ -1,4 +1,4 @@
-let telemetry = {
+let journaler = {
 	/* Takes in data, encodes, and decodes, and translates */
 	_delimiter: '^',
 	_supportsCompression: false,
@@ -123,7 +123,7 @@ let telemetry = {
 			const compressed = await new Response(cs.readable).arrayBuffer();
 			return this._uint8ToBase64(new Uint8Array(compressed));
 		} catch (e) {
-			console.error(`telemetry._compressGzip: error while compressing '${str}' --> ${e}`);
+			console.error(`journaler._compressGzip: error while compressing '${str}' --> ${e}`);
 			return "";
 		}
 	},
@@ -277,7 +277,7 @@ let telemetry = {
 					console.log("User can do compression but saved without it");
 					raw = saveString;
 				} else {
-					console.error(`telemetry.unpack: Decompression failed. Data might be corrupt! saveString: '${saveString}'\n`, e);
+					console.error(`journaler.unpack: Decompression failed. Data might be corrupt! saveString: '${saveString}'\n`, e);
 					return null;
 				}
 		}
@@ -287,7 +287,7 @@ let telemetry = {
 
 		// Safety Check: Ensure we have enough parts
 		if(parts.length < 4 || parts[0] !== this._version){
-				console.log(`[DEBUG]telemetry.unpack --> Saved data invalid: '${raw}'`);
+				console.log(`[DEBUG]journaler.unpack --> Saved data invalid: '${raw}'`);
 				return null;
 		}
 
@@ -327,7 +327,7 @@ let telemetry = {
 				delta: deltaArray,
 				log: logArray
 		};
-		console.log("[DEBUG] telemetry.unpack --> ", cleanObject);
+		console.log("[DEBUG] journaler.unpack --> ", cleanObject);
 		this._currentLog = cleanObject.log;
 		this._userID = cleanObject.meta.userID;
 		return cleanObject;

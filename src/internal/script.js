@@ -39,8 +39,8 @@ let state = {
 		// Set the student's ID
 		this.studentID = lms.getStudentID();
 
-		// Set up telemetry
-		if(!telemetry.initialized) telemetry.init();
+		// Set up journaler
+		if(!journaler.initialized) journaler.init();
 
 		// Set the date and time of us starting today. TODO consider not using the user for time
 		this.sessionStartTime = Date.now();
@@ -77,7 +77,7 @@ let state = {
 		// turn on visibility tracking
 		document.addEventListener("visibilitychange", () => {
 			const type = document.hidden ?  "VISIBILITY_HIDDEN" : "VISIBILITY_VISIBLE";
-			telemetry.log(type, this.data.delta.currentPageIndex);
+			journaler.log(type, this.data.delta.currentPageIndex);
 		});
 
 		// create focus and blur function for both parent and iframe
@@ -89,7 +89,7 @@ let state = {
 
 			if(this.isIdle){
 					this.isIdle = false;
-					telemetry.log("CLICK_BACK", this.data.delta.currentPageIndex);
+					journaler.log("CLICK_BACK", this.data.delta.currentPageIndex);
 			}
 		};
 
@@ -97,7 +97,7 @@ let state = {
 			this.focusTimer = setTimeout(() => {
 				if(!this.isIdle){
 					this.isIdle = true;
-					telemetry.log("CLICK_OFF", this.data.delta.currentPageIndex);
+					journaler.log("CLICK_OFF", this.data.delta.currentPageIndex);
 				}
 			}, 100);
 		};
@@ -120,7 +120,7 @@ let state = {
 				window.addEventListener("blur", onBlur);
 			} catch (e) {
 				console.warn(`state.startEventListeners: Unable to add focus/blur --> ${e}`);
-				telemetry.log("GENERAL", "focus/blur events disabled");
+				journaler.log("GENERAL", "focus/blur events disabled");
 				window.removeEventListener("focus", onFocus);
 				window.removeEventListener("blur", onBlur);
 			}
@@ -165,7 +165,7 @@ let state = {
 			data.push(roundFloatTo2Int(p.videoProgress));
 
 			// Convert user answers to a string and sanitize it
-			data.push(telemetry.sanitize(JSON.stringify(p.userAnswers || {})));
+			data.push(journaler.sanitize(JSON.stringify(p.userAnswers || {})));
 
 		});
 
@@ -174,7 +174,7 @@ let state = {
 
 	deserialize: function(arr){
 		/*
-		 Logic: Take the array from telemetry.unpack. Read indices 0-2 into the global variables.
+		 Logic: Take the array from journaler.unpack. Read indices 0-2 into the global variables.
 		 Loop through the rest of the array (in chunks based on the page schema size) and assign values back to this.data.delta.pagesState.
 		*/
 		const delta = this.data.delta;
@@ -222,7 +222,7 @@ let state = {
 			// Calculate score
 			const grade = this.calculateOverallGrade();
 			const gradeString = String(grade.ratio * 100); // <-- percentage grade as a string
-			telemetry.log("COURSE_COMPLETE", gradeString);
+			journaler.log("COURSE_COMPLETE", gradeString);
 
 			lms.setScore(grade.earnedScore, grade.maxScore); // <-- send course score to the LMS
 
@@ -261,7 +261,7 @@ let state = {
 			this.data.delta.progress += 1;
 			this.save();
 			this.log(`Page ${this.data.delta.currentPageIndex} completed`);
-			telemetry.log("PAGE_COMPLETE", this.data.delta.currentPageIndex);
+			journaler.log("PAGE_COMPLETE", this.data.delta.currentPageIndex);
 			this.bannerMessage("This page is completed. You may continue", false);
 		} else {
 			return false;
@@ -347,7 +347,7 @@ let state = {
 
 		let saveData = this.serialize();
 
-		let compressed = await telemetry.pack(saveData);
+		let compressed = await journaler.pack(saveData);
 
 		// Try to save with the LMS
 		if(compressed){
@@ -361,7 +361,7 @@ let state = {
 	loadSave: async function(){
 	// loads the state from the local browser
 		// Try to load from the LMS first
-		const data = await telemetry.unpack(lms.loadData());
+		const data = await journaler.unpack(lms.loadData());
 
 		// If that fails, try local backup
 		/*if(!stateAsString){
@@ -376,7 +376,7 @@ let state = {
 				console.error(`state.loadSave: Unable to parse saved data of \n${stateAsString}\n --> ${e}`);
 			}
 		} else {
-			telemetry.log("STARTED_NEW_COURSE", "");
+			journaler.log("STARTED_NEW_COURSE", "");
 		}
 	},
 
@@ -391,7 +391,6 @@ let state = {
 			this.lessonFrame.src = this.data.pages[0].name + '?_cb=' + Date.now();
 			// TODO check if we are debugging, if so, delete the saved log too
 			window.onbeforeunload = null;
-			// TODO consider saving telemetry logs and loading them
 			window.location.reload();
 		}
 	},
@@ -418,7 +417,7 @@ let state = {
 
 		// nuke the state and its modules
 		state = "";
-		telemetry = "";
+		journaler = "";
 		lms = "";
 
 		// now the user cannot destroy their saved file, unless they refresh!
@@ -487,7 +486,7 @@ let state = {
 
 		switch(event.data.type){
 			case "QUIZ_SUBMITTED":
-				telemetry.log("QUIZ_SUBMITTED", index);
+				journaler.log("QUIZ_SUBMITTED", index);
 				pageDelta.userAnswers = event.data.message; // <-- push what the user says to the state of the page
 				const grades = this.gradeQuizQuestions(page.questions, event.data.message);
 				pageDelta.score = grades.score;
@@ -502,57 +501,57 @@ let state = {
 				// Page requests the quiz to be rendered from the JSON, and gets the rendered HTML returned
 				this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_ADD_QUESTIONS",
 					message: this.renderQuiz(this.data.delta.currentPageIndex)}, '*');
-				telemetry.log("QUESTIONS_RENDERED", index);
+				journaler.log("QUESTIONS_RENDERED", index);
 				break;
 
 			case "LOG":
-				telemetry.log("GENERAL", `${index} ${event.data.message}`);
+				journaler.log("GENERAL", `${index} ${event.data.message}`);
 				break;
 
 			case "PAGE_SCROLLED":
 				pageDelta.scrolled = event.data.scrolled;
-				telemetry.log("SCROLLED", index);
+				journaler.log("SCROLLED", index);
 				break;
 
 			case "VIDEO_PROGRESS":
 				pageDelta.videoProgress = event.data.message;
 				//log progress every 5%
-				if(Math.round(event.data.message * 100) % telemetry.videoProgressInterval === 0) telemetry.log("VIDEO_PROGRESS", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				if(Math.round(event.data.message * 100) % journaler.videoProgressInterval === 0) journaler.log("VIDEO_PROGRESS", `${index},${roundTo4(pageDelta.videoProgress)}`);
 				break;
 
 			case "VIDEO_PLAYING":
 				// Logs when the play button was hit, and video percentage at that point
-				telemetry.log("VIDEO_PLAY", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				journaler.log("VIDEO_PLAY", `${index},${roundTo4(pageDelta.videoProgress)}`);
 				break;
 
 			case "VIDEO_PAUSED":
-				telemetry.log("VIDEO_PAUSE", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				journaler.log("VIDEO_PAUSE", `${index},${roundTo4(pageDelta.videoProgress)}`);
 				break;
 
 			case "VIDEO_REWIND":
 				// TODO look into better way of getting rewind to and from
-				telemetry.log("VIDEO_REWIND", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				journaler.log("VIDEO_REWIND", `${index},${roundTo4(pageDelta.videoProgress)}`);
 				break;
 
 			case "VIDEO_FORWARD":
 				// TODO look into better way of getting forward to and from
-				telemetry.log("VIDEO_FORWARD", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				journaler.log("VIDEO_FORWARD", `${index},${roundTo4(pageDelta.videoProgress)}`);
 				break;
 
 			case "VIDEO_SPEED_CHANGE":
-				telemetry.log("VIDEO_SPEED_CHANGE", `${index},${roundTo4(pageDelta.videoProgress)},${event.data.message}`);
+				journaler.log("VIDEO_SPEED_CHANGE", `${index},${roundTo4(pageDelta.videoProgress)},${event.data.message}`);
 				break;
 
 			case "VIDEO_FULL_SCREEN":
-				telemetry.log("VIDEO_FULL_SCREEN", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				journaler.log("VIDEO_FULL_SCREEN", `${index},${roundTo4(pageDelta.videoProgress)}`);
 				break;
 
 			case "VIDEO_NORMAL_SCREEN":
-				telemetry.log("VIDEO_NORMAL_SCREEN", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				journaler.log("VIDEO_NORMAL_SCREEN", `${index},${roundTo4(pageDelta.videoProgress)}`);
 				break;
 
 			case "VIDEO_MUTED":
-				telemetry.log("VIDEO_MUTED", `${index},${roundTo4(pageDelta.videoProgress)},${event.data.message}`);
+				journaler.log("VIDEO_MUTED", `${index},${roundTo4(pageDelta.videoProgress)},${event.data.message}`);
 				break;
 
 			case "GET_STUDENT_DATA":
@@ -560,7 +559,7 @@ let state = {
 				const grade = String(Math.floor((this.calculateOverallGrade().ratio * 100)));
 				this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA",
 					name: this.studentName, grade: grade }, '*');
-				telemetry.log("GENERAL", "student info requested, page " + String(index));
+				journaler.log("GENERAL", "student info requested, page " + String(index));
 				break;
 
 			default:
@@ -581,7 +580,7 @@ let state = {
 	},
 
 	log: function(message){
-		telemetry.log("GENERAL", message);
+		journaler.log("GENERAL", message);
 	},
 
 	alert: function(message){
