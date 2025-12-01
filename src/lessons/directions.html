@@ -41,19 +41,37 @@
 		</main>
 		<footer></footer>
 		<script>
-			window.addEventListener('scroll', function onScroll() {
-			// Tracks if the user has scrolled all the way down
-				if (window.scrollY + window.innerHeight >= document.body.scrollHeight) {
-					window.parent.postMessage({ type: 'PAGE_SCROLLED', scrolled: true }, '*');
-					window.removeEventListener('scroll', onScroll);
+			let parent = null;
+			let pageAPICode = null;
+
+			function handshake(event){
+				if(event.data.type === "ORIGIN"){
+					parent = event.data.message;
+					pageAPICode = event.data.code;
+					init();
+				} else {
+					console.error("Handshake failed");
 				}
-			});
+			}
+
 			function init(){
 				// Start listening for messages like name and grade
+
+				window.removeEventListener('message', handshake);
+
+				window.addEventListener('scroll', function onScroll() {
+
+				// Tracks if the user has scrolled all the way down
+					if (window.scrollY + window.innerHeight >= document.body.scrollHeight) {
+						window.parent.postMessage({ type: 'PAGE_SCROLLED', scrolled: true }, parent);
+						window.removeEventListener('scroll', onScroll);
+					}
+				});
+
 				window.addEventListener('message', (event) => {
-					if(event.origin != 'localhost'){
+					if(event.origin != parent){
 						console.error("Unknown orgin " + event.origin);
-						//return;
+						return;
 					}
 
 					if(event.data.type === "GET_STUDENT_DATA"){
@@ -61,11 +79,14 @@
 					}
 				});
 				// send data requests to the parent
-				window.parent.postMessage({type: 'GET_STUDENT_DATA', message: ""}, '*');
+				window.parent.postMessage({type: 'GET_STUDENT_DATA', message: ""}, parent);
 			}
 
-			init();
+			// Set up handshake
+			window.addEventListener('message', handshake);
 
+			// Send handshake
+			window.parent.postMessage({type: 'ORIGIN', message: ""}, '*');
 	</script>
 	</body>
 </html>

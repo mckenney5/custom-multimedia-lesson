@@ -27,6 +27,7 @@ let state = {
 	sessionStartTime: 0, // Logs how long the student has been on today
 	isIdle: false, // Tracks if the user is idle on the site to help balance logs
 	focusTimer: null, // handles timing between focus checks
+	pageAPISecret: null,
 	initialized: false,
 
 	init: async function(frameId, bannerId, infoBar) {
@@ -56,6 +57,9 @@ let state = {
 		// attempt to load the saved state
 		await this.loadSave();
 
+		// set up API Secret for the pages (auth)
+		this.pageAPISecret = this.generatePasscode();
+
 		// load last webpage we were on
 		this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
 
@@ -67,6 +71,29 @@ let state = {
 
 		// mark done
 		this.initialized = true;
+	},
+
+	generatePasscode: function () {
+		// Creates random passcodes
+		if(typeof crypto !== 'undefined' && crypto.randomUUID){
+			return crypto.randomUUID();
+		}
+
+		// if the browser does not support it, try secure random
+		const length = 32;
+		const cryptoObj = window.crypto || window.msCrypto;
+		if(cryptoObj){
+			const items = new Uint8Array(length);
+			cryptoObj.getRandomValues(items);
+			return items.join("");
+		}
+
+		// if it does not support any of that, its Math.random time with 32 floats
+		let result = [];
+		for(let i = 0; i < length; i++){
+			result.push(Math.random() * (Math.random()*1000).toFixed(0));
+		}
+		return result.join("");
 	},
 
 	startEventListeners: function(){
@@ -485,6 +512,12 @@ let state = {
 		}
 
 		switch(event.data.type){
+			case "ORIGIN":
+				// tell the iframe who we are. Trust on First Use (TOFU)
+				this.lessonFrame.contentWindow.postMessage({ type: "ORIGIN", message: window.location.origin, code: this.pageAPISecret });
+				console.log("Auth Attempt");
+				break;
+
 			case "QUIZ_SUBMITTED":
 				journaler.log("QUIZ_SUBMITTED", index);
 				pageDelta.userAnswers = event.data.message; // <-- push what the user says to the state of the page
