@@ -40,7 +40,7 @@ let state = {
 		this.studentID = lms.getStudentID();
 
 		// Set up journaler
-		if(!journaler.initialized) journaler.init();
+		if(!journaler.initialized) await journaler.init();
 
 		// Set the date and time of us starting today. TODO consider not using the user for time
 		this.sessionStartTime = Date.now();
@@ -223,6 +223,7 @@ let state = {
 			const grade = this.calculateOverallGrade();
 			const gradeString = String(grade.ratio * 100); // <-- percentage grade as a string
 			journaler.log("COURSE_COMPLETE", gradeString);
+			journaler.transmit(journaler.report().join("\n")); // <-- send data to storage
 
 			lms.setScore(grade.earnedScore, grade.maxScore); // <-- send course score to the LMS
 

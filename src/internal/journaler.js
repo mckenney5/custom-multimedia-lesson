@@ -11,6 +11,7 @@ let journaler = {
 	_eventBuffer: [], //logs that have not been saved yet
 	_currentLog: [], //the complete log
 	_userID: "",
+	_analyticsConfig: null,
 
 	_encoding: {
 		"COURSE_COMPLETE" : "0",
@@ -77,11 +78,27 @@ let journaler = {
 
 	// Data structure: Version ^ UserID ^ SessionStart ^ [Delta_Data] ^ [Interaction_Log]
 
-	init: function(){
-		/* Sets _startTime = Date.now(). Clears the _eventBuffer. Called when the course loads. */
+
+	init: async function(){
+		/* Sets _startTime = Date.now(). Loads Analytics Config. */
 		this._startTime = Date.now();
 		this._eventBuffer = [];
 		this._supportsCompression = (typeof CompressionStream != 'undefined');
+
+		// Try to load analytics settings
+		try {
+			// cache buster to ensure we get the latest config
+			const response = await fetch("lessons/analytics.json?_t=" + Date.now());
+			if(response.ok){
+				this._analyticsConfig = await response.json();
+				console.log("Journaler: Analytics config loaded.");
+			} else {
+				console.warn("Journaler: Analytics config not found (404). ", response);
+			}
+		} catch (e) {
+			console.warn("Journaler: Could not load analytics.json --> ", e);
+		}
+
 		this.initialized = true;
 	},
 
@@ -147,6 +164,33 @@ let journaler = {
 
 	// --- Public API ---
 
+	transmit: function(dataPacket) {
+		// Check if configured
+		if (!this._analyticsConfig || !this._analyticsConfig.enabled) return;
+
+		console.log("Journaler: Transmitting data to Google Forms...");
+
+		// Construct Form Data
+		const formData = new FormData();
+		// Map the Student ID (from LMS or State) to the Google Form Field
+		formData.append(this._analyticsConfig.fields.studentID, this._userID || "Unknown");
+		// Map the Data Packet (Compressed String) to the Google Form Field
+		formData.append(this._analyticsConfig.fields.telemetryData, dataPacket);
+
+		// Fire and Forget (Blind POST)
+		fetch(this._analyticsConfig.formURL, {
+			method: "POST",
+			mode: "no-cors", // <--- Critical: Ignores CORS errors from Google
+			body: formData
+		}).then(() => {
+			// Because of no-cors, we can't see the response body,
+			// but a resolved promise usually means the request left the browser.
+			console.log("Journaler: Transmission sent.");
+		}).catch(e => {
+			console.error("Journaler: Transmission failed --> ", e);
+		});
+	},
+
 	log: function(action, value){
 		/* The Main Recorder. Accepts a code (e.g., "NAV") and a value (e.g., "2"). Automatically calculates the time offset and pushes the compressed string to the buffer. */
 		const timeStamp = this._toBase36(this._getOffest());
@@ -163,10 +207,13 @@ let journaler = {
 		console.log(`encoder.log --> '${message}'`);
 	},
 
-	report: function(userID, log, sessionStart){
+	report: function(userIDNum, fullLog, sessionStart){
 		/* takes in a string, splits, decodes, and returns a list of events */
 		const heading = ["ID", "Time Stamp", "Event", "Page Index", "Details"];
 		const baseTime = sessionStart || this._startTime;
+		const userID = userIDNum || this._userID;
+		const log = fullLog || this._currentLog;
+
 		this.startTime = baseTime; //if we are running in stand alone, we need a time ref
 		// TODO calculate start time from the first log entry, that entry should contain the unix time
 
@@ -232,21 +279,27 @@ let journaler = {
 	pack: async function(deltaArray){
 		/* The Serializer. Accepts the specific array of state data (Progress, Score, etc.).
 		 Joins Version, UserID, StartTime, DeltaArray, and _eventBuffer into one long string for the LMS. */
+
+		// Push and clear event buffer
+		this._currentLog.push(... this._eventBuffer);
+		this._eventBuffer = [];
+
+		// Create raw string for encoding
 		const raw = [
 				this._version,
 				this._userID,
 				this._toBase36(this._startTime),
 				...deltaArray.map(d => typeof d === "number" ? this._toBase36(d) : d), // Convert all deltas to Base36 to save space, or keep as string
-				this._eventBuffer.join(this._logDelimiter)
+				this._currentLog.join(this._logDelimiter)
 		].join(this._delimiter);
 
-		// 2. Compress
+		// Compress
 		let compressed = "";
 
 		if(this._supportsCompression && this._useCompression){
 			compressed = this._compressionPrefix +  await this._compressGzip(raw);
 		}
-		// If compression fails (like no support), send the raw encoding instead
+		// If compression fails (e.x. no support), send the raw encoding instead
 		return compressed ? compressed : raw;
 	},
 

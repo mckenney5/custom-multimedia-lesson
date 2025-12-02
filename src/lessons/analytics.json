@@ -1,0 +1,8 @@
+{
+	"enabled": true,
+	"formURL": "https://docs.google.com/forms/d/e/???/formResponse",
+	"fields": {
+		"studentID": "entry.#",
+		"telemetryData": "entry.#"
+	}
+}
