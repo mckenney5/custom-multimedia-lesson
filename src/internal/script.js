@@ -35,13 +35,13 @@ let state = {
 		if(!lms.initialized) lms.init();
 
 		// Set the student's name
-		this.studentName = lms.getStudentName().split(',')[1] || ""; // returns first name (Lastname,Firstname)
+		this.studentName = lms.getStudentName().split(",")[1] || ""; // returns first name (Lastname,Firstname)
 
 		// Set the student's ID
 		this.studentID = lms.getStudentID();
 
 		// Set up journaler
-		if(!journaler.initialized) journaler.init();
+		if(!journaler.initialized) await journaler.init();
 
 		// Set the date and time of us starting today. TODO consider not using the user for time
 		this.sessionStartTime = Date.now();
@@ -99,7 +99,7 @@ let state = {
 	startEventListeners: function(){
 
 		// make infoBanner close on click
-		this.infoBanner.addEventListener("click", () => {this.infoBanner.style.display = "none"});
+		this.infoBanner.addEventListener("click", () => {this.infoBanner.style.display = "none";});
 
 		// turn on visibility tracking
 		document.addEventListener("visibilitychange", () => {
@@ -115,8 +115,8 @@ let state = {
 			}
 
 			if(this.isIdle){
-					this.isIdle = false;
-					journaler.log("CLICK_BACK", this.data.delta.currentPageIndex);
+				this.isIdle = false;
+				journaler.log("CLICK_BACK", this.data.delta.currentPageIndex);
 			}
 		};
 
@@ -170,10 +170,10 @@ let state = {
 		// Takes in the delta and flattens the array
 		// NOTE: Rounds numbers
 		const delta = this.data.delta;
-		let data = [
+		const data = [
 			delta.currentPageIndex,
 			delta.progress,
-			delta.totalCourseSeconds
+			delta.totalCourseSeconds,
 		];
 
 		// This code must be specific. It was originally converting objects into values and using a switch statement to encode
@@ -215,7 +215,7 @@ let state = {
 		delta.pagesState = delta.pagesState.map((p, i) => {
 			// Reconstruct the object
 			// math to calculate offsets
-			let base = GLOBALS_COUNT + (i * ITEMS_PER_PAGE);
+			const base = GLOBALS_COUNT + (i * ITEMS_PER_PAGE);
 
 			// check array size to stop trying to read past the array
 			if(base >= arr.length) return p;
@@ -227,7 +227,7 @@ let state = {
 				watchTime: arr[base + 3],
 				attempts: arr[base + 4],
 				videoProgress: arr[base + 5]/100, // <-- convert back to float
-				userAnswers: JSON.parse(arr[base + 6] || "{}")
+				userAnswers: JSON.parse(arr[base + 6] || "{}"),
 			};
 		});
 
@@ -250,6 +250,7 @@ let state = {
 			const grade = this.calculateOverallGrade();
 			const gradeString = String(grade.ratio * 100); // <-- percentage grade as a string
 			journaler.log("COURSE_COMPLETE", gradeString);
+			journaler.transmit("FINAL", journaler.report().join("\n"), true); // <-- send final data, send expanded analytics as a CSV, high priority
 
 			lms.setScore(grade.earnedScore, grade.maxScore); // <-- send course score to the LMS
 
@@ -286,10 +287,10 @@ let state = {
 		if(this.checkIfComplete() && this.data.delta.currentPageIndex === this.data.delta.progress && pageDelta.completed === false){
 			pageDelta.completed = true;
 			this.data.delta.progress += 1;
-			this.save();
 			this.log(`Page ${this.data.delta.currentPageIndex} completed`);
 			journaler.log("PAGE_COMPLETE", this.data.delta.currentPageIndex);
 			this.bannerMessage("This page is completed. You may continue", false);
+			this.save();
 		} else {
 			return false;
 		}
@@ -300,7 +301,7 @@ let state = {
 		// Can you tell I had so many off by one bugs?
 		const lastPage = this.data.pages.length-1;
 		const secondToLastPage = lastPage -1;
-		const currentPage = this.data.delta.currentPageIndex
+		const currentPage = this.data.delta.currentPageIndex;
 
 		if(currentPage === secondToLastPage){
 			// see if we can finish the course
@@ -372,13 +373,15 @@ let state = {
 	// saves the state to the local browser storage
 		if(this.pauseSave){ console.log("Ignoring Save"); return;}
 
-		let saveData = this.serialize();
+		const saveData = this.serialize();
 
-		let compressed = await journaler.pack(saveData);
+		const compressed = await journaler.pack(saveData);
 
 		// Try to save with the LMS
 		if(compressed){
 			lms.saveData(compressed);
+			const progress = Math.round((this.data.delta.progress/(this.data.pages.length-1))*100);
+			journaler.transmit("PROGRESS", `${progress}%\n${compressed}`, false); // <-- send progress log, low priority
 		} else {
 			console.error(`state.save: unable to save to save the data '${saveData}'. Compressed returned '${compressed}'`);
 		}
@@ -409,13 +412,13 @@ let state = {
 
 	reset: function(){
 	// reset the state
-		let confirmed = window.confirm("Are you sure you want to reset all of your progress? This action cannot be undone.");
+		const confirmed = window.confirm("Are you sure you want to reset all of your progress? This action cannot be undone.");
 		if(confirmed){
 			this.pauseSave = true;
 			console.log("Resetting progress");
 			//localStorage.removeItem("courseProgress");
 			lms.reset(); // <-- set the saved data to nothing
-			this.lessonFrame.src = this.data.pages[0].name + '?_cb=' + Date.now();
+			this.lessonFrame.src = this.data.pages[0].name + "?_cb=" + Date.now();
 			// TODO check if we are debugging, if so, delete the saved log too
 			window.onbeforeunload = null;
 			window.location.reload();
@@ -427,7 +430,7 @@ let state = {
 		this.pauseSave = true;
 
 		// disable buttons
-		document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+		document.querySelectorAll("button").forEach(btn => btn.disabled = true);
 
 		//clear the screen
 		this.lessonFrame.src = "about:blank";
@@ -436,7 +439,7 @@ let state = {
 		this.quit();
 
 		// Inform the user
-		window.document.body.innerHTML = "<h2>Course disabled</h2>"
+		window.document.body.innerHTML = "<h2>Course disabled</h2>";
 
 		// remove event listeners
 		window.onbeforeunload = () => console.log("Stoping prompt");
@@ -473,7 +476,7 @@ let state = {
 			score >= page.completionRules.score &&
 			pageDelta.scrolled === page.completionRules.scrolled &&
 			pageDelta.videoProgress >= page.completionRules.videoProgress
-		)
+		);
 	},
 
 	calculateOverallGrade: function (){
@@ -527,13 +530,13 @@ let state = {
 				this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_INFO",
 					score: pageDelta.score / page.maxScore,
 					maxAttempts: page.completionRules.attempts - ++pageDelta.attempts },
-					'*');
+				"*");
 				break;
 
 			case "QUIZ_ADD_QUESTIONS":
 				// Page requests the quiz to be rendered from the JSON, and gets the rendered HTML returned
 				this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_ADD_QUESTIONS",
-					message: this.renderQuiz(this.data.delta.currentPageIndex)}, '*');
+					message: this.renderQuiz(this.data.delta.currentPageIndex)}, "*");
 				journaler.log("QUESTIONS_RENDERED", index);
 				break;
 
@@ -591,7 +594,7 @@ let state = {
 				// Returns name and current grade so far
 				const grade = String(Math.floor((this.calculateOverallGrade().ratio * 100)));
 				this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA",
-					name: this.studentName, grade: grade }, '*');
+					name: this.studentName, grade: grade }, "*");
 				journaler.log("GENERAL", "student info requested, page " + String(index));
 				break;
 
@@ -657,8 +660,8 @@ let state = {
 
 	renderQuiz: function(index){
 		// Puts all of the questions on the screen, in their own DIV
-		let QUIZ_QUESTIONS = this.data.pages[index].questions;
-		let savedAnswers = this.data.delta.pagesState[index].userAnswers;
+		const QUIZ_QUESTIONS = this.data.pages[index].questions;
+		const savedAnswers = this.data.delta.pagesState[index].userAnswers;
 
 		let html = "";
 
@@ -667,7 +670,7 @@ let state = {
 
 		for(let i = 0; i < QUIZ_QUESTIONS.length; i++){
 		// Render every question in a div
-			let qID = QUIZ_QUESTIONS[i].id;
+			const qID = QUIZ_QUESTIONS[i].id;
 
 			if(i % 2 == 0){
 			// alternate background colors
@@ -681,7 +684,7 @@ let state = {
 
 			for(let l = 0; l < QUIZ_QUESTIONS[i].possibleAnswers.length; l++){
 			// Render every choice
-				let val = QUIZ_QUESTIONS[i].possibleAnswers[l];
+				const val = QUIZ_QUESTIONS[i].possibleAnswers[l];
 
 				let isChecked = "";
 				if(savedAnswers && savedAnswers[qID] && savedAnswers[qID].includes(val)){
@@ -712,7 +715,7 @@ let state = {
 			if(debugging){
 				console.log("Skipping cache for JSON");
 				response = await fetch("lessons/course_data.json", {
-					cache: "no-store"
+					cache: "no-store",
 				});
 			} else {
 				response = await fetch("lessons/course_data.json");
@@ -729,7 +732,7 @@ let state = {
 			// Load the learning pages AND generate initial state
 			this.data.pages = rawData.pages.map(page => {
 
-			// Create state object
+				// Create state object
 				const pageState = {
 					completed: false,
 					scrolled: false,
@@ -737,7 +740,7 @@ let state = {
 					watchTime: 0,
 					attempts: 0,
 					videoProgress: 0.0,
-					userAnswers: {}
+					userAnswers: {},
 				};
 				this.data.delta.pagesState.push(pageState);
 
@@ -745,16 +748,16 @@ let state = {
 				return {
 					...page, // id, name, type, questions
 					path: `lessons/${page.name}`,
-					maxScore: page.type === 'quiz'
-							? page.questions.reduce((acc, q) => acc + q.pointValue, 0.0)
-							: 0.0
+					maxScore: page.type === "quiz"
+						? page.questions.reduce((acc, q) => acc + q.pointValue, 0.0)
+						: 0.0,
 				};
 
 			});
 		} catch(error){
 			console.error("Failed to load course data: ", error);
 		}
-	}
+	},
 };
 
 // --- End of Objects ---
@@ -763,7 +766,7 @@ window.onload = async () => {
 
 	// Write some loading text into the iframe
 	const iframe = document.getElementById("lesson-frame");
-	iframe.src = 'about:blank';
+	iframe.src = "about:blank";
 	const doc = iframe.contentDocument || iframe.contentWindow.document;
 	doc.open();
 	doc.write('<!doctype html><html lang="en">Loading…</html>');
@@ -771,7 +774,7 @@ window.onload = async () => {
 
 	// Start the web app
 	await state.init("lesson-frame", "info-banner", "info-bar");
-	window.addEventListener('message', state.handleMessage.bind(state));
+	window.addEventListener("message", state.handleMessage.bind(state));
 };
 
 window.onbeforeunload = () => {
