@@ -15,7 +15,7 @@ body {
 	--l-base: 38%;
 	--brand-800: hsl(var(--h) var(--s) calc(var(--l-base) - 18%));
 	--brand-700: hsl(var(--h) var(--s) calc(var(--l-base) - 8%));
-	--brand: hsl(var(--h) var(--s) var(--l-base));
+	--brand: hsl(var(--h) var(--s) var(--l-base)); /* #629962 */
 	--brand-100: hsl(var(--h) var(--s) calc(var(--l-base) + 32%));
 	--brand-50:  hsl(var(--h) var(--s) calc(var(--l-base) + 62%));
 	--brand-text: #ffffff
