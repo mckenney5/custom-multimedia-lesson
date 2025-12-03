@@ -1,11 +1,11 @@
-let journaler = {
+const journaler = {
 	/* Takes in data, encodes, and decodes, and translates */
-	_delimiter: '^',
+	_delimiter: "^",
 	_supportsCompression: false,
 	_useCompression: true,
 	_compressionPrefix: "CGZ", //how we can tell the data is compressed. the string starts with CGZ
-	_logDelimiter: '~',
-	_logHeadDelimiter: '`',
+	_logDelimiter: "~",
+	_logHeadDelimiter: "`",
 	_version: "v1",
 	_startTime: null,
 	_eventBuffer: [], //logs that have not been saved yet
@@ -40,7 +40,7 @@ let journaler = {
 		"DIAGNOSTIC" : "n",
 		"VIDEO_MUTED" : "o",
 		"CLICK_OFF" : "p",
-		"CLICK_BACK" : "q"
+		"CLICK_BACK" : "q",
 	},
 
 	_decoding: {
@@ -70,7 +70,7 @@ let journaler = {
 		"n": "DIAGNOSTIC",
 		"o": "VIDEO_MUTED",
 		"p": "CLICK_OFF",
-		"q": "CLICK_BACK"
+		"q": "CLICK_BACK",
 	},
 
 	initialized: false,
@@ -83,7 +83,7 @@ let journaler = {
 		/* Sets _startTime = Date.now(). Loads Analytics Config. */
 		this._startTime = Date.now();
 		this._eventBuffer = [];
-		this._supportsCompression = (typeof CompressionStream != 'undefined');
+		this._supportsCompression = (typeof CompressionStream != "undefined");
 
 		// Try to load analytics settings
 		try {
@@ -112,11 +112,11 @@ let journaler = {
 
 	_uint8ToBase64: function(u8){
 		// chunk to avoid call stack limits for very large arrays
-		let CHUNK = 0x8000;
+		const CHUNK = 0x8000;
 		let index = 0;
-		let res = '';
+		let res = "";
 		while (index < u8.length) {
-			let slice = u8.subarray(index, Math.min(index + CHUNK, u8.length));
+			const slice = u8.subarray(index, Math.min(index + CHUNK, u8.length));
 			res += String.fromCharCode.apply(null, slice);
 			index += CHUNK;
 		}
@@ -133,7 +133,7 @@ let journaler = {
 	_compressGzip: async function(str){
 		try {
 			const encoder = new TextEncoder();
-			const cs = new CompressionStream('gzip'); // or 'deflate'
+			const cs = new CompressionStream("gzip"); // or 'deflate'
 			const writer = cs.writable.getWriter();
 			writer.write(encoder.encode(str));
 			writer.close();
@@ -147,7 +147,7 @@ let journaler = {
 
 	_decompressGzip: async function(b64){
 		const compressed = this._base64ToUint8(b64);
-		const ds = new DecompressionStream('gzip');
+		const ds = new DecompressionStream("gzip");
 		const writable = ds.writable.getWriter();
 		writable.write(compressed);
 		writable.close();
@@ -164,24 +164,45 @@ let journaler = {
 
 	// --- Public API ---
 
-	transmit: function(dataPacket) {
+	transmit: function(submissionType, dataPacket, priority = false) {
+		// Send data via post. Currently set up for Google Forms
+
 		// Check if configured
 		if (!this._analyticsConfig || !this._analyticsConfig.enabled) return;
 
-		console.log("Journaler: Transmitting data to Google Forms...");
+		/* _suggested_ submission types:
+		 * - PROGRESS: Stores the % complete and the saved compressed data
+		 * - FINAL: Full telemetryData
+		 * - ASSIGNMENT: Page number and meta data with newline, then text of the assignment
+		 */
 
-		// Construct Form Data
-		const formData = new FormData();
-		// Map the Student ID (from LMS or State) to the Google Form Field
-		formData.append(this._analyticsConfig.fields.studentID, this._userID || "Unknown");
-		// Map the Data Packet (Compressed String) to the Google Form Field
-		formData.append(this._analyticsConfig.fields.telemetryData, dataPacket);
+
+		// Make payload (URLSearchParams > FormData due to FormData overhead (extra ~100bytes per))
+		const payload = new URLSearchParams();
+		payload.append(this._analyticsConfig.fields.studentID, this._userID || "Unknown");
+		payload.append(this._analyticsConfig.fields.submissionType, submissionType);
+		payload.append(this._analyticsConfig.fields.telemetryData, dataPacket);
+
+		// Check payload size
+		const payloadSize = payload.toString().length;
+		const maxSize = this._analyticsConfig.maxPayloadSize;
+		if(payloadSize >= maxSize * 0.9){
+			console.warn(`Journaler: Payload is greater than 90% of max size (${payloadSize}/${maxSize})`);
+		}
+
+		console.log(`Journaler: Transmitting data to Google Forms --> size: ${payloadSize}\n`, payload);
+
+		// navigator.sendBeacon survives the page close and is natively 'no-cors' compliant.
+		// Does not work on Google due to 302 redirect to the 'Thank you for submitting' page...
+		//const success = navigator.sendBeacon(this._analyticsConfig.formURL, payload);
+		//console.log("Journaler: Beacon queued: " + success);
 
 		// Fire and Forget (Blind POST)
 		fetch(this._analyticsConfig.formURL, {
 			method: "POST",
 			mode: "no-cors", // <--- Critical: Ignores CORS errors from Google
-			body: formData
+			keepalive: priority, // <-- only use for important logging to not clog the browser
+			body: payload,
 		}).then(() => {
 			// Because of no-cors, we can't see the response body,
 			// but a resolved promise usually means the request left the browser.
@@ -219,7 +240,7 @@ let journaler = {
 
 		const rows = log.map(r => {
 			// make the row a list
-			const list = r.split(',');
+			const list = r.split(",");
 
 			// calculate time from offset
 			const offset = this._fromBase36(list[0]);
@@ -232,7 +253,7 @@ let journaler = {
 			const page = list[2];
 
 			// combine the rest of the details
-			const details = list.slice(3).join(',');
+			const details = list.slice(3).join(",");
 
 			return [userID, time, eventName, page, details];
 
@@ -246,14 +267,14 @@ let journaler = {
 		// takes in a 2D array formatted as a CSV and saves it
 
 		// puts the text together
-		const text = '\uFEFF' + csv.join("\n");
+		const text = "\uFEFF" + csv.join("\n");
 
 		// makes the html blob
-		const blob = new Blob([text], {type: 'text/plain;charset=utf-8'});
+		const blob = new Blob([text], {type: "text/plain;charset=utf-8"});
 		const url = URL.createObjectURL(blob);
 
 		// runs the download code
-		const a = document.createElement('a');
+		const a = document.createElement("a");
 		a.href = url;
 		a.download = `${this._userID}.data.csv`;
 		document.body.appendChild(a); // needed in some browsers
@@ -286,11 +307,11 @@ let journaler = {
 
 		// Create raw string for encoding
 		const raw = [
-				this._version,
-				this._userID,
-				this._toBase36(this._startTime),
-				...deltaArray.map(d => typeof d === "number" ? this._toBase36(d) : d), // Convert all deltas to Base36 to save space, or keep as string
-				this._currentLog.join(this._logDelimiter)
+			this._version,
+			this._userID,
+			this._toBase36(this._startTime),
+			...deltaArray.map(d => typeof d === "number" ? this._toBase36(d) : d), // Convert all deltas to Base36 to save space, or keep as string
+			this._currentLog.join(this._logDelimiter),
 		].join(this._delimiter);
 
 		// Compress
@@ -320,19 +341,19 @@ let journaler = {
 
 		let raw = "";
 		try {
-				if((this._supportsCompression && this._useCompression) || saveString.startsWith(this._compressionPrefix)){
-					raw = await this._decompressGzip(saveString.slice(this._compressionPrefix.length)); // <-- remove the compression prefix and decompress
-				} else {
-					raw = saveString;
-				}
+			if((this._supportsCompression && this._useCompression) || saveString.startsWith(this._compressionPrefix)){
+				raw = await this._decompressGzip(saveString.slice(this._compressionPrefix.length)); // <-- remove the compression prefix and decompress
+			} else {
+				raw = saveString;
+			}
 		} catch (e) {
-				if(saveString.startsWith(this._version + this._delimiter)){
-					console.log("User can do compression but saved without it");
-					raw = saveString;
-				} else {
-					console.error(`journaler.unpack: Decompression failed. Data might be corrupt! saveString: '${saveString}'\n`, e);
-					return null;
-				}
+			if(saveString.startsWith(this._version + this._delimiter)){
+				console.log("User can do compression but saved without it");
+				raw = saveString;
+			} else {
+				console.error(`journaler.unpack: Decompression failed. Data might be corrupt! saveString: '${saveString}'\n`, e);
+				return null;
+			}
 		}
 
 		// 2. Split by Delimiter (^)
@@ -340,8 +361,8 @@ let journaler = {
 
 		// Safety Check: Ensure we have enough parts
 		if(parts.length < 4 || parts[0] !== this._version){
-				console.log(`[DEBUG]journaler.unpack --> Saved data invalid: '${raw}'`);
-				return null;
+			console.log(`[DEBUG] journaler.unpack --> Saved data invalid: '${raw}'`);
+			return null;
 		}
 
 		// 3. Map the Parts (Based on the pack structure)
@@ -372,13 +393,13 @@ let journaler = {
 
 		// 6. Return the clean object
 		const cleanObject = {
-				meta: {
-						version: version,
-						userID: userID,
-						startTime: startTime
-				},
-				delta: deltaArray,
-				log: logArray
+			meta: {
+				version: version,
+				userID: userID,
+				startTime: startTime,
+			},
+			delta: deltaArray,
+			log: logArray,
 		};
 		console.log("[DEBUG] journaler.unpack --> ", cleanObject);
 		this._currentLog = cleanObject.log;
@@ -392,4 +413,4 @@ let journaler = {
 		return (date.toString());
 
 	},
-}
+};

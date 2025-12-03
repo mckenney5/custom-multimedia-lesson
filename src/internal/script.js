@@ -223,7 +223,7 @@ let state = {
 			const grade = this.calculateOverallGrade();
 			const gradeString = String(grade.ratio * 100); // <-- percentage grade as a string
 			journaler.log("COURSE_COMPLETE", gradeString);
-			journaler.transmit(journaler.report().join("\n")); // <-- send data to storage
+			journaler.transmit("FINAL", journaler.report().join("\n"), true); // <-- send final data, send expanded analytics as a CSV, high priority
 
 			lms.setScore(grade.earnedScore, grade.maxScore); // <-- send course score to the LMS
 
@@ -260,10 +260,10 @@ let state = {
 		if(this.checkIfComplete() && this.data.delta.currentPageIndex === this.data.delta.progress && pageDelta.completed === false){
 			pageDelta.completed = true;
 			this.data.delta.progress += 1;
-			this.save();
 			this.log(`Page ${this.data.delta.currentPageIndex} completed`);
 			journaler.log("PAGE_COMPLETE", this.data.delta.currentPageIndex);
 			this.bannerMessage("This page is completed. You may continue", false);
+			this.save();
 		} else {
 			return false;
 		}
@@ -353,6 +353,8 @@ let state = {
 		// Try to save with the LMS
 		if(compressed){
 			lms.saveData(compressed);
+			const progress = Math.round((this.data.delta.progress/(this.data.pages.length-1))*100);
+			journaler.transmit("PROGRESS", `${progress}%\n${compressed}`, false); // <-- send progress log, low priority
 		} else {
 			console.error(`state.save: unable to save to save the data '${saveData}'. Compressed returned '${compressed}'`);
 		}

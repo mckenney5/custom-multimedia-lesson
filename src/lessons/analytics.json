@@ -1,8 +1,10 @@
 {
 	"enabled": true,
+	"maxPayloadSize": 60000,
 	"formURL": "https://docs.google.com/forms/d/e/???/formResponse",
 	"fields": {
-		"studentID": "entry.#",
-		"telemetryData": "entry.#"
+		"studentID": "entry.???",
+		"submissionType": "entry.???",
+		"telemetryData": "entry.???"
 	}
 }
