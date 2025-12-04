@@ -4,29 +4,21 @@
 <head>
 	<meta charset="UTF-8">
 	<title>Simple Article</title>
+	<link rel="stylesheet" href="lesson_styles.css">
+	<script src="../internal/children.js"></script>
+	<script src="../internal/components.js"></script>
 </head>
 <body>
+<course-article>
 	<h1>Page 1</h1></br>
 	<h3>Article</h3>
-	<p>Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.<p>
+	<p>Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.</p>
+	<p>Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.</p>
 	</br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br>
 	</br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br></br>
 
 	<p>bottom text</p>
-	<div id="feedback" style="display: none; margin-top: 20px;">
-		<p>Your answer has been submitted to the LMS. You may close this window.</p>
-	</div>
-
-	<script>
-	window.addEventListener('scroll', function onScroll() {
-	// Tracks if the user has scrolled all the way down
-		if (window.scrollY + window.innerHeight >= document.body.scrollHeight) {
-			window.parent.postMessage({ type: 'PAGE_SCROLLED', scrolled: true }, '*');
-			window.removeEventListener('scroll', onScroll);
-		}
-	});
-
-	</script>
+</course-article>
 
 </body>
 </html>

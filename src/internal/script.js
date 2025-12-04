@@ -501,6 +501,11 @@ let state = {
 		return (isTimeRequirementMet && (isScoreMet || studentsCanFail) && isEveryPageComplete);
 	},
 
+	sendMessage: function(subject, message){
+		this.lessonFrame.contentWindow.postMessage({ type: subject,
+			message: message}, "*");
+	},
+
 	handleMessage: function(event){
 		//console.log(event);
 		const index = this.data.delta.currentPageIndex;
@@ -527,16 +532,19 @@ let state = {
 				const grades = this.gradeQuizQuestions(page.questions, event.data.message);
 				pageDelta.score = grades.score;
 				this.finalizePage(); // <-- do a page completion check
-				this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_INFO",
+				this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_RESULTS", message: {
 					score: pageDelta.score / page.maxScore,
-					maxAttempts: page.completionRules.attempts - ++pageDelta.attempts },
+					maxAttempts: page.completionRules.attempts - ++pageDelta.attempts } },
 				"*");
 				break;
 
-			case "QUIZ_ADD_QUESTIONS":
-				// Page requests the quiz to be rendered from the JSON, and gets the rendered HTML returned
-				this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_ADD_QUESTIONS",
-					message: this.renderQuiz(this.data.delta.currentPageIndex)}, "*");
+			case "GET_QUIZ_DATA":
+				// Sends questions and users submitted answers (if avail)
+				const quizPayload = {
+					questions: page.questions,
+					userAnswers: pageDelta.userAnswers || {},
+				};
+				this.sendMessage("GET_QUIZ_DATA", quizPayload);
 				journaler.log("QUESTIONS_RENDERED", index);
 				break;
 
@@ -545,7 +553,7 @@ let state = {
 				break;
 
 			case "PAGE_SCROLLED":
-				pageDelta.scrolled = event.data.scrolled;
+				pageDelta.scrolled = event.data.message;
 				journaler.log("SCROLLED", index);
 				break;
 
@@ -593,13 +601,25 @@ let state = {
 			case "GET_STUDENT_DATA":
 				// Returns name and current grade so far
 				const grade = String(Math.floor((this.calculateOverallGrade().ratio * 100)));
-				this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA",
-					name: this.studentName, grade: grade }, "*");
+				this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA", message: {
+					name: this.studentName, grade: grade } }, "*");
 				journaler.log("GENERAL", "student info requested, page " + String(index));
 				break;
 
+			case "SEND_RENDER":
+				console.log(`${name}: SEND_RENDER not implemented yet`);
+				break;
+
+			case "SEND_META":
+				const pageInfo = {
+					page: page,
+					delta: pageDelta,
+				};
+				this.sendMessage("SEND_META", pageInfo);
+				break;
+
 			default:
-				console.error(`${name}: Unknown / unimplemented message! --> ${event}`);
+				console.error(`${name}: Unknown / unimplemented message! --> \n`, event);
 				break;
 		}
 		this.finalizePage();
@@ -622,13 +642,6 @@ let state = {
 	alert: function(message){
 		//handles critical alerts to the user. useful if the calling object does not need a DOM
 		return confirm(message);
-	},
-
-	setQuizQuestions: function(pageName, data){
-		// sets a list of questions to a page
-		this.data.quizes[pageName] = data;
-		console.log(`${pageName} | ${data}`);
-		console.log(this.data.quizes);
 	},
 
 	gradeQuizQuestions: function(questions, responses){
@@ -656,53 +669,6 @@ let state = {
 			return -1;
 		}
 		return ({score: score, maxScore: maxScore});
-	},
-
-	renderQuiz: function(index){
-		// Puts all of the questions on the screen, in their own DIV
-		const QUIZ_QUESTIONS = this.data.pages[index].questions;
-		const savedAnswers = this.data.delta.pagesState[index].userAnswers;
-
-		let html = "";
-
-		// add feedback div to show submission and test score
-		html += '<div id="feedback" style="display: none; margin-top: 20px;"><p>Your answer has been submitted to the LMS.</p></div>';
-
-		for(let i = 0; i < QUIZ_QUESTIONS.length; i++){
-		// Render every question in a div
-			const qID = QUIZ_QUESTIONS[i].id;
-
-			if(i % 2 == 0){
-			// alternate background colors
-				html += `<div id="Q${i+1}" style="background: lightgray;">`;
-			} else {
-				html += `<div id="Q${i+1}" style="background: white;">`;
-			}
-
-			// Render quiz question and number
-			html += `<h3 id="text">${i+1}. ${QUIZ_QUESTIONS[i].text}</h3>`;
-
-			for(let l = 0; l < QUIZ_QUESTIONS[i].possibleAnswers.length; l++){
-			// Render every choice
-				const val = QUIZ_QUESTIONS[i].possibleAnswers[l];
-
-				let isChecked = "";
-				if(savedAnswers && savedAnswers[qID] && savedAnswers[qID].includes(val)){
-					isChecked = "checked";
-				}
-
-				html += `
-					<input id="a${l}" type="checkbox" value="${val}" ${isChecked}>
-					<label id="a${l}-label" for="a${l}">${val}</label>
-					</br>
-				`;
-			}
-			html += "</div>";
-		}
-
-		// Render submit button
-		html += "</br><button onclick='submitQuiz()'>Submit</button>";
-		return html;
 	},
 
 	loadCourseData: async function(){
