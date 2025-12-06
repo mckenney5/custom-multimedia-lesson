@@ -1,6 +1,6 @@
 {
 	"courseRules": {
-		"minimumMinutes": 1.5,
+		"minimumMinutes": 1.0,
 		"minimumGrade": 0.70,
 		"completeOnly": false,
 		"studentsCanFail": true
@@ -11,7 +11,7 @@
 		"name": "directions.html",
 		"articleText": "Welcome to the course...",
 		"completionRules": {
-			"watchTime": 5,
+			"watchTime": 3,
 			"score": 0.0,
 			"scrolled": true,
 			"attempts": 1,
@@ -19,11 +19,11 @@
 		}
 	},
 	{
-		"type": "article",
-		"name": "page1.html",
+		"type": "multi",
+		"name": "article_example.html",
 		"articleText": "Welcome to the course...",
 		"completionRules": {
-			"watchTime": 5,
+			"watchTime": 3,
 			"score": 0.0,
 			"scrolled": true,
 			"attempts": 1,
@@ -32,7 +32,7 @@
 	},
 	{
 		"type": "quiz",
-		"name": "page2.html",
+		"name": "quiz_example.html",
 		"completionRules": {
 			"watchTime": 0,
 			"score": 0.1,
@@ -81,7 +81,7 @@
 	},
 	{
 		"type": "video",
-		"name": "page3.html",
+		"name": "video_example.html",
 		"videoURL": "media/1.mp4",
 		"completionRules": {
 			"watchTime": 10,
@@ -92,14 +92,14 @@
 		}
 	},
 	{
-		"type": "quiz",
-		"name": "page4.html",
+		"type": "multi",
+		"name": "multi_example.html",
 		"completionRules": {
-			"watchTime": 0,
+			"watchTime": 5,
 			"score": 0.7,
-			"scrolled": false,
+			"scrolled": true,
 			"attempts": 3,
-			"videoProgress" : 0.0
+			"videoProgress" : 0.01
 		},
 		"questions": [
 			{

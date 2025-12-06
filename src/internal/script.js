@@ -714,7 +714,7 @@ let state = {
 				return {
 					...page, // id, name, type, questions
 					path: `lessons/${page.name}`,
-					maxScore: page.type === "quiz"
+					maxScore: page.questions
 						? page.questions.reduce((acc, q) => acc + q.pointValue, 0.0)
 						: 0.0,
 				};
