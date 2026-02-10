@@ -200,6 +200,32 @@ points of every page and adding the total earned points. Dividing earned / possi
 | `videoProgress`    | The percentage of the video that must be watched. 1.0 is the whole video | 
 
 
+### Creating a page in HTML
+Each page in the lesson needs its own HTML file so the program can move the student to the next one. A basic template looks like this:
+
+```HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Multi Component Example</title>
+	<link rel="stylesheet" href="lesson_styles.css">
+	<script src="../internal/children.js"></script>
+	<script src="../internal/components.js"></script>
+</head>
+<body>
+	<h1>Page 1</h1></br>
+	<course-article>
+		<course-quiz id="quiz1"></course-quiz>
+		<course-video id="intro_video" src="../media/1.mp4"></course-video>
+		<course-quiz id="quiz2"></course-quiz>
+	</course-article>
+</body>
+</html>
+
+```
+
+
 ### Course Check List
 - [ ] There are no errors in the course console
 - [ ] Videos work
