@@ -75,7 +75,7 @@ let state = {
 
 	generatePasscode: function () {
 		// Creates random passcodes
-		if(typeof crypto !== 'undefined' && crypto.randomUUID){
+		if(typeof crypto !== "undefined" && crypto.randomUUID){
 			return crypto.randomUUID();
 		}
 
@@ -167,8 +167,6 @@ let state = {
 	},
 
 	serialize: function(){
-		// Takes in the delta and flattens the array
-		// NOTE: Rounds numbers
 		const delta = this.data.delta;
 		const data = [
 			delta.currentPageIndex,
@@ -176,61 +174,77 @@ let state = {
 			delta.totalCourseSeconds,
 		];
 
-		// This code must be specific. It was originally converting objects into values and using a switch statement to encode
-		// This cannot work because in 'Object.values(obj)' there is NO guarantee that it will be in order...
 		delta.pagesState.slice().forEach(p => {
-			//push each hardcoded key value into the data list
-
-			// Simple round to two decimal points, and make it an int (we will make it a float again in deserialize)
 			const roundFloatTo2Int = n => Math.round(n*100);
 
+			// Standard Metrics
 			data.push(p.completed ? 1: 0);
 			data.push(p.scrolled ? 1: 0);
 			data.push(roundFloatTo2Int(p.score));
-			data.push(p.watchTime); //TODO see if rounding is needed
+			data.push(p.watchTime);
 			data.push(p.attempts);
 			data.push(roundFloatTo2Int(p.videoProgress));
 
-			// Convert user answers to a string and sanitize it
-			data.push(journaler.sanitize(JSON.stringify(p.userAnswers || {})));
+			// Complex State: Determine what to save
+			// If we have component data, save that. Otherwise, save legacy answers.
+			let complexState = {};
+			if (p.components && Object.keys(p.components).length > 0) {
+				complexState = p.components;
+			} else {
+				complexState = { userAnswers: p.userAnswers };
+			}
 
+			// Stringify and Sanitize
+			data.push(journaler.sanitize(JSON.stringify(complexState)));
 		});
 
-		return data; // <-- an array of mostly numbers
+		return data;
 	},
 
 	deserialize: function(arr){
-		/*
-		 Logic: Take the array from journaler.unpack. Read indices 0-2 into the global variables.
-		 Loop through the rest of the array (in chunks based on the page schema size) and assign values back to this.data.delta.pagesState.
-		*/
 		const delta = this.data.delta;
-		delta.currentPageIndex = arr[0];
-		delta.progress = arr[1];
-		delta.totalCourseSeconds = arr[2];
-
 		const GLOBALS_COUNT = 3;
-		const ITEMS_PER_PAGE = 7;
+		const ITEMS_PER_PAGE = 7; // 6 numbers + 1 JSON string
 
+		// Restore Globals
+		if(arr.length >= 3) {
+			delta.currentPageIndex = arr[0];
+			delta.progress = arr[1];
+			delta.totalCourseSeconds = arr[2];
+		}
+
+		// Restore Pages
 		delta.pagesState = delta.pagesState.map((p, i) => {
-			// Reconstruct the object
-			// math to calculate offsets
 			const base = GLOBALS_COUNT + (i * ITEMS_PER_PAGE);
-
-			// check array size to stop trying to read past the array
 			if(base >= arr.length) return p;
 
-			return {
-				completed: (arr[base + 0] === 1),
-				scrolled: (arr[base + 1] === 1),
-				score: arr[base + 2]/100, // <-- convert back to float
-				watchTime: arr[base + 3],
-				attempts: arr[base + 4],
-				videoProgress: arr[base + 5]/100, // <-- convert back to float
-				userAnswers: JSON.parse(arr[base + 6] || "{}"),
-			};
-		});
+			// Restore standard metrics
+			p.completed = (arr[base + 0] === 1);
+			p.scrolled = (arr[base + 1] === 1);
+			p.score = arr[base + 2]/100;
+			p.watchTime = arr[base + 3];
+			p.attempts = arr[base + 4];
+			p.videoProgress = arr[base + 5]/100;
 
+			// Restore Complex State
+			try {
+				const savedBlob = JSON.parse(arr[base + 6] || "{}");
+
+				// Heuristic: Does this look like a Component Map or Legacy Answers?
+				// If the saved object has a key that matches 'userAnswers', it's likely legacy.
+				if (savedBlob.userAnswers && Object.keys(savedBlob).length === 1) {
+					p.userAnswers = savedBlob.userAnswers;
+				} else {
+					// Otherwise, assume it is the components map
+					// We merge it into the initialized structure to be safe
+					p.components = { ...p.components, ...savedBlob };
+				}
+			} catch (e) {
+				console.warn("Failed to deserialize page state blob", e);
+			}
+
+			return p;
+		});
 	},
 
 	updateInfo: function (){
@@ -474,7 +488,7 @@ let state = {
 		return (
 			pageDelta.watchTime >= page.completionRules.watchTime &&
 			score >= page.completionRules.score &&
-			pageDelta.scrolled === page.completionRules.scrolled &&
+			(!page.completionRules.scrolled || pageDelta.scrolled) &&
 			pageDelta.videoProgress >= page.completionRules.videoProgress
 		);
 	},
@@ -519,52 +533,127 @@ let state = {
 			return;
 		}
 
+		// 1. UNWRAP the message
+		let msgData = event.data.message;
+		let componentID = null;
+
+		// Check if this is a wrapped packet { id: "...", value: ... }
+		if (msgData && typeof msgData === "object" && "id" in msgData && "value" in msgData) {
+			componentID = msgData.id; // Extract ID
+			msgData = msgData.value;  // Extract actual payload
+		}
+
+		// Now use 'componentID' and 'msgData' for the rest of the function
+
 		switch(event.data.type){
 			case "ORIGIN":
 				// tell the iframe who we are. Trust on First Use (TOFU)
-				this.lessonFrame.contentWindow.postMessage({ type: "ORIGIN", message: window.location.origin, code: this.pageAPISecret });
+				this.lessonFrame.contentWindow.postMessage({ type: "ORIGIN", message: window.location.origin, code: this.pageAPISecret }, "*");
 				console.log("Auth Attempt");
 				break;
 
-			case "QUIZ_SUBMITTED":
+			case "QUIZ_RESULT":
 				journaler.log("QUIZ_SUBMITTED", index);
-				pageDelta.userAnswers = event.data.message; // <-- push what the user says to the state of the page
-				const grades = this.gradeQuizQuestions(page.questions, event.data.message);
-				pageDelta.score = grades.score;
-				this.finalizePage(); // <-- do a page completion check
-				this.lessonFrame.contentWindow.postMessage({ type: "QUIZ_RESULTS", message: {
-					score: pageDelta.score / page.maxScore,
-					maxAttempts: page.completionRules.attempts - ++pageDelta.attempts } },
-				"*");
+
+				if(componentID && pageDelta.components && pageDelta.components[componentID]){
+					const compState = pageDelta.components[componentID];
+					const compConfig = page.components.find(c => c.id === componentID);
+
+					// Increment attempts
+					compState.attempts = (compState.attempts || 0) + 1;
+
+					compState.score = msgData.score;
+					compState.userAnswers = msgData.answers;
+					compState.completed = true;
+
+					// Re-sum total page score
+					let totalScore = 0;
+					for(const key in pageDelta.components){
+						// Ensure we handle potential undefined scores safely
+						const s = pageDelta.components[key].score;
+						if(typeof s === "number") totalScore += s;
+					}
+					pageDelta.score = totalScore;
+
+					// Send attempt count to quiz
+					this.lessonFrame.contentWindow.postMessage({
+						type: "QUIZ_DATA",
+						message: {
+							id: componentID,
+							value: {
+								questions: compConfig.questions, // (Optional if component caches it)
+								userAnswers: compState.userAnswers,
+								attemptsLeft: page.completionRules.attempts - compState.attempts, // <--- The updated count
+							},
+						},
+					}, "*");
+
+					this.finalizePage();
+				}
 				break;
 
 			case "GET_QUIZ_DATA":
-				// Sends questions and users submitted answers (if avail)
-				const quizPayload = {
-					questions: page.questions,
-					userAnswers: pageDelta.userAnswers || {},
-				};
-				this.sendMessage("GET_QUIZ_DATA", quizPayload);
+				// Composite Logic ---
+				if(componentID && page.components){
+					console.log(`comp -->\n${page.components}`);
+					const compConfig = page.components.find(c => c.id === componentID);
+					const compState = pageDelta.components[componentID];
+
+					if(compConfig && compState){
+						const quizPayload = {
+							questions: compConfig.questions,
+							userAnswers: compState.userAnswers || {},
+							attemptsLeft: page.completionRules.attempts - (compState.attempts || 0),
+						};
+						// Send with ID
+						this.lessonFrame.contentWindow.postMessage({
+							type: "QUIZ_DATA",
+							message: {
+								id: componentID,        // <--- Match component expectation
+								value: quizPayload,     // <--- Match component expectation
+							},
+						}, "*");
+					}
+				}
+				// --- OLD: Legacy Logic ---
+				else {
+					const quizPayload = {
+						questions: compConfig.questions,
+						userAnswers: compState.userAnswers || {},
+						attemptsLeft: page.completionRules.attempts - (compState.attempts || 0),
+					};
+					this.sendMessage("GET_QUIZ_DATA", quizPayload);
+				}
+
 				journaler.log("QUESTIONS_RENDERED", index);
 				break;
 
 			case "LOG":
-				journaler.log("GENERAL", `${index} ${event.data.message}`);
+				journaler.log("GENERAL", `${index} ${msgData}`);
 				break;
 
 			case "PAGE_SCROLLED":
-				pageDelta.scrolled = event.data.message;
+				// Simple update: If component sent it, mark component. Always mark page.
+				if(componentID && pageDelta.components && pageDelta.components[componentID]){
+					pageDelta.components[componentID].scrolled = msgData;
+				}
+				pageDelta.scrolled = msgData;
 				journaler.log("SCROLLED", index);
 				break;
 
 			case "VIDEO_PROGRESS":
-				pageDelta.videoProgress = event.data.message;
-				//log progress every 5%
-				if(Math.round(event.data.message * 100) % journaler.videoProgressInterval === 0) journaler.log("VIDEO_PROGRESS", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				// Simple update: If component sent it, mark component. Always mark page.
+				if(componentID && pageDelta.components && pageDelta.components[componentID]){
+					pageDelta.components[componentID].videoProgress = msgData;
+				}
+				// We keep updating the main page videoProgress for backward compatibility with rules
+				pageDelta.videoProgress = msgData;
+
+				if(Math.round(msgData * 100) % journaler.videoProgressInterval === 0) journaler.log("VIDEO_PROGRESS", `${index},${roundTo4(pageDelta.videoProgress)}`);
 				break;
 
+				// ... (Rest of switch statement remains UNCHANGED) ...
 			case "VIDEO_PLAYING":
-				// Logs when the play button was hit, and video percentage at that point
 				journaler.log("VIDEO_PLAY", `${index},${roundTo4(pageDelta.videoProgress)}`);
 				break;
 
@@ -573,17 +662,15 @@ let state = {
 				break;
 
 			case "VIDEO_REWIND":
-				// TODO look into better way of getting rewind to and from
 				journaler.log("VIDEO_REWIND", `${index},${roundTo4(pageDelta.videoProgress)}`);
 				break;
 
 			case "VIDEO_FORWARD":
-				// TODO look into better way of getting forward to and from
 				journaler.log("VIDEO_FORWARD", `${index},${roundTo4(pageDelta.videoProgress)}`);
 				break;
 
 			case "VIDEO_SPEED_CHANGE":
-				journaler.log("VIDEO_SPEED_CHANGE", `${index},${roundTo4(pageDelta.videoProgress)},${event.data.message}`);
+				journaler.log("VIDEO_SPEED_CHANGE", `${index},${roundTo4(pageDelta.videoProgress)},${msgData}`);
 				break;
 
 			case "VIDEO_FULL_SCREEN":
@@ -595,11 +682,10 @@ let state = {
 				break;
 
 			case "VIDEO_MUTED":
-				journaler.log("VIDEO_MUTED", `${index},${roundTo4(pageDelta.videoProgress)},${event.data.message}`);
+				journaler.log("VIDEO_MUTED", `${index},${roundTo4(pageDelta.videoProgress)},${msgData}`);
 				break;
 
 			case "GET_STUDENT_DATA":
-				// Returns name and current grade so far
 				const grade = String(Math.floor((this.calculateOverallGrade().ratio * 100)));
 				this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA", message: {
 					name: this.studentName, grade: grade } }, "*");
@@ -689,36 +775,73 @@ let state = {
 			console.log("Loaded course_data.json");
 			const rawData = await response.json();
 
-			// Save course rules
 			this.data.courseRules = rawData.courseRules || {};
+			this.data.delta.pagesState = [];
 
-			// Load the learning pages
-			this.data.delta.pagesState = []; // <-- reset page states
-
-			// Load the learning pages AND generate initial state
 			this.data.pages = rawData.pages.map(page => {
 
-				// Create state object
+				// 1. Create the State Object
 				const pageState = {
+					// Flat properties for the Page itself
 					completed: false,
 					scrolled: false,
 					score: 0.0,
 					watchTime: 0,
 					attempts: 0,
 					videoProgress: 0.0,
+
+					// Legacy compatibility (keep for now until HTML is updated)
 					userAnswers: {},
+
+					// The Future: Component State Map
+					components: {}
 				};
+
+				let calculatedMaxScore = 0.0;
+
+				// 2. Initialize Components (if present)
+				if (page.components && Array.isArray(page.components)) {
+					page.components.forEach(comp => {
+						if(!comp.id) console.error(`Component on page '${page.name}' missing ID`);
+
+						// Initialize specific state for this component
+						const compState = {
+							type: comp.type,
+							completed: false
+						};
+
+						// Add type-specific defaults
+						if (comp.type === 'quiz') {
+							const qMax = comp.questions.reduce((acc, q) => acc + q.pointValue, 0.0);
+							calculatedMaxScore += qMax;
+							compState.score = 0;
+							compState.maxScore = qMax;
+							compState.userAnswers = {};
+							compState.attempts = 0;
+						}
+						else if (comp.type === 'video') {
+							compState.videoProgress = 0.0;
+						}
+						else if (comp.type === 'article') {
+							compState.scrolled = false;
+						}
+
+						// Add to the map
+						pageState.components[comp.id] = compState;
+					});
+				}
+				// 3. Legacy Fallback (Calculates maxScore for old quizzes)
+				else if (page.type === 'quiz' && page.questions) {
+					calculatedMaxScore = page.questions.reduce((acc, q) => acc + q.pointValue, 0.0);
+				}
+
 				this.data.delta.pagesState.push(pageState);
 
-				// Return the Static Object
 				return {
-					...page, // id, name, type, questions
+					...page,
 					path: `lessons/${page.name}`,
-					maxScore: page.questions
-						? page.questions.reduce((acc, q) => acc + q.pointValue, 0.0)
-						: 0.0,
+					maxScore: calculatedMaxScore
 				};
-
 			});
 		} catch(error){
 			console.error("Failed to load course data: ", error);

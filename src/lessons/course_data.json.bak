@@ -1,0 +1,129 @@
+{
+	"courseRules": {
+		"minimumMinutes": 1.0,
+		"minimumGrade": 0.70,
+		"completeOnly": false,
+		"studentsCanFail": true
+},
+	"pages": [
+	{
+		"type": "article",
+		"name": "directions.html",
+		"articleText": "Welcome to the course...",
+		"completionRules": {
+			"watchTime": 3,
+			"score": 0.0,
+			"scrolled": true,
+			"attempts": 1,
+			"videoProgress" : 0.0
+		}
+	},
+	{
+		"type": "multi",
+		"name": "article_example.html",
+		"articleText": "Welcome to the course...",
+		"completionRules": {
+			"watchTime": 3,
+			"score": 0.0,
+			"scrolled": true,
+			"attempts": 1,
+			"videoProgress" : 0.0
+		}
+	},
+	{
+		"type": "quiz",
+		"name": "quiz_example.html",
+		"completionRules": {
+			"watchTime": 0,
+			"score": 0.1,
+			"scrolled": false,
+			"attempts": 3,
+			"videoProgress" : 0.0
+		},
+		"questions": [
+			{
+				"id": "Q1",
+				"text": "The sky is blue.",
+				"correctAnswers": ["True"],
+				"possibleAnswers": ["True", "False"],
+				"pointValue": 1,
+				"isCorrect": null,
+				"choices": []
+			},
+			{
+				"id": "Q2",
+				"text": "What is 3 + 1",
+				"correctAnswers": ["4"],
+				"possibleAnswers": ["1", "2", "3", "4"],
+				"pointValue": 1,
+				"isCorrect": null,
+				"choices": []
+			},
+			{
+				"id": "Q3",
+				"text": "Which of the following are warm colors? Select all that apply",
+				"correctAnswers": ["red", "orange", "yellow"],
+				"possibleAnswers": ["blue", "orange", "red", "yellow"],
+				"pointValue": 1,
+				"isCorrect": null,
+				"choices": []
+			},
+			{
+				"id": "Q4",
+				"text": "Which of the following are common dose of an Epi Pen?",
+				"correctAnswers": ["0.3mg", "0.15mg"],
+				"possibleAnswers": ["0.15mg", "1mg", "0.3mg", "0.4g"],
+				"pointValue": 0.5,
+				"isCorrect": null,
+				"choices": []
+			}
+		]
+	},
+	{
+		"type": "video",
+		"name": "video_example.html",
+		"videoURL": "media/1.mp4",
+		"completionRules": {
+			"watchTime": 10,
+			"score": 0.0,
+			"scrolled": false,
+			"attempts": 1,
+			"videoProgress" : 0.10
+		}
+	},
+	{
+		"type": "multi",
+		"name": "multi_example.html",
+		"completionRules": {
+			"watchTime": 5,
+			"score": 0.7,
+			"scrolled": true,
+			"attempts": 3,
+			"videoProgress" : 0.01
+		},
+		"questions": [
+			{
+				"id": "Q1",
+				"text": "True False Questions give you a 50/50 shot of guessing right?",
+				"correctAnswers": ["True"],
+				"possibleAnswers": ["True", "False"],
+				"pointValue": 1,
+				"isCorrect": null,
+				"choices": []
+			}
+		]
+	},
+	{
+		"type": "article",
+		"name": "finish.html",
+		"articleText": "Welcome to the course...",
+		"completionRules": {
+			"watchTime": 2,
+			"score": 0.0,
+			"scrolled": false,
+			"attempts": 1,
+			"videoProgress" : 0.0
+		}
+	}
+	]
+}

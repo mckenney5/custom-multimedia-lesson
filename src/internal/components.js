@@ -51,12 +51,23 @@ class CourseComponent extends HTMLElement {
 		console.log(`[${this.tagName}] Received data for ${data.name}`);
 	}
 
+	// 1. UPDATE CourseComponent 'send' method
 	send(type, message) {
-		console.log(`Sending to parent: '${type}'`, message);
+		const myId = this.getAttribute("id");
+		let payload = message;
+
+		// Wrap the message if this component has an ID
+		if (myId) {
+			payload = {
+				id: myId,
+				value: message
+			};
+		}
+
 		if (window.child && typeof window.child.send === "function") {
-			window.child.send(type, message);
+			window.child.send(type, payload);
 		} else {
-			console.warn(`[${this.tagName}] Cannot send message. 'child' library not found.`);
+			console.warn(`[${this.tagName}] Cannot send message.`);
 		}
 	}
 
@@ -321,6 +332,12 @@ class CourseArticle extends CourseComponent {
  QUIZ COMPONENT: <course-quiz></course-quiz>   *
  ========================================================================== */
 class CourseQuiz extends CourseComponent {
+	// Tell browser which attributes to watch for changes
+
+
+	render() {
+
+	}
 
 	connectedCallback() {
 		super.connectedCallback();
@@ -334,6 +351,7 @@ class CourseQuiz extends CourseComponent {
 		window.addEventListener("quiz-results", this._boundQuizResults);
 
 		// Ask for data
+		// This will now automatically send the ID because of the base class update
 		this.send("GET_QUIZ_DATA", "");
 	}
 
@@ -343,13 +361,39 @@ class CourseQuiz extends CourseComponent {
 		super.disconnectedCallback();
 	}
 
+	// 2. UPDATE CourseQuiz handlers
 	handleQuizData(event) {
-		const { questions, userAnswers } = event.detail;
-		this.renderForm(questions, userAnswers);
+		let data = event.detail;
+		let targetId = null;
+		this.attemptsLeft = event.detail.value.attemptsLeft; // Store it
+
+		// Unwrap if it's a directed message
+		if (data && data.id && data.value) {
+			targetId = data.id;
+			data = data.value;
+		}
+
+		// Filter: If message has a target ID, it MUST match mine
+		const myId = this.getAttribute("id");
+		if (targetId && targetId !== myId) return;
+
+		// Proceed
+		this.renderForm(data.questions, data.userAnswers);
 	}
 
 	handleQuizResults(event) {
-		const { score, maxAttempts } = event.detail;
+		let data = event.detail;
+		let targetId = null;
+
+		if (data && data.id && data.value) {
+			targetId = data.id;
+			data = data.value;
+		}
+
+		const myId = this.getAttribute("id");
+		if (targetId && targetId !== myId) return;
+
+		const { score, maxAttempts } = data;
 
 		const scoreField = this.querySelector("#score-field");
 		if(scoreField) scoreField.textContent = `${Math.round(score*100)}%`;
@@ -357,10 +401,12 @@ class CourseQuiz extends CourseComponent {
 		const maxAttemptsField = this.querySelector("#max-attempts-field");
 		if(maxAttemptsField) maxAttemptsField.textContent = maxAttempts;
 
-		document.getElementById("results").style.display = "";
+		const resultsDiv = this.querySelector("#results");
+		if(resultsDiv) resultsDiv.style.display = "block";
 	}
 
 	renderForm(questions, savedAnswers) {
+
 		// Clear previous content
 		this.innerHTML = "";
 
@@ -403,6 +449,7 @@ class CourseQuiz extends CourseComponent {
 			});
 
 			form.appendChild(qDiv);
+
 		});
 
 		// Submit Button
@@ -413,30 +460,59 @@ class CourseQuiz extends CourseComponent {
 
 		form.appendChild(document.createElement("br"));
 		form.appendChild(btn);
-
+		
 		this.appendChild(form);
+		if (this.attemptsLeft <= 0) {
+			const btn = this.querySelector(".btn-submit");
+			if(btn) {
+				btn.disabled = true;
+				const score = this.maxScore ? Math.round((this.score/this.maxScore)*100) : "";
+				btn.textContent = `No Attempts Left - Score ${score}`;
+			}
+			// Also disable checkboxes
+			this.querySelectorAll("input[type=checkbox]").forEach(cb => cb.disabled = true);
+		}
 	}
 
 	submit(questions) {
 		const answers = {};
+		this.score = 0;
+		this.maxScore = 0;
+		this.attemptsLeft--;
 
-		// Gather data
 		questions.forEach(q => {
-			// Get all checked boxes for this question ID
 			const checked = this.querySelectorAll(`input[name="${q.id}"]:checked`);
 			const values = Array.from(checked).map(cb => cb.value);
 			answers[q.id] = values;
+
+			// --- NEW GRADING LOGIC ---
+			const normalize = arr => (arr || []).map(s => String(s).toLowerCase()).sort();
+			const correct = normalize(q.correctAnswers);
+			const user = normalize(values);
+
+			// Exact match
+			if (correct.length === user.length && correct.every((v, i) => v === user[i])) {
+				this.score += q.pointValue;
+			}
+			this.maxScore += q.pointValue;
 		});
 
-		// Disable button to prevent double-submit
-		const btn = this.querySelector(".btn-submit");
-		if(btn) {
-			btn.disabled = true;
-			btn.textContent = "Submitted";
-		}
+		// UI Updates
+		const scoreField = this.querySelector("#score-field");
+		if(scoreField) scoreField.textContent = `${Math.round((this.score/this.maxScore)*100)}%`;
+		const resultsDiv = this.querySelector("#results");
+		if(resultsDiv) resultsDiv.style.display = "block";
 
-		// Send to Parent
-		this.send("QUIZ_SUBMITTED", answers);
+		// Disable button
+		const btn = this.querySelector(".btn-submit");
+		if(btn) { btn.disabled = true; btn.textContent = "Submitted"; }
+
+		// Send RESULT (not just answers)
+		this.send("QUIZ_RESULT", {
+			score: this.score,
+			maxScore: this.maxScore,
+			answers: answers,
+		});
 	}
 }
 

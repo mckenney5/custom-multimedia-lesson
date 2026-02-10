@@ -52,16 +52,12 @@ const child = {
 	},
 
 	init: function() {
-		// Make the object global
 		window.child = this;
-
-		// Set up a message Queue in case we cannot auth in time for page load
 		this.messagePoller = setInterval(() => {
 			if(!this.pageAPICode || this.pageAPICode === "*") return;
-
 			if(this.messageQueue.length > 0){
-				console.log(`child: clearing out queue of ${this.messageQueue.length}`);
-				this.messageQueue.forEach(m => this.send(m[0], m[1]));
+				// FIXED: Send m[2] (the ID)
+				this.messageQueue.forEach(m => this.send(m[0], m[1], m[2]));
 				this.messageQueue = [];
 			}
 			clearInterval(this.messagePoller);
@@ -107,23 +103,35 @@ const child = {
 	},
 
 
-	send: function(subject, body){
+	send: function(subject, body, id = null){
 		if(!this.pageAPICode || this.pageAPICode === "*"){
-			console.log("Message Queued");
-			this.messageQueue.push([subject, body]);
+			// FIXED: Push ID to queue
+			this.messageQueue.push([subject, body, id]);
 			return;
 		}
-		window.parent.postMessage({type: subject, message: body, code: this.pageAPICode}, this.parentOrigin);
+		// FIXED: Include 'id' in the postMessage payload
+		window.parent.postMessage({
+			type: subject,
+			message: body,
+			code: this.pageAPICode,
+			id: id,
+		}, this.parentOrigin);
 	},
 
 	receive: function(event){
 		const subject = event.data.type;
 		const message = event.data.message;
+		const id = event.data.id; // <-- Capture the ID from Parent
 		console.log(`Child: recieved '${subject}'\n `, event);
 
 		if(event.origin !== this.parentOrigin){
 			console.error("Blocked message --> ", event);
 			return;
+		}
+
+		// Helper to inject ID into the message object so components can read it
+		if(id && typeof message === "object" && message !== null){
+			message._targetId = id;
 		}
 
 		switch(subject){
@@ -144,8 +152,10 @@ const child = {
 			case "GET_QUIZ_DATA":
 				this.events.fire("quiz-data", message);
 				break;
+			case "QUIZ_DATA":
+				this.events.fire("quiz-data", message);
+				break;
 			case "QUIZ_RESULTS":
-
 				this.events.fire("quiz-results", message);
 				break;
 			default:
