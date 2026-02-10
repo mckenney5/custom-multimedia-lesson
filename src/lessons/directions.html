@@ -2,13 +2,17 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8">
-		<title></title>
+		<title>Course Directions</title>
+		<link rel="stylesheet" href="lesson_styles.css">
+		<script src="../internal/children.js"></script>
+		<script src="../internal/components.js"></script>
 	</head>
 	<body>
+	<course-article needsStudentInfo="true">
 		<h1>Lesson Directions</h1>
 		<main>
 		<h2 id="welcome">
-		Welcome!
+		Welcome! <span id="name-field"></span>
 		</h2><br>
 		<p>
 		This is an online interactive course. There are multiple ways you can interact with it.<br>
@@ -22,7 +26,7 @@
 		<img id="photo" src="../media/reset.button.png" alt="button with reset on it. Looks different from the other buttons">
 		<br><br>
 		Banners will appear to let you know that you are ready to move to the next page or remind you to complete the page.<br>
-		<img id="photo" src="../media/banner.png" alt="A red banner at the top of a page stating 'Please complete all items on the page'">
+		<img id="photo" src="../media/banner.png" width="90%" alt="A red banner at the top of a page stating 'Please complete all items on the page'">
 		<br><br>
 		<h2>Articles</h2>
 		If your online course has articles, the text will display in the center window. Most articles have rules like 'how long' you have been on the page, and 'did you reach the bottom'? Once these rules are met, you may continue. The course will tell you this with a banner at the top.<br>
@@ -40,32 +44,6 @@
 		</p>
 		</main>
 		<footer></footer>
-		<script>
-			window.addEventListener('scroll', function onScroll() {
-			// Tracks if the user has scrolled all the way down
-				if (window.scrollY + window.innerHeight >= document.body.scrollHeight) {
-					window.parent.postMessage({ type: 'PAGE_SCROLLED', scrolled: true }, '*');
-					window.removeEventListener('scroll', onScroll);
-				}
-			});
-			function init(){
-				// Start listening for messages like name and grade
-				window.addEventListener('message', (event) => {
-					if(event.origin != 'localhost'){
-						console.error("Unknown orgin " + event.origin);
-						//return;
-					}
-
-					if(event.data.type === "GET_STUDENT_DATA"){
-						document.getElementById("welcome").innerHTML = `Welcome ${event.data.name}!`;
-					}
-				});
-				// send data requests to the parent
-				window.parent.postMessage({type: 'GET_STUDENT_DATA', message: ""}, '*');
-			}
-
-			init();
-
-	</script>
+		</course-article>
 	</body>
 </html>

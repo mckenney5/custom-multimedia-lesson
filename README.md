@@ -1,6 +1,6 @@
 Custom Multimedia Lesson
 ========================
-CML (v A0.2.0) — _A small, lightweight, interactive lesson application_
+CML (v A0.3.0) — _A small, lightweight, interactive lesson application_
 
 ## Description
 This is a web application made from vanilla JavaScript, CSS, and HTML5. Its job is to facilitate a custom multi-page lesson.
@@ -9,7 +9,7 @@ This is accomplished with a parent window that holds the state of the lesson, pl
 ## Project Meta
 This software is in a **working alpha** state.
 The software may not work and may have drastic changes in the future.
-There is no guarantee that the JSON course data will be compatible with future versions
+There is no current guarantee that the JSON course data will be compatible with future versions
 
 ## License
 This code is licensed under the GNU GPL v3. See 'LICENSE' for details. 
@@ -55,7 +55,7 @@ Here are the current steps to make your own course:
 
 1. Add HTML files to the lesson folder
 	1. Use the examples in the lesson folder for features
-	2. It is recommended to only use one type of media per page for chunking / segmentation
+	2. It is _recommended_ to only use one type of media per page for chunking / segmentation
 	3. Replace links to your media
 	4. Put your media in the media folder
 2. Update the course_data.json in the lessons folder
@@ -63,14 +63,14 @@ Here are the current steps to make your own course:
 	2. Copy and paste the course object in sequential order
 	3. Modify the course object with your info (see below)
 	4. Add completion rules per page (see below)
-	5. Keep (or make your own) first and last page, where the first page is directions and the last page a congrats
+	5. Keep (or make your own) first and last page, where the first page is directions and the last page is a congrats
 	6. Open the course to test for errors in the console log
 	7. Do a dry run of your course from start to finish
 	8. (optional) package your course via `make.sh` in the tools folder
 	9. (optional) upload the SCORM 1.2 package to an LMS for further testing and publication
 
 ### Course Rules
-The object looks like this:
+Here is what the settings look like, starting with the overall course rules:
 
 ```JSON
 {
@@ -136,15 +136,24 @@ Common question set up:
 
 ```JSON
 		"questions": [
-			{
-				"id": "Q1",
-				"text": "True False Questions give you a 50/50 shot of guessing right?",
-				"correctAnswers": ["True"],
-				"possibleAnswers": ["True", "False"],
-				"pointValue": 1,
-				"isCorrect": null,
-				"choices": []
-			}
+		{
+			"id": "Q1",
+			"text": "The sky is blue.",
+			"correctAnswers": ["True"],
+			"possibleAnswers": ["True", "False"],
+			"pointValue": 1,
+			"isCorrect": null,
+			"choices": []
+		},
+		{
+			"id": "Q2",
+			"text": "What is 3 + 1",
+			"correctAnswers": ["4"],
+			"possibleAnswers": ["1", "2", "3", "4"],
+			"pointValue": 1,
+			"isCorrect": null,
+			"choices": []
+		}
 		]
 ```
 
@@ -153,7 +162,7 @@ Common question set up:
 |--------------------|-----------------------------------------------------|
 | `id`               | The unique identifier of a question, used analytics |
 | `text`             | The question that the student is asked              |
-| `correctAnswers`   | A list of possible correct answers                  |
+| `correctAnswers`   | A list of the correct answers                       |
 | `possibleAnswers`  | The choices the student has                         |
 | `pointValue`       | The weight of the question                          |
 | `isCorrect`        | Internal, do not change                             |
@@ -189,6 +198,32 @@ points of every page and adding the total earned points. Dividing earned / possi
 | `scrolled`         | The student must scroll to the bottom                                    |
 | `attempts`         | The ammount of time the student can submit quiz answers                  |
 | `videoProgress`    | The percentage of the video that must be watched. 1.0 is the whole video | 
+
+
+### Creating a page in HTML
+Each page in the lesson needs its own HTML file so the program can move the student to the next one. A basic template looks like this:
+
+```HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Multi Component Example</title>
+	<link rel="stylesheet" href="lesson_styles.css">
+	<script src="../internal/children.js"></script>
+	<script src="../internal/components.js"></script>
+</head>
+<body>
+	<h1>Page 1</h1></br>
+	<course-article>
+		<course-quiz id="quiz1"></course-quiz>
+		<course-video id="intro_video" src="../media/1.mp4"></course-video>
+		<course-quiz id="quiz2"></course-quiz>
+	</course-article>
+</body>
+</html>
+
+```
 
 
 ### Course Check List

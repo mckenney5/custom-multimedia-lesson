@@ -1,0 +1,132 @@
+:root{
+	--h: 120;
+	--s: 20%;
+	--l-base: 38%;
+	--brand-800: hsl(var(--h) var(--s) calc(var(--l-base) - 18%));
+	--brand-700: hsl(var(--h) var(--s) calc(var(--l-base) - 8%));
+	--brand: hsl(var(--h) var(--s) var(--l-base)); /* #629962 */
+	--brand-100: hsl(var(--h) var(--s) calc(var(--l-base) + 32%));
+	--brand-50:  hsl(var(--h) var(--s) calc(var(--l-base) + 62%));
+	--brand-text: #ffffff
+}
+
+/* The Container for Video + Controls */
+#video-container {
+	position: relative; /* Allows absolute positioning inside if needed later */
+	width: 100%;
+	max-width: 800px; /* Optional: restricts max width on desktop */
+	margin: 0 auto; /* Centers the player */
+	background: #000; /* Black background for the container itself */
+}
+
+/* The Video Element */
+#vid-player {
+	width: 100%;
+	display: block; /* Removes extra space below video */
+}
+
+/* The Control Bar */
+#video-controls {
+	background-color: rgba(0, 0, 0, 0.6); /* Semitransparent Black */
+	padding: 10px;
+	display: flex;
+	justify-content: space-around; /* Spreads buttons out */
+	align-items: center;
+	color: white;
+	position: absolute;
+	bottom: 0;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+/* Flat Buttons */
+#video-controls button {
+	background: transparent;
+	border: none;
+	color: white;
+	cursor: pointer;
+	font-size: 16px;
+	padding: 5px 10px;
+	border-radius: 4px;
+	transition: background 0.3s;
+}
+
+/* Visual Feedback on Hover */
+#video-controls button:hover {
+	background: rgba(255, 255, 255, 0.2);
+}
+
+/* Slider Styling */
+#speed-slider {
+	cursor: pointer;
+	margin: 0 10px;
+}
+
+#speed-value {
+	/* 1. Allows the span to accept a width */
+	display: inline-block;
+
+	/* 2. Reserves space for roughly 3-4 characters (e.g., "1.5x") */
+	width: 4ch;
+
+	/* 3. Centers the text inside that reserved space */
+	text-align: center;
+}
+
+#play-pause {
+	/* 1. Allows the span to accept a width */
+	display: inline-block;
+
+	/* 2. Reserves space for roughly 4-5 characters with padding (e.g., " Pause ") */
+	width: 7ch;
+
+	/* 3. Centers the text inside that reserved space */
+	text-align: center;
+}
+
+#time-display {
+	/* font stack, goes left to right until it finds a font */
+	font-family: "Liberation Mono", monospace;
+
+	/* Keeps numbers the same width */
+	font-variant-numeric: tabular-nums;
+}
+
+/* --- Quiz Component --- */
+course-quiz {
+	display: block;
+	max-width: 800px;
+	margin: 0 auto;
+}
+
+.question-block {
+	padding: 15px;
+	border: 1px solid #ddd;
+	margin-bottom: 10px;
+	border-radius: 4px;
+}
+
+.question-block.even { background-color: #f9f9f9; }
+.question-block.odd { background-color: #fff; }
+
+.answer-row {
+	display: inline-block;
+	padding: 5px;
+	cursor: pointer;
+}
+
+.btn-submit {
+	background-color: var(--brand); /* #629962 */
+	color: white;
+	padding: 10px 20px;
+	border: none;
+	border-radius: 4px;
+	font-size: 1rem;
+	cursor: pointer;
+	margin-top: 10px;
+}
+
+.btn-submit:disabled {
+	background-color: #ccc;
+	cursor: not-allowed;
+}
