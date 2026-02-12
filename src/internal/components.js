@@ -113,22 +113,22 @@ class CourseVideo extends CourseComponent {
 
 		// We use Light DOM, so we write directly to this.innerHTML
 		this.innerHTML = `
-		<div id="video-container">
+		<div id="video-container" style="position: relative;">
+		<div id="loading-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); color: white; align-items: center; justify-content: center; z-index: 10; pointer-events: none; font-size: 1.2rem;">
+		<span class="spinner">⏳ Buffering...</span>
+		</div>
+
 		<h3 id="muted" style="color: red;"></h3>
 		<video id="vid-player" src="${src}" poster="${poster}"></video>
 
 		<div id="video-controls">
 		<button id="play-pause" type="button">Play</button>
-
 		<button id="rewind" type="button">-5s</button>
 		<button id="forward" type="button">+5s</button>
-
 		<span id="time-display">0:00 / 0:00</span>
-
 		<label for="speed-slider">Speed:</label>
 		<input type="range" id="speed-slider" min="0.5" max="2.0" step="0.1" value="1">
 		<span id="speed-value">1x</span>
-
 		<button id="full-screen" type="button">Full Screen</button>
 		</div>
 		</div>
@@ -146,13 +146,37 @@ class CourseVideo extends CourseComponent {
 		this.fullScreenButton = this.querySelector("#full-screen");
 		this.videoContainer = this.querySelector("#video-container");
 		this.muteBanner = this.querySelector("#muted");
+		this.loadingOverlay = this.querySelector("#loading-overlay");
 
 		// State tracking
 		this.lastLoggedPercent = 0;
 	}
 
 	attachListeners() {
-		// 1. Play/Pause Toggle
+
+		// -- Video Buffering
+		// Fires when the browser starts fetching the media
+		this.videoElem.addEventListener("loadstart", () => {
+			this.loadingOverlay.style.display = "flex";
+		});
+
+		// Fires when playback stops because it needs to buffer the next frame
+		this.videoElem.addEventListener("waiting", () => {
+			this.loadingOverlay.style.display = "flex";
+		});
+
+		// Fires when enough data has loaded to start/resume playing
+		this.videoElem.addEventListener("canplay", () => {
+			this.loadingOverlay.style.display = "none";
+		});
+
+		// Backup: explicitly hide when playing resumes
+		this.videoElem.addEventListener("playing", () => {
+			this.loadingOverlay.style.display = "none";
+		});
+		// --
+
+		// Play/Pause Toggle
 		this.playBtn.addEventListener("click", () => {
 			if (this.videoElem.paused) {
 				this.videoElem.play();
@@ -164,6 +188,8 @@ class CourseVideo extends CourseComponent {
 				this.send("VIDEO_PAUSED", this.videoElem.currentTime);
 			}
 		});
+
+
 
 		this.rewindButton.addEventListener("click", () => {
 			this.videoElem.pause();
