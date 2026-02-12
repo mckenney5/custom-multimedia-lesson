@@ -74,7 +74,7 @@ const journaler = {
 	},
 
 	initialized: false,
-	videoProgressInterval: 5, // <-- request that video progress be updated every 5%
+	videoProgressInterval: 10, // <-- request that video progress be updated every 10%
 
 	// Data structure: Version ^ UserID ^ SessionStart ^ [Delta_Data] ^ [Interaction_Log]
 
@@ -407,10 +407,24 @@ const journaler = {
 		return cleanObject;
 	},
 
-	getHumanTime: function(offset){
-		/* Debug Helper. Converts a raw timestamp (or calculated offset) into a human-readable string (e.g., "10:45 AM") for the console logs or analytics viewer. */
-		const date = new Date(this._startTime + offset * 1000);
-		return (date.toString());
+	getHumanTime: function(offset = 0){
+		// Returns the time in human readible format
 
+		// offset is in seconds
+		const date = new Date(this._startTime + offset * 1000);
+
+		const pad2 = n => String(n).padStart(2, "0");
+
+		const month = pad2(date.getMonth() + 1);
+		const day = pad2(date.getDate());
+		const year = date.getFullYear();
+
+		const hh = pad2(date.getHours());
+		const mm = pad2(date.getMinutes());
+		const ss = pad2(date.getSeconds());
+
+
+
+		return `${month}/${day}/${year} ${hh}:${mm}:${ss}`;
 	},
 };

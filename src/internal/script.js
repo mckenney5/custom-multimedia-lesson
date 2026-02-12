@@ -646,10 +646,11 @@ let state = {
 				if(componentID && pageDelta.components && pageDelta.components[componentID]){
 					pageDelta.components[componentID].videoProgress = msgData;
 				}
-				// We keep updating the main page videoProgress for backward compatibility with rules
 				pageDelta.videoProgress = msgData;
 
-				if(Math.round(msgData * 100) % journaler.videoProgressInterval === 0) journaler.log("VIDEO_PROGRESS", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				if(Math.round(msgData * 100) % journaler.videoProgressInterval === 0){
+					journaler.log("VIDEO_PROGRESS", `${index},${roundTo4(pageDelta.videoProgress)}`);
+				}
 				break;
 
 				// ... (Rest of switch statement remains UNCHANGED) ...

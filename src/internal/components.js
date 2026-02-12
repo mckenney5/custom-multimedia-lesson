@@ -264,7 +264,8 @@ class CourseVideo extends CourseComponent {
 			// Update UI
 			this.timeDisplay.textContent = this.formatTime(this.videoElem.currentTime);
 
-			// Send to Parent (Let the parent handle the 5% throttling logic or do it here)
+			// Send to Parent - currently script.js does the throtteling based on the hardcoded limit in journaler.js
+			// TODO consider adding the limiter here to prevent spam
 			this.send("VIDEO_PROGRESS", pct); // Send float 0.0 - 1.0
 		});
 
