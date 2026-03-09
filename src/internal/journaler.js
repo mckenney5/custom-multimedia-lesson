@@ -41,6 +41,7 @@ const journaler = {
 		"VIDEO_MUTED" : "o",
 		"CLICK_OFF" : "p",
 		"CLICK_BACK" : "q",
+		"QUESTION_ANSWERED" : "r",
 	},
 
 	_decoding: {
@@ -71,6 +72,7 @@ const journaler = {
 		"o": "VIDEO_MUTED",
 		"p": "CLICK_OFF",
 		"q": "CLICK_BACK",
+		"r": "QUESTION_ANSWERED",
 	},
 
 	initialized: false,

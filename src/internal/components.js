@@ -556,6 +556,23 @@ class CourseQuiz extends CourseComponent {
 			qDiv.className = `question-block ${index % 2 === 0 ? "even" : "odd"}`;
 			qDiv.innerHTML = `<h3>${index + 1}. ${q.text}</h3>`;
 
+			// Add interaction logging to quiz elements
+			const logInteraction = () => {
+				let values = [];
+				if (q.type === "short-answer") {
+					const el = this.querySelector(`input[name="${q.id}"]`);
+					if (el && el.value.trim() !== "") values = [el.value.trim()];
+				} else {
+					const checked = this.querySelectorAll(`input[name="${q.id}"]:checked`);
+					values = Array.from(checked).map(cb => cb.value);
+				}
+
+				this.send("QUESTION_ANSWERED", {
+					questionID: q.id,
+					answer: values.join(" | ") // Join arrays cleanly for the CSV log
+				});
+			};
+
 			if (q.type === "short-answer") {
 				const input = document.createElement("input");
 				input.type = "text";
@@ -568,6 +585,9 @@ class CourseQuiz extends CourseComponent {
 				if (savedAnswers[q.id] && savedAnswers[q.id].length > 0) {
 					input.value = savedAnswers[q.id][0];
 				}
+
+				// Add listener for changes in the text box
+				input.addEventListener("change", logInteraction);
 
 				qDiv.appendChild(input);
 			} else {
@@ -585,6 +605,9 @@ class CourseQuiz extends CourseComponent {
 					if (savedAnswers[q.id] && savedAnswers[q.id].includes(choice)) {
 						input.checked = true;
 					}
+
+					// Listen for answers
+					input.addEventListener("change", logInteraction);
 
 					label.appendChild(input);
 					label.appendChild(document.createTextNode(" " + choice));

@@ -186,7 +186,6 @@ let state = {
 			data.push(roundFloatTo2Int(p.videoProgress));
 
 			// Complex State: Determine what to save
-			// If we have component data, save that. Otherwise, save legacy answers.
 			let complexState = {};
 			if (p.components && Object.keys(p.components).length > 0) {
 				complexState = p.components;
@@ -559,7 +558,7 @@ let state = {
 				break;
 
 			case "QUIZ_RESULT":
-				journaler.log("QUIZ_SUBMITTED", `${index},${componentID || "legacy"},${msgData.score},${msgData.maxScore}`);
+				journaler.log("QUIZ_SUBMITTED", `${index},${componentID},${msgData.score},${msgData.maxScore}`);
 
 				if(componentID && pageDelta.components && pageDelta.components[componentID]){
 					const compState = pageDelta.components[componentID];
@@ -624,6 +623,11 @@ let state = {
 					}
 				}
 				journaler.log("QUESTIONS_RENDERED", index);
+				break;
+
+			case "QUESTION_ANSWERED":
+				// Log format: PageIndex, QuizID, QuestionID, Answer
+				journaler.log("QUESTION_ANSWERED", `${index},${componentID},${msgData.questionID},${msgData.answer}`);
 				break;
 
 			case "LOG":
