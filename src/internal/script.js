@@ -485,11 +485,26 @@ let state = {
 		// Calculate score ratio or set to zero (stops / by 0)
 		const score = page.maxScore > 0 ? pageDelta.score / page.maxScore : 0;
 
+		let quizzesSatisfied = true;
+
+		if (page.completionRules.requireSubmission) {
+			// Get IDs of all quiz components on this page from static config
+			const quizComponents = (page.components || []).filter(c => c.type === "quiz");
+
+			// Check if every quiz has been marked 'completed' in the dynamic state
+			// Note: compState.completed is set to true in handleMessage > QUIZ_RESULT
+			quizzesSatisfied = quizComponents.every(q => {
+				const compState = pageDelta.components[q.id];
+				return compState && compState.completed === true;
+			});
+		}
+
 		return (
 			pageDelta.watchTime >= page.completionRules.watchTime &&
 			score >= page.completionRules.score &&
 			(!page.completionRules.scrolled || pageDelta.scrolled) &&
-			pageDelta.videoProgress >= page.completionRules.videoProgress
+			pageDelta.videoProgress >= page.completionRules.videoProgress &&
+			quizzesSatisfied
 		);
 	},
 
@@ -553,7 +568,7 @@ let state = {
 				break;
 
 			case "QUIZ_RESULT":
-				journaler.log("QUIZ_SUBMITTED", index);
+				journaler.log("QUIZ_SUBMITTED", `${index},${componentID || "legacy"},${msgData.score},${msgData.maxScore}`);
 
 				if(componentID && pageDelta.components && pageDelta.components[componentID]){
 					const compState = pageDelta.components[componentID];
