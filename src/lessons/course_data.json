@@ -46,6 +46,7 @@
 		{
 			"id": "quiz1",
 			"type": "quiz",
+			"options": ["show-wrong", "show-answer"],
 			"questions": [
 			{
 				"id": "Q1",
@@ -59,10 +60,9 @@
 			},
 			{
 				"id": "Q2",
-				"type": "multiple-choice",
+				"type": "short-answer",
 				"text": "What is 3 + 1",
-				"correctAnswers": ["4"],
-				"possibleAnswers": ["1", "2", "3", "4"],
+				"correctAnswers": ["4", "four"],
 				"pointValue": 1,
 				"isCorrect": null,
 				"choices": []
@@ -85,9 +85,9 @@
 			},
 			{
 				"id": "Q4",
-				"type": "select-all-that-apply",
-				"text": "Which of the following are common dose of an Epi Pen?",
-				"correctAnswers": ["0.3mg", "0.15mg"],
+				"type": "multiple-choice",
+				"text": "Which of the following is the adult dose of an Epi Pen?",
+				"correctAnswers": ["0.3mg"],
 				"possibleAnswers": ["0.15mg", "1mg", "0.3mg", "0.4g"],
 				"pointValue": 0.5,
 				"isCorrect": null,

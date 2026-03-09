@@ -491,7 +491,6 @@ class CourseQuiz extends CourseComponent {
 	handleQuizData(event) {
 		let data = event.detail;
 		let targetId = null;
-		this.attemptsLeft = event.detail.value.attemptsLeft; // Store it
 
 		// Unwrap if it's a directed message
 		if (data && data.id && data.value) {
@@ -502,6 +501,11 @@ class CourseQuiz extends CourseComponent {
 		// Filter: If message has a target ID, it MUST match mine
 		const myId = this.getAttribute("id");
 		if (targetId && targetId !== myId) return;
+
+		// Store Data
+		this.attemptsLeft = data.attemptsLeft;
+		this.options = data.options || [];
+		this.hasAttempted = data.hasAttempted;
 
 		// Proceed
 		this.renderForm(data.questions, data.userAnswers);
@@ -532,7 +536,6 @@ class CourseQuiz extends CourseComponent {
 	}
 
 	renderForm(questions, savedAnswers) {
-
 		// Clear previous content
 		this.innerHTML = "";
 
@@ -553,29 +556,89 @@ class CourseQuiz extends CourseComponent {
 			qDiv.className = `question-block ${index % 2 === 0 ? "even" : "odd"}`;
 			qDiv.innerHTML = `<h3>${index + 1}. ${q.text}</h3>`;
 
-			q.possibleAnswers.forEach((choice, i) => {
-				const label = document.createElement("label");
-				label.className = "answer-row";
-
+			if (q.type === "short-answer") {
 				const input = document.createElement("input");
-				input.type = (q.type === "select-all-that-apply") ? "checkbox" : "radio";
-				input.value = choice;
-				input.name = q.id; // Group by Question ID
-				input.id = `${q.id}_${i}`;
+				input.type = "text";
+				input.name = q.id;
+				input.id = `${q.id}_text`;
+				input.style.width = "100%";
+				input.style.padding = "5px";
 
-				// Restore saved state
-				if (savedAnswers[q.id] && savedAnswers[q.id].includes(choice)) {
-					input.checked = true;
+				// Restore saved state (savedAnswers[q.id] is an array of length 1)
+				if (savedAnswers[q.id] && savedAnswers[q.id].length > 0) {
+					input.value = savedAnswers[q.id][0];
 				}
 
-				label.appendChild(input);
-				label.appendChild(document.createTextNode(" " + choice));
-				qDiv.appendChild(label);
-				qDiv.appendChild(document.createElement("br"));
-			});
+				qDiv.appendChild(input);
+			} else {
+				q.possibleAnswers.forEach((choice, i) => {
+					const label = document.createElement("label");
+					label.className = "answer-row";
+
+					const input = document.createElement("input");
+					input.type = (q.type === "select-all-that-apply") ? "checkbox" : "radio";
+					input.value = choice;
+					input.name = q.id;
+					input.id = `${q.id}_${i}`;
+
+					// Restore saved state
+					if (savedAnswers[q.id] && savedAnswers[q.id].includes(choice)) {
+						input.checked = true;
+					}
+
+					label.appendChild(input);
+					label.appendChild(document.createTextNode(" " + choice));
+					qDiv.appendChild(label);
+					qDiv.appendChild(document.createElement("br"));
+				});
+			}
+
+			// Evaluate correctness if the user has attempted the quiz at least once
+			if (this.hasAttempted) {
+				const normalize = arr => (arr || []).map(s => String(s).toLowerCase().trim());
+				const correctNorm = normalize(q.correctAnswers);
+				const userNorm = normalize(savedAnswers[q.id] || []);
+
+				let isCorrect = false;
+				if (q.type === "short-answer") {
+					isCorrect = (userNorm.length === 1 && correctNorm.includes(userNorm[0]));
+				} else {
+					const cSort = [...correctNorm].sort();
+					const uSort = [...userNorm].sort();
+					isCorrect = (cSort.length === uSort.length && cSort.every((v, i) => v === uSort[i]));
+				}
+
+				// Option: show-wrong
+				if (this.options.includes("show-wrong")) {
+					const feedbackDiv = document.createElement("div");
+					feedbackDiv.style.marginTop = "8px";
+					feedbackDiv.style.fontWeight = "bold";
+					feedbackDiv.style.fontSize = "0.95em";
+
+					if (isCorrect) {
+						// Using aria-hidden prevents screen readers from redundantly reading the emoji
+						feedbackDiv.innerHTML = `<span aria-hidden="true">✅</span> Correct`;
+						feedbackDiv.style.color = "#0f5132"; // WCAG AAA Accessible Dark Green
+					} else {
+						feedbackDiv.innerHTML = `<span aria-hidden="true">❌</span> Incorrect`;
+						feedbackDiv.style.color = "#842029"; // WCAG AAA Accessible Dark Red
+					}
+					qDiv.appendChild(feedbackDiv);
+				}
+			}
+
+			// Option: show-answer (Only triggers when out of attempts)
+			if (this.attemptsLeft <= 0 && this.options.includes("show-answer")) {
+				const answerDiv = document.createElement("div");
+				answerDiv.style.marginTop = "8px";
+				answerDiv.style.padding = "8px";
+				answerDiv.style.backgroundColor = "#e2e3e5"; // Neutral gray background
+				answerDiv.style.borderLeft = "4px solid #6c757d";
+				answerDiv.innerHTML = `<strong>Correct Answer:</strong> ${q.correctAnswers.join(", ")}`;
+				qDiv.appendChild(answerDiv);
+			}
 
 			form.appendChild(qDiv);
-
 		});
 
 		// Submit Button
@@ -586,7 +649,7 @@ class CourseQuiz extends CourseComponent {
 
 		form.appendChild(document.createElement("br"));
 		form.appendChild(btn);
-		
+
 		this.appendChild(form);
 		if (this.attemptsLeft <= 0) {
 			const btn = this.querySelector(".btn-submit");
@@ -595,8 +658,8 @@ class CourseQuiz extends CourseComponent {
 				const score = this.maxScore ? Math.round((this.score/this.maxScore)*100) : "";
 				btn.textContent = `No Attempts Left - Score ${score}`;
 			}
-			// Also disable checkboxes
-			this.querySelectorAll("input[type=checkbox]").forEach(cb => cb.disabled = true);
+			// Disable ALL inputs (text, radio, and checkboxes)
+			this.querySelectorAll("input").forEach(el => el.disabled = true);
 		}
 	}
 
@@ -607,19 +670,41 @@ class CourseQuiz extends CourseComponent {
 		this.attemptsLeft--;
 
 		questions.forEach(q => {
-			const checked = this.querySelectorAll(`input[name="${q.id}"]:checked`);
-			const values = Array.from(checked).map(cb => cb.value);
+			let values = [];
+
+			if (q.type === "short-answer") {
+				const input = this.querySelector(`input[name="${q.id}"]`);
+				// Grab text if it's not empty and put it in an array
+				if (input && input.value.trim() !== "") {
+					values = [input.value.trim()];
+				}
+			} else {
+				const checked = this.querySelectorAll(`input[name="${q.id}"]:checked`);
+				values = Array.from(checked).map(cb => cb.value);
+			}
+
 			answers[q.id] = values;
 
-			// --- NEW GRADING LOGIC ---
-			const normalize = arr => (arr || []).map(s => String(s).toLowerCase()).sort();
+			// Normalize lowercases everything for easy comparison
+			const normalize = arr => (arr || []).map(s => String(s).toLowerCase());
 			const correct = normalize(q.correctAnswers);
 			const user = normalize(values);
 
-			// Exact match
-			if (correct.length === user.length && correct.every((v, i) => v === user[i])) {
-				this.score += q.pointValue;
+			if (q.type === "short-answer") {
+				// For short answer, if their 1 typed string exists the list of acceptable answers
+				if (user.length === 1 && correct.includes(user[0])) {
+					this.score += q.pointValue;
+				}
+			} else {
+				// For multiple choice / select all, require an exact array match
+				// We sort them so ["A", "B"] matches ["B", "A"]
+				correct.sort();
+				user.sort();
+				if (correct.length === user.length && correct.every((v, i) => v === user[i])) {
+					this.score += q.pointValue;
+				}
 			}
+
 			this.maxScore += q.pointValue;
 		});
 
@@ -633,7 +718,7 @@ class CourseQuiz extends CourseComponent {
 		const btn = this.querySelector(".btn-submit");
 		if(btn) { btn.disabled = true; btn.textContent = "Submitted"; }
 
-		// Send RESULT (not just answers)
+		// Send RESULT
 		this.send("QUIZ_RESULT", {
 			score: this.score,
 			maxScore: this.maxScore,
