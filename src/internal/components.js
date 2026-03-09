@@ -113,24 +113,121 @@ class CourseVideo extends CourseComponent {
 
 		// We use Light DOM, so we write directly to this.innerHTML
 		this.innerHTML = `
-		<div id="video-container" style="position: relative;">
-		<div id="loading-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); color: white; align-items: center; justify-content: center; z-index: 10; pointer-events: none; font-size: 1.2rem;">
-		<span class="spinner">⏳ Buffering...</span>
-		</div>
+		<style>
+			/* --- DEFAULT LAYOUT (Normal Page Flow) --- */
+			#video-container {
+				position: relative;
+				background-color: #000;
+				display: flex;
+				flex-direction: column;
+				width: 60%;
+				max-width: 100%;
+				/* Prevent text selection on double clicks */
+				user-select: none;
+			}
 
-		<h3 id="muted" style="color: red;"></h3>
-		<video id="vid-player" src="${src}" poster="${poster}"></video>
+			#vid-player {
+				width: 100%;
+				display: block;
+				/* Ensure video takes available space */
+				flex-grow: 1;
+			}
 
-		<div id="video-controls">
-		<button id="play-pause" type="button">Play</button>
-		<button id="rewind" type="button">-5s</button>
-		<button id="forward" type="button">+5s</button>
-		<span id="time-display">0:00 / 0:00</span>
-		<label for="speed-slider">Speed:</label>
-		<input type="range" id="speed-slider" min="0.5" max="2.0" step="0.1" value="1">
-		<span id="speed-value">1x</span>
-		<button id="full-screen" type="button">Full Screen</button>
-		</div>
+			#video-controls {
+				/* Default: Sit below the video */
+				position: static;
+				background-color: #222;
+				padding: 10px;
+				display: flex;
+				justify-content: space-around;
+				align-items: center;
+				color: white;
+				width: 100%;
+				box-sizing: border-box;
+				z-index: 20; /* Always on top of triggers */
+				transition: opacity 0.3s ease; /* Smooth fade */
+			}
+
+			/* --- FULL SCREEN OVERRIDES --- */
+
+			/* When the container is in full screen... */
+			#video-container:fullscreen {
+				justify-content: center; /* Center video vertically */
+				background: black;
+			}
+
+			/* Make controls float over the video at the bottom */
+			#video-container:fullscreen #video-controls {
+				position: absolute;
+				bottom: 0;
+				left: 0;
+				width: 100%;
+				background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent */
+				opacity: 0; /* Hidden by default */
+			}
+
+			/* The Trigger Zone (Bottom 15% of screen) */
+			#fs-hover-trigger {
+				display: none; /* Hidden normally */
+			}
+			#video-container:fullscreen #fs-hover-trigger {
+				display: block;
+				position: absolute;
+				bottom: 0;
+				left: 0;
+				width: 100%;
+				height: 15%; /* Active area */
+				z-index: 10; /* Above video, below controls */
+			}
+
+			/* Show controls when hovering the Trigger OR the Controls themselves */
+			#video-container:fullscreen #fs-hover-trigger:hover ~ #video-controls,
+			#video-container:fullscreen #video-controls:hover {
+				opacity: 1;
+			}
+
+
+			/* --- BUTTON STYLES --- */
+			#video-controls button {
+				background: transparent;
+				border: none;
+				color: white;
+				cursor: pointer;
+				font-size: 16px;
+				padding: 5px 10px;
+				transition: background 0.2s;
+			}
+			#video-controls button:hover {
+				background: rgba(255,255,255,0.2);
+				border-radius: 4px;
+			}
+			#speed-slider { margin: 0 10px; cursor: pointer; }
+		</style>
+
+		<div id="video-container">
+			<div id="fs-hover-trigger"></div>
+
+			<div id="loading-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); color: white; align-items: center; justify-content: center; z-index: 10; pointer-events: none; font-size: 1.2rem;">
+				<span class="spinner">⏳ Buffering...</span>
+			</div>
+
+			<h3 id="muted" style="color: red; position: absolute; top: 10px; left: 10px; z-index: 5; margin: 0;"></h3>
+
+			<video id="vid-player" src="${src}" poster="${poster}"></video>
+
+			<div id="video-controls">
+				<button id="play-pause" type="button">Play</button>
+				<button id="rewind" type="button">-5s</button>
+				<button id="forward" type="button">+5s</button>
+
+				<span id="time-display" style="font-family: monospace; font-variant-numeric: tabular-nums; min-width: 12ch; text-align: center;">0:00 / 0:00</span>
+
+				<label for="speed-slider">Speed:</label>
+				<input type="range" id="speed-slider" min="0.5" max="2.0" step="0.1" value="1">
+				<span id="speed-value" style="display: inline-block; width: 3ch;">1x</span>
+
+				<button id="full-screen" type="button">Full Screen</button>
+			</div>
 		</div>
 		`;
 
@@ -259,14 +356,16 @@ class CourseVideo extends CourseComponent {
 
 		// Progress Tracking
 		this.videoElem.addEventListener("timeupdate", () => {
-			const pct = (this.videoElem.currentTime / this.videoElem.duration);
+			const currentTime = this.videoElem.currentTime;
+			const duration = this.videoElem.duration || 0; // Handle NaN if loading
 
-			// Update UI
-			this.timeDisplay.textContent = this.formatTime(this.videoElem.currentTime);
+			const pct = (currentTime / duration);
 
-			// Send to Parent - currently script.js does the throtteling based on the hardcoded limit in journaler.js
-			// TODO consider adding the limiter here to prevent spam
-			this.send("VIDEO_PROGRESS", pct); // Send float 0.0 - 1.0
+			// Update UI with "Current / Total"
+			this.timeDisplay.textContent = `${this.formatTime(currentTime)} / ${this.formatTime(duration)}`;
+
+			// Send to Parent
+			this.send("VIDEO_PROGRESS", pct);
 		});
 
 		// Completion
@@ -459,7 +558,7 @@ class CourseQuiz extends CourseComponent {
 				label.className = "answer-row";
 
 				const input = document.createElement("input");
-				input.type = "checkbox";
+				input.type = (q.type === "select-all-that-apply") ? "checkbox" : "radio";
 				input.value = choice;
 				input.name = q.id; // Group by Question ID
 				input.id = `${q.id}_${i}`;

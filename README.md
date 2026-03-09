@@ -161,6 +161,7 @@ Common question set up:
 | Property           | Notes                                               |
 |--------------------|-----------------------------------------------------|
 | `id`               | The unique identifier of a question, used analytics |
+| `type`             | The type of quesiton like multiple-choice           |
 | `text`             | The question that the student is asked              |
 | `correctAnswers`   | A list of the correct answers                       |
 | `possibleAnswers`  | The choices the student has                         |

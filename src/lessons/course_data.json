@@ -14,7 +14,8 @@
 			"score": 0.0,
 			"scrolled": true,
 			"attempts": 1,
-			"videoProgress" : 0.0
+			"videoProgress" : 0.0,
+			"requireSubmission": false
 		},
 		"components": [
 		{
@@ -32,7 +33,8 @@
 			"score": 0.1,
 			"scrolled": false,
 			"attempts": 3,
-			"videoProgress" : 0.0
+			"videoProgress" : 0.0,
+			"requireSubmission": true
 		},
 		"components": [
 		{
@@ -47,6 +49,7 @@
 			"questions": [
 			{
 				"id": "Q1",
+				"type": "multiple-choice",
 				"text": "The sky is blue.",
 				"correctAnswers": ["True"],
 				"possibleAnswers": ["True", "False"],
@@ -56,6 +59,7 @@
 			},
 			{
 				"id": "Q2",
+				"type": "multiple-choice",
 				"text": "What is 3 + 1",
 				"correctAnswers": ["4"],
 				"possibleAnswers": ["1", "2", "3", "4"],
@@ -71,6 +75,7 @@
 			"questions": [
 			{
 				"id": "Q3",
+				"type": "select-all-that-apply",
 				"text": "Which of the following are warm colors? Select all that apply",
 				"correctAnswers": ["red", "orange", "yellow"],
 				"possibleAnswers": ["blue", "orange", "red", "yellow"],
@@ -80,6 +85,7 @@
 			},
 			{
 				"id": "Q4",
+				"type": "select-all-that-apply",
 				"text": "Which of the following are common dose of an Epi Pen?",
 				"correctAnswers": ["0.3mg", "0.15mg"],
 				"possibleAnswers": ["0.15mg", "1mg", "0.3mg", "0.4g"],
@@ -99,7 +105,8 @@
 			"score": 0.1,
 			"scrolled": false,
 			"attempts": 3,
-			"videoProgress" : 0.10
+			"videoProgress" : 0.10,
+			"requireSubmission": false
 		},
 		"components": [
 		{
@@ -114,6 +121,7 @@
 			"questions": [
 			{
 				"id": "Q5",
+				"type": "multiple-choice",
 				"text": "The sky is red.",
 				"correctAnswers": ["False"],
 				"possibleAnswers": ["True", "False"],
@@ -123,6 +131,7 @@
 			},
 			{
 				"id": "Q6",
+				"type": "multiple-choice",
 				"text": "What is 1 + 1",
 				"correctAnswers": ["2"],
 				"possibleAnswers": ["1", "2", "3", "4"],
@@ -138,6 +147,7 @@
 			"questions": [
 			{
 				"id": "Q7",
+				"type": "select-all-that-apply",
 				"text": "Which of the following are warm colors? Select all that apply",
 				"correctAnswers": ["red", "orange", "yellow"],
 				"possibleAnswers": ["blue", "orange", "red", "yellow"],
@@ -147,6 +157,7 @@
 			},
 			{
 				"id": "Q8",
+				"type": "select-all-that-apply",
 				"text": "Which of the following are common dose of an Epi Pen?",
 				"correctAnswers": ["0.3mg", "0.15mg"],
 				"possibleAnswers": ["0.15mg", "1mg", "0.3mg", "0.4g"],
@@ -166,7 +177,8 @@
 			"score": 0.0,
 			"scrolled": false,
 			"attempts": 1,
-			"videoProgress" : 0.0
+			"videoProgress" : 0.0,
+			"requireSubmission": false
 		},
 		"components": [
 		{
