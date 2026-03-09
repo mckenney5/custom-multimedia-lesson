@@ -60,7 +60,7 @@ class CourseComponent extends HTMLElement {
 		if (myId) {
 			payload = {
 				id: myId,
-				value: message
+				value: message,
 			};
 		}
 
@@ -569,7 +569,7 @@ class CourseQuiz extends CourseComponent {
 
 				this.send("QUESTION_ANSWERED", {
 					questionID: q.id,
-					answer: values.join(" | ") // Join arrays cleanly for the CSV log
+					answer: values.join(" | "), // Join arrays cleanly for the CSV log
 				});
 			};
 
