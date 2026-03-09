@@ -344,6 +344,7 @@ let state = {
 		} else {
 			// if we did not complete the page
 			this.bannerMessage("You must complete the current page to continue");
+			journaler.log("ADVANCE_DENIED", this.data.delta.currentPageIndex);
 		}
 		this.updateInfo();
 	},
