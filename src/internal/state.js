@@ -688,6 +688,17 @@ let state = {
 				journaler.log("VIDEO_MUTED", `${index},${roundTo4(pageDelta.videoProgress)},${msgData}`);
 				break;
 
+			case "VIDEO_STATS":
+				// Save it to the dynamic state map
+				if(componentID && pageDelta.components && pageDelta.components[componentID]){
+					pageDelta.components[componentID].avgSpeed = msgData.avgSpeed;
+					pageDelta.components[componentID].visiblePct = msgData.visiblePct;
+				}
+
+				// Log format: PageIndex, VideoID, AvgSpeed, VisiblePct
+				journaler.log("VIDEO_STATS", `${index},${componentID},${msgData.avgSpeed},${msgData.visiblePct}`);
+				break;
+
 			case "GET_STUDENT_DATA":
 				const grade = String(Math.floor((this.calculateOverallGrade().ratio * 100)));
 				this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA", message: {

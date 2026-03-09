@@ -247,6 +247,12 @@ class CourseVideo extends CourseComponent {
 
 		// State tracking
 		this.lastLoggedPercent = 0;
+
+		// Stat tracking
+		this.activePlayMs = 0;
+		this.visiblePlayMs = 0;
+		this.weightedSpeedSum = 0;
+		this.lastTick = 0;
 	}
 
 	attachListeners() {
@@ -286,7 +292,25 @@ class CourseVideo extends CourseComponent {
 			}
 		});
 
+		this.videoElem.addEventListener("play", () => {
+			// Track play time
+			this.lastTick = performance.now();
+		});
 
+		// Resume tracking when recovering from a buffer/skip
+		this.videoElem.addEventListener("playing", () => {
+			this.lastTick = performance.now();
+		});
+
+		// PAUSE tracking if the user skips around (seeking)
+		this.videoElem.addEventListener("seeking", () => {
+			this.lastTick = null;
+		});
+
+		// PAUSE tracking if their internet is slow and it has to buffer
+		this.videoElem.addEventListener("waiting", () => {
+			this.lastTick = null;
+		});
 
 		this.rewindButton.addEventListener("click", () => {
 			this.videoElem.pause();
@@ -356,6 +380,23 @@ class CourseVideo extends CourseComponent {
 
 		// Progress Tracking
 		this.videoElem.addEventListener("timeupdate", () => {
+
+			// Analytics Math to see how much screen time the video has
+			if (!this.videoElem.paused && this.lastTick) {
+				const now = performance.now();
+				const delta = now - this.lastTick;
+				this.lastTick = now;
+
+				this.activePlayMs += delta;
+
+				// document.hidden accurately tracks if the tab is minimized or switched
+				if (!document.hidden) {
+					this.visiblePlayMs += delta;
+				}
+
+				this.weightedSpeedSum += (this.videoElem.playbackRate * delta);
+			}
+
 			const currentTime = this.videoElem.currentTime;
 			const duration = this.videoElem.duration || 0; // Handle NaN if loading
 
@@ -368,10 +409,25 @@ class CourseVideo extends CourseComponent {
 			this.send("VIDEO_PROGRESS", pct);
 		});
 
+		const reportStats = () => {
+			if (this.activePlayMs > 0) {
+				const avgSpeed = (this.weightedSpeedSum / this.activePlayMs).toFixed(2);
+				const visiblePct = Math.round((this.visiblePlayMs / this.activePlayMs) * 100);
+				this.send("VIDEO_STATS", {
+					avgSpeed: parseFloat(avgSpeed),
+					visiblePct: visiblePct,
+				});
+			}
+		};
+
+		// Save stats on pause
+		this.videoElem.addEventListener("pause", reportStats);
+
 		// Completion
 		this.videoElem.addEventListener("ended", () => {
 			this.playBtn.textContent = "Replay";
-			this.send("VIDEO_PROGRESS", 1.0); // Ensure 100% is sent
+			this.send("VIDEO_PROGRESS", 1.0);
+			reportStats();
 		});
 	}
 
