@@ -229,16 +229,7 @@ let state = {
 			// Restore Complex State
 			try {
 				const savedBlob = JSON.parse(arr[base + 6] || "{}");
-
-				// Heuristic: Does this look like a Component Map or Legacy Answers?
-				// If the saved object has a key that matches 'userAnswers', it's likely legacy.
-				if (savedBlob.userAnswers && Object.keys(savedBlob).length === 1) {
-					p.userAnswers = savedBlob.userAnswers;
-				} else {
-					// Otherwise, assume it is the components map
-					// We merge it into the initialized structure to be safe
-					p.components = { ...p.components, ...savedBlob };
-				}
+				p.components = { ...p.components, ...savedBlob };
 			} catch (e) {
 				console.warn("Failed to deserialize page state blob", e);
 			}
@@ -632,18 +623,6 @@ let state = {
 						}, "*");
 					}
 				}
-				// --- OLD: Legacy Logic ---
-				else {
-					const quizPayload = {
-						questions: compConfig.questions,
-						userAnswers: compState.userAnswers || {},
-						attemptsLeft: page.completionRules.attempts - (compState.attempts || 0),
-						options: compConfig.options || [],
-						hasAttempted: (compState.attempts || 0) > 0,
-					};
-					this.sendMessage("GET_QUIZ_DATA", quizPayload);
-				}
-
 				journaler.log("QUESTIONS_RENDERED", index);
 				break;
 
@@ -810,9 +789,6 @@ let state = {
 					attempts: 0,
 					videoProgress: 0.0,
 
-					// Legacy compatibility (keep for now until HTML is updated)
-					userAnswers: {},
-
 					// The Future: Component State Map
 					components: {}
 				};
@@ -849,10 +825,6 @@ let state = {
 						// Add to the map
 						pageState.components[comp.id] = compState;
 					});
-				}
-				// 3. Legacy Fallback (Calculates maxScore for old quizzes)
-				else if (page.type === 'quiz' && page.questions) {
-					calculatedMaxScore = page.questions.reduce((acc, q) => acc + q.pointValue, 0.0);
 				}
 
 				this.data.delta.pagesState.push(pageState);
