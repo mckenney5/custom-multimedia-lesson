@@ -89,7 +89,7 @@ let state = {
 		}
 
 		// if it does not support any of that, its Math.random time with 32 floats
-		let result = [];
+		const result = [];
 		for(let i = 0; i < length; i++){
 			result.push(Math.random() * (Math.random()*1000).toFixed(0));
 		}
@@ -790,7 +790,7 @@ let state = {
 					videoProgress: 0.0,
 
 					// The Future: Component State Map
-					components: {}
+					components: {},
 				};
 
 				let calculatedMaxScore = 0.0;
@@ -803,11 +803,11 @@ let state = {
 						// Initialize specific state for this component
 						const compState = {
 							type: comp.type,
-							completed: false
+							completed: false,
 						};
 
 						// Add type-specific defaults
-						if (comp.type === 'quiz') {
+						if (comp.type === "quiz") {
 							const qMax = comp.questions.reduce((acc, q) => acc + q.pointValue, 0.0);
 							calculatedMaxScore += qMax;
 							compState.score = 0;
@@ -815,10 +815,10 @@ let state = {
 							compState.userAnswers = {};
 							compState.attempts = 0;
 						}
-						else if (comp.type === 'video') {
+						else if (comp.type === "video") {
 							compState.videoProgress = 0.0;
 						}
-						else if (comp.type === 'article') {
+						else if (comp.type === "article") {
 							compState.scrolled = false;
 						}
 
@@ -832,7 +832,7 @@ let state = {
 				return {
 					...page,
 					path: `lessons/${page.name}`,
-					maxScore: calculatedMaxScore
+					maxScore: calculatedMaxScore,
 				};
 			});
 		} catch(error){
@@ -875,9 +875,3 @@ window.onunload = () => {
 	// See: https://developer.mozilla.org/en-US/docs/Web/API/Window/unload_event
 	state.quit();
 };
-
-function test(){
-	state.infoBanner.innerHTML = "<p>Please complete all items on the page</p>";
-	state.infoBanner.style.display = "block";
-	state.save();
-}
