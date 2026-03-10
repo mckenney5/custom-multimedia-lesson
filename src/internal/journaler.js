@@ -44,6 +44,7 @@ const journaler = {
 		"QUESTION_ANSWERED" : "r",
 		"VIDEO_STATS" : "s",
 		"ADVANCE_DENIED" : "t",
+		"PAGE_IDLE" : "u",
 	},
 
 	_decoding: {
@@ -77,6 +78,7 @@ const journaler = {
 		"r": "QUESTION_ANSWERED",
 		"s": "VIDEO_STATS",
 		"t": "ADVANCE_DENIED",
+		"u": "PAGE_IDLE",
 	},
 
 	initialized: false,

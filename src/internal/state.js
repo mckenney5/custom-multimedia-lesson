@@ -160,6 +160,19 @@ let state = {
 			}
 			const page = this.data.delta.pagesState[this.data.delta.currentPageIndex];
 			page.watchTime += 1;
+
+			// Handles checking if student was idle after page was complete for 5min
+			// Timer resets on refresh
+			if (page.completed) {
+				// Initialize a new counter if it doesn't exist yet
+				page.idleTime = (page.idleTime || 0) + 1;
+
+				// Fire exactly once after 5 minutes (300 seconds) of ignoring the next button
+				if (page.idleTime === 300) {
+					journaler.log("PAGE_IDLE", this.data.delta.currentPageIndex);
+				}
+			}
+
 			this.finalizePage();
 
 		}, 1000);
