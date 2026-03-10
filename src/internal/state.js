@@ -101,6 +101,21 @@ let state = {
 		// make infoBanner close on click
 		this.infoBanner.addEventListener("click", () => {this.infoBanner.style.display = "none";});
 
+		// Add the Esc key as a shortcut to closing the info banner
+		const handleEsc = (e) => {
+			if (e.key === "Escape" || e.code === "Escape") {
+				// Check if the banner is currently visible
+				if (this.infoBanner.style.display === "block") {
+					e.preventDefault(); // Prevent default browser Esc behavior
+					this.infoBanner.style.display = "none"; // Hide the banner
+				}
+				// If not visible, do nothing
+			}
+		};
+
+		// Attach to parent window
+		window.addEventListener("keydown", handleEsc);
+
 		// turn on visibility tracking
 		document.addEventListener("visibilitychange", () => {
 			const type = document.hidden ?  "VISIBILITY_HIDDEN" : "VISIBILITY_VISIBLE";
@@ -140,6 +155,7 @@ let state = {
 				childWindow.addEventListener("focus", onFocus);
 				childWindow.addEventListener("blur", onBlur);
 				childWindow.document.addEventListener("click", onFocus);
+				childWindow.addEventListener("keydown", handleEsc); // For info banner
 
 				// assign the focus and blur to parent if possible
 				// browsers will ignore repeat identical event listeners
