@@ -599,6 +599,43 @@ class CourseQuiz extends CourseComponent {
 		const form = document.createElement("div");
 		form.className = "quiz-container";
 
+		// Disables and checks for copy+paste / right click / text selection
+		if (!this.options.includes("disable-anticheat")) {
+			const logSuspicious = (e, actionName) => {
+				// Exception: Allow students to highlight text INSIDE their short-answer boxes to edit typos
+				if (e.target.tagName === "INPUT" && e.type === "selectstart") return;
+
+				// Block the default browser action
+				e.preventDefault();
+
+				// Log the attempt
+				this.send("SUSPICIOUS_ACTION", actionName);
+			};
+
+			// Attach the traps to the form
+			form.addEventListener("contextmenu", (e) => logSuspicious(e, "right-click"));
+			form.addEventListener("copy", (e) => logSuspicious(e, "copy-attempt"));
+			form.addEventListener("paste", (e) => logSuspicious(e, "paste-attempt"));
+			form.addEventListener("selectstart", (e) => logSuspicious(e, "text-highlight"));
+
+			// Block printing of the exam
+			this.innerHTML = `
+				<style>
+				@media print {
+					.quiz-container { display: none !important; }
+					body::before {
+						content: "Printing this course materials is a violation of the academic integrity policy.";
+						display: block;
+						font-size: 24px;
+						font-weight: bold;
+						color: red;
+						text-align: center;
+						margin-top: 50px;
+					}
+				}
+				</style>`;
+		}
+
 		// Create hidden results text
 		const results = document.createElement("h2");
 		results.innerHTML = "Score: <span id='score-field'></span>. Attempts left: <span id='max-attempts-field'></span>";
@@ -647,7 +684,19 @@ class CourseQuiz extends CourseComponent {
 
 				qDiv.appendChild(input);
 			} else {
-				q.possibleAnswers.forEach((choice, i) => {
+
+				// Create a shallow copy so we don't permanently alter the original JSON data
+				const choices = [...q.possibleAnswers];
+
+				// Standard Fisher-Yates Shuffle (Skip if disabled in JSON)
+				if (!this.options.includes("disable-shuffle")) {
+					for (let i = choices.length - 1; i > 0; i--) {
+						const j = Math.floor(Math.random() * (i + 1));
+						[choices[i], choices[j]] = [choices[j], choices[i]];
+					}
+				}
+
+				choices.forEach((choice, i) => {
 					const label = document.createElement("label");
 					label.className = "answer-row";
 

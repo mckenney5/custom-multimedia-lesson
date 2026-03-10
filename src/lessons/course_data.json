@@ -46,7 +46,7 @@
 		{
 			"id": "quiz1",
 			"type": "quiz",
-			"options": ["show-wrong", "show-answer"],
+			"options": ["show-wrong", "show-answer", "disable-anticheat"],
 			"questions": [
 			{
 				"id": "Q1",

@@ -644,6 +644,12 @@ let state = {
 				journaler.log("QUESTION_ANSWERED", `${index},${componentID},${msgData.questionID},${msgData.answer}`);
 				break;
 
+			case "SUSPICIOUS_ACTION":
+				// Logs things like copy paste, right click, and text selection
+				// Log format: PageIndex, QuizID, ActionType
+				journaler.log("SUSPICIOUS_ACTION", `${index},${componentID || "legacy"},${msgData}`);
+				break;
+
 			case "LOG":
 				journaler.log("GENERAL", `${index} ${msgData}`);
 				break;

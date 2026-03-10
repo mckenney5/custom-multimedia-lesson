@@ -45,6 +45,7 @@ const journaler = {
 		"VIDEO_STATS" : "s",
 		"ADVANCE_DENIED" : "t",
 		"PAGE_IDLE" : "u",
+		"SUSPICIOUS_ACTION" : "v",
 	},
 
 	_decoding: {
@@ -79,6 +80,7 @@ const journaler = {
 		"s": "VIDEO_STATS",
 		"t": "ADVANCE_DENIED",
 		"u": "PAGE_IDLE",
+		"v": "SUSPICIOUS_ACTION",
 	},
 
 	initialized: false,
