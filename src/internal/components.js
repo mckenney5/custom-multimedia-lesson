@@ -109,6 +109,7 @@ class CourseVideo extends CourseComponent {
 	render() {
 		const src = this.attr("src");
 		const poster = this.attr("poster");
+		const captions = this.attr("captions"); // allows for adding CC to the atributes like <course-video src="vid.mp4" captions="subs.vtt"></course-video>
 		this.seek = 5; // How far FF and RW move the video
 
 		// We use Light DOM, so we write directly to this.innerHTML
@@ -213,7 +214,9 @@ class CourseVideo extends CourseComponent {
 
 			<h3 id="muted" style="color: red; position: absolute; top: 10px; left: 10px; z-index: 5; margin: 0;"></h3>
 
-			<video id="vid-player" src="${src}" poster="${poster}"></video>
+			<video id="vid-player" src="${src}" poster="${poster}">
+				${captions ? `<track id="vid-captions" kind="captions" src="${captions}" srclang="en" label="English" default>` : ""}
+			</video>
 
 			<div id="video-controls">
 				<button id="play-pause" type="button">Play</button>
