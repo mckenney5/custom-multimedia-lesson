@@ -20,7 +20,7 @@ body {
 	--brand: hsl(var(--h) var(--s) var(--l-base)); /* #629962 */
 	--brand-100: hsl(var(--h) var(--s) calc(var(--l-base) + 32%));
 	--brand-50:  hsl(var(--h) var(--s) calc(var(--l-base) + 62%));
-	--brand-text: #ffffff;
+	--brand-text: #000000;
 
 	/* Standard red for resets/exits */
 	--danger-h: 354;
