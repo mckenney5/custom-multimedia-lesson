@@ -926,15 +926,22 @@ let state = {
 		this.helpContent.innerHTML = `
 			<div class="help-wrapper centered">
 				<h1 class="help-title no-border">Course Help</h1>
-				<p class="help-subtitle" style="margin-bottom: 40px;">Select an option below to continue.</p>
+				<p class="help-subtitle" style="margin-bottom: 40px;">Select an option below to continue.
+				<br><br> If you run into an issue during the course,
+				go through each menu, from top to bottom, until the issue is resolved</p>
 				<div class="help-btn-group-col">
 					<button class="help-action-btn" onclick="state.showPageHelp()">
-						📄 Help with This Page
+						📄 Help with Current Page
 					</button>
 
 					<button class="help-action-btn" onclick="state.showGeneralHelp()">
-						❓ General Help
+						❓ General Course Help
 					</button>
+
+					<button class="help-action-btn" onclick="state.refreshBrowser()">
+					🔄 Refresh This Web Page
+					</button>
+
 					<button class="help-action-btn danger" onclick="state.reset()">
 						⚠️ Reset Course Progress
 					</button>
@@ -1020,6 +1027,15 @@ let state = {
 		// Reenable course navigation
 		document.getElementById("prev").disabled = false;
 		document.getElementById("next").disabled = false;
+	},
+
+	refreshBrowser: function(){
+		// A simple button to refresh the web page for the user
+		// Force a save just in case
+		this.save();
+
+		// Reload the entire web app. The main page leaving event will prompt
+		window.location.reload();
 	},
 
 
