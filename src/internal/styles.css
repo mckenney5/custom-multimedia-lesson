@@ -285,6 +285,53 @@ body {
 	outline-offset: 4px;
 }
 
+.answer-row input[type="radio"],
+.answer-row input[type="checkbox"] {
+	transform: scale(1.5); /* Blows up the tiny 13px box to a readable size */
+	margin-right: 15px; /* Adds breathing room between the box and the text */
+	cursor: pointer;
+	accent-color: var(--brand); /* Automatically tints the checked state to the brand color */
+}
+
+/* Align the row perfectly so the enlarged box doesn't push text out of line */
+.answer-row {
+	display: flex;
+	align-items: center; /* Vertically centers the checkbox with the text */
+	font-size: 1.15rem; /* Large, highly readable font */
+	line-height: 1.5;
+	color: #333;
+	padding: 10px 15px;
+	cursor: pointer;
+	border-radius: 8px;
+	border: 2px solid transparent;
+	transition: background-color 0.2s, border-color 0.2s;
+	margin-bottom: 5px;
+}
+
+.answer-row:hover,
+.answer-row:focus-within {
+	background-color: #f0f8ff;
+	border-color: var(--brand-100);
+}
+
+/* Short Answer Text Boxes */
+.question-block input[type="text"] {
+	font-size: 1.15rem; /* Prevents iOS auto-zoom and helps visually impaired */
+	padding: 12px 15px;
+	border: 2px solid #ccc;
+	border-radius: 8px;
+	width: 100%;
+	box-sizing: border-box; /* Keeps the input from spilling out of the container */
+	transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+/* Keyboard Navigation for Text Boxes */
+.question-block input[type="text"]:focus {
+	outline: none;
+	border-color: var(--brand);
+	box-shadow: 0 0 0 4px var(--brand-100); /* Matches your other focus rings */
+}
+
 /* Modifier class for buttons that sit side-by-side */
 .help-action-btn.auto-width {
 	width: auto;
