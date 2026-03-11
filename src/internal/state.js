@@ -929,11 +929,14 @@ let state = {
 				<p class="help-subtitle" style="margin-bottom: 40px;">Select an option below to continue.</p>
 				<div class="help-btn-group-col">
 					<button class="help-action-btn" onclick="state.showPageHelp()">
-					📄 Help with This Page
+						📄 Help with This Page
 					</button>
 
 					<button class="help-action-btn" onclick="state.showGeneralHelp()">
-					❓ General Help
+						❓ General Help
+					</button>
+					<button class="help-action-btn danger" onclick="state.reset()">
+						⚠️ Reset Course Progress
 					</button>
 				</div>
 			</div>

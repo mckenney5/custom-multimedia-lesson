@@ -157,18 +157,6 @@ body {
 	font-size: 0.9rem;
 }
 
-#course-nav #reset:hover {
-	background-color: var(--danger-hover);
-}
-
-#course-nav #reset:focus {
-	outline: 4px solid var(--danger-100); /* Soft red halo for danger buttons */
-	outline-offset: 4px;
-}
-
-#course-nav #test {
-	background-color: #6c757d; /* Grey for test */
-}
 
 /* Push Reset button to the bottom of the bar using margin-top: auto */
 .spacer {
@@ -258,13 +246,31 @@ body {
 	max-width: 90%;
 }
 
+#close-help,
+.help-action-btn.danger {
+	background-color: var(--danger); /* Overrides the green brand color */
+}
+
+/* Specific hover for destructive buttons */
+#close-help:hover,
+.help-action-btn.danger:hover {
+	background-color: var(--danger-hover);
+	transform: scale(1.05);
+}
+
+/* Specific focus for destructive buttons */
+#close-help:focus,
+.help-action-btn.danger:focus {
+	outline: 4px solid var(--danger-100); /* Soft red halo */
+	outline-offset: 4px;
+}
+
 /* Close button specific alignment */
 #close-help {
 	align-self: center;
 	margin: 20px 0 0 0;
 	width: auto;
 	min-width: 200px;
-	background-color: var(--danger);
 }
 
 #close-help:hover,
