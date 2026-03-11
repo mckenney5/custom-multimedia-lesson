@@ -135,6 +135,11 @@ body {
 	transform: scale(1.1);
 }
 
+#course-nav button:focus {
+	outline: 4px solid var(--brand-100);
+	outline-offset: 4px;
+}
+
 /* Specific styling for the Reset/Test buttons (Rectangles) */
 #course-nav #reset,
 #course-nav #test {
@@ -147,7 +152,12 @@ body {
 }
 
 #course-nav #reset:hover {
-	background-color: var(--danger-hover); /* <-- Added hover effect */
+	background-color: var(--danger-hover);
+}
+
+#course-nav #reset:focus {
+	outline: 4px solid var(--danger-100); /* Soft red halo for danger buttons */
+	outline-offset: 4px;
 }
 
 #course-nav #test {
