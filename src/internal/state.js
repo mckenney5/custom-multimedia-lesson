@@ -109,7 +109,7 @@ let state = {
 		this.infoBanner.addEventListener("click", () => {this.infoBanner.style.display = "none";});
 
 		// Add the Esc key as a shortcut to closing the info banner
-		const handleEsc = (e) => {
+		const handleShortcuts = (e) => {
 			if (e.key === "Escape" || e.code === "Escape") {
 				// Check if Help Modal is open
 				if (this.helpOverlay && this.helpOverlay.style.display === "flex") {
@@ -122,10 +122,27 @@ let state = {
 				}
 				// If not visible and not in help, do nothing
 			}
+
+			if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
+				return;
+			}
+
+			// PageDown = Next Page
+			if (e.key === "PageDown") {
+				e.preventDefault();
+				this.next();
+			}
+
+			// PageUp = Previous Page
+			if (e.key === "PageUp") {
+				e.preventDefault();
+				this.prev();
+			}
+
 		};
 
 		// Attach to parent window
-		window.addEventListener("keydown", handleEsc);
+		window.addEventListener("keydown", handleShortcuts);
 
 		// turn on visibility tracking
 		document.addEventListener("visibilitychange", () => {
@@ -167,7 +184,7 @@ let state = {
 				childWindow.addEventListener("focus", onFocus);
 				childWindow.addEventListener("blur", onBlur);
 				childWindow.document.addEventListener("click", onFocus);
-				childWindow.addEventListener("keydown", handleEsc); // For info banner
+				childWindow.addEventListener("keydown", handleShortcuts); // For info banner
 
 				// assign the focus and blur to parent if possible
 				// browsers will ignore repeat identical event listeners
