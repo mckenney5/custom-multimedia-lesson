@@ -13,12 +13,23 @@ body {
 	--h: 120;
 	--s: 20%;
 	--l-base: 38%;
+
+	/* Brand Coloring */
 	--brand-800: hsl(var(--h) var(--s) calc(var(--l-base) - 18%));
 	--brand-700: hsl(var(--h) var(--s) calc(var(--l-base) - 8%));
 	--brand: hsl(var(--h) var(--s) var(--l-base)); /* #629962 */
 	--brand-100: hsl(var(--h) var(--s) calc(var(--l-base) + 32%));
 	--brand-50:  hsl(var(--h) var(--s) calc(var(--l-base) + 62%));
-	--brand-text: #ffffff
+	--brand-text: #ffffff;
+
+	/* Standard red for resets/exits */
+	--danger-h: 354;
+	--danger-s: 70%;
+	--danger-l: 54%;
+
+	--danger: hsl(var(--danger-h) var(--danger-s) var(--danger-l));
+	--danger-hover: hsl(var(--danger-h) var(--danger-s) calc(var(--danger-l) - 10%));
+	--danger-100: hsl(var(--danger-h) var(--danger-s) calc(var(--danger-l) + 35%)); /* The auto-calculated focus ring */
 }
 
 /* The Professional Header */
@@ -61,10 +72,10 @@ body {
 	display: flex;
 	flex-direction: row-reverse;
 
-	/* RESTORED: Rounded Corners */
+	/* Rounded Corners */
 	border-radius: 1.5rem;
 
-	/* CRITICAL: This cuts off the square corners of the sidebar/iframe inside */
+	/* This cuts off the square corners of the sidebar/iframe inside */
 	overflow: hidden;
 
 	border: 1px solid #ccc;
@@ -72,6 +83,7 @@ body {
 
 	/* Optional: Add a shadow to emphasize the "floating card" effect */
 	box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+	position: relative; /* Traps the absolute overlay inside this box */
 }
 
 #course-nav {
@@ -126,12 +138,16 @@ body {
 /* Specific styling for the Reset/Test buttons (Rectangles) */
 #course-nav #reset,
 #course-nav #test {
-	background-color: #dc3545; /* Red for reset */
+	background-color: var(--danger);
 	border-radius: 8px;
 	width: 60px;
 	height: auto;
 	padding: 8px 0;
 	font-size: 0.9rem;
+}
+
+#course-nav #reset:hover {
+	background-color: var(--danger-hover); /* <-- Added hover effect */
 }
 
 #course-nav #test {
@@ -176,6 +192,164 @@ body {
 
 	/* Removed position: fixed logic */
 }
+
+#help-overlay {
+	width: 100%;
+	height: 100%;
+	background-color: rgba(0, 0, 0, 0.85);
+	display: none; /* Toggled to 'flex' by JS */
+	justify-content: center;
+	align-items: center;
+	z-index: 3000;
+}
+
+#help-modal {
+	background: #fff;
+	width: 90%;
+	height: 90%;
+	max-width: 900px;
+	border-radius: 8px;
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+
+#help-content {
+	flex-grow: 1;
+	padding: 30px;
+	overflow-y: auto;
+	border-radius: 8px;
+}
+
+#close-help,
+.help-action-btn {
+	background-color: var(--brand);
+	color: var(--brand-text);
+	border: none;
+	border-radius: 50px;
+	padding: 15px 40px;
+	font-size: 1.2rem;
+	font-weight: bold;
+	cursor: pointer;
+	box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+	transition: background-color 0.2s, transform 0.2s;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	width: 350px;
+	max-width: 90%;
+}
+
+/* Close button specific alignment */
+#close-help {
+	align-self: center;
+	margin: 20px 0 0 0;
+	width: auto;
+	min-width: 200px;
+	background-color: var(--danger);
+}
+
+#close-help:hover,
+.help-action-btn:hover {
+	background-color: var(--danger-hover);
+	transform: scale(1.05);
+}
+
+#close-help:focus,
+.help-action-btn:focus {
+	outline: 4px solid var(--danger-100); /* Automatically generates a soft red halo */
+	outline-offset: 4px;
+}
+
+/* Modifier class for buttons that sit side-by-side */
+.help-action-btn.auto-width {
+	width: auto;
+	padding: 15px 30px;
+}
+
+/* --- Clean UI Layout Classes for the JS injection --- */
+.help-wrapper {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	height: 100%;
+	width: 100%;
+	text-align: center;
+}
+.help-wrapper.centered { justify-content: center; }
+
+.help-title {
+	font-size: 2.5rem;
+	color: #333;
+	margin-bottom: 10px;
+	border-bottom: 2px solid #eee;
+	padding-bottom: 10px;
+	width: 100%;
+}
+.help-title.no-border { border-bottom: none; }
+
+.help-subtitle {
+	font-size: 1.1rem;
+	color: #555;
+	margin-bottom: 20px;
+}
+
+.help-btn-group-col {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	align-items: center;
+	width: 100%;
+	margin-top: 20px;
+}
+
+.help-btn-group-row {
+	display: flex;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 15px;
+	width: 100%;
+	margin-top: 30px;
+}
+
+.help-iframe {
+	flex-grow: 1;
+	width: 100%;
+	max-width: 900px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	background: #f9f9f9;
+}
+
+/* --- Table & Status Classes --- */
+.help-table {
+	width: 90%;
+	max-width: 800px;
+	margin: 0 auto;
+	border-collapse: collapse;
+	background: #fff;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+	border: 1px solid #ddd;
+	font-size: 1.1rem;
+}
+
+.help-table th {
+	background: #f4f4f4;
+	border-bottom: 2px solid #ccc;
+	padding: 15px;
+	text-align: center;
+}
+
+.help-table td {
+	border-bottom: 1px solid #ddd;
+	padding: 15px;
+	text-align: center;
+}
+
+.status-pass { color: #198754; font-size: 1.5em; }
+.status-fail { color: #dc3545; font-size: 1.5em; }
 
 
 /* --- MOBILE RESPONSIVENESS & ZOOM ACCESSIBILITY --- */
@@ -224,5 +398,12 @@ body {
 	#top-bar, #info-bar {
 		flex: none;
 		position: static;
+	}
+
+	#help-content {
+		flex-grow: 1;
+		padding: 30px;
+		overflow-y: auto;
+		border-radius: 8px;
 	}
 }

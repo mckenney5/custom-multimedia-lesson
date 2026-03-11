@@ -20,6 +20,9 @@ let state = {
 	lessonFrame: null,	 // Will hold the iframe element
 	infoBanner: null, // Will hold the banner element
 	infoBar: null, // Will hold progress for the user and other info
+	helpOverlay: null, // The overlay of the help window
+	helpContent: null, // Content of the help window
+	isPaused: false, // Flag to pause timers when the user is looking at the help window
 	pauseSave: false, // Flag to pause the save on a reset
 	test: null, // Used for debugging
 	studentName: "",
@@ -46,30 +49,34 @@ let state = {
 		// Set the date and time of us starting today. TODO consider not using the user for time
 		this.sessionStartTime = Date.now();
 
-		// finds the required iframe and banner
+		// Finds the required iframe and banner
 		this.lessonFrame = document.getElementById(frameId);
 		this.infoBanner = document.getElementById(bannerId);
 		this.infoBar = document.getElementById(infoBar);
 
-		// attempt to load the course (static data)
+		// Set up help window
+		this.helpOverlay = document.getElementById("help-overlay");
+		this.helpContent = document.getElementById("help-content");
+
+		// Attempt to load the course (static data)
 		await this.loadCourseData();
 
-		// attempt to load the saved state
+		// Attempt to load the saved state
 		await this.loadSave();
 
-		// set up API Secret for the pages (auth)
+		// Set up API Secret for the pages (auth)
 		this.pageAPISecret = this.generatePasscode();
 
-		// load last webpage we were on
+		// Load last webpage we were on
 		this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
 
-		// start event listeners and timers
+		// Start event listeners and timers
 		this.startEventListeners();
 
-		// update the UI bar
+		// Update the UI bar
 		this.updateInfo();
 
-		// mark done
+		// Mark done
 		this.initialized = true;
 	},
 
@@ -104,12 +111,16 @@ let state = {
 		// Add the Esc key as a shortcut to closing the info banner
 		const handleEsc = (e) => {
 			if (e.key === "Escape" || e.code === "Escape") {
-				// Check if the banner is currently visible
-				if (this.infoBanner.style.display === "block") {
-					e.preventDefault(); // Prevent default browser Esc behavior
-					this.infoBanner.style.display = "none"; // Hide the banner
+				// Check if Help Modal is open
+				if (this.helpOverlay && this.helpOverlay.style.display === "flex") {
+					e.preventDefault();
+					this.closeHelp();
+				} else if (this.infoBanner.style.display === "block") {
+					// Check if banner visible
+					e.preventDefault();
+					this.infoBanner.style.display = "none";
 				}
-				// If not visible, do nothing
+				// If not visible and not in help, do nothing
 			}
 		};
 
@@ -136,6 +147,7 @@ let state = {
 		};
 
 		const onBlur = () => {
+			if (this.isPaused) return; // Disabled when looking at help menu
 			this.focusTimer = setTimeout(() => {
 				if(!this.isIdle){
 					this.isIdle = true;
@@ -171,6 +183,7 @@ let state = {
 
 		// track the time in the course and the current page
 		setInterval(() => {
+			if (this.isPaused) return; // Disabled when looking at help menu
 			if(++this.data.delta.totalCourseSeconds % 60 == 0){
 				if(!debugging) this.save();
 			}
@@ -889,6 +902,100 @@ let state = {
 		} catch(error){
 			console.error("Failed to load course data: ", error);
 		}
+	},
+
+	showHelpMenu: function() {
+		this.isPaused = true;
+		this.lessonFrame.style.display = "none";
+		this.helpOverlay.style.display = "flex";
+
+		this.helpContent.innerHTML = `
+			<div class="help-wrapper centered">
+				<h1 class="help-title no-border">Course Help</h1>
+				<p class="help-subtitle" style="margin-bottom: 40px;">Select an option below to continue.</p>
+				<div class="help-btn-group-col">
+					<button class="help-action-btn" onclick="state.showPageHelp()">
+					📄 Help with This Page
+					</button>
+
+					<button class="help-action-btn" onclick="state.showGeneralHelp()">
+					❓ General Help
+					</button>
+				</div>
+			</div>
+		`;
+	},
+
+	showPageHelp: function() {
+		const page = this.data.pages[this.data.delta.currentPageIndex];
+		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
+		const rules = page.completionRules;
+		const scorePct = page.maxScore > 0 ? (pageDelta.score / page.maxScore) : 0;
+
+		let quizzesSatisfied = true;
+		if (rules.requireSubmission) {
+			const quizComponents = (page.components || []).filter(c => c.type === "quiz");
+			quizzesSatisfied = quizComponents.every(q => pageDelta.components[q.id] && pageDelta.components[q.id].completed);
+		}
+
+		const checks = {
+			watchTime: pageDelta.watchTime >= rules.watchTime,
+			score: scorePct >= rules.score,
+			scrolled: !rules.scrolled || pageDelta.scrolled,
+			videoProgress: pageDelta.videoProgress >= rules.videoProgress,
+			requireSubmission: quizzesSatisfied
+		};
+
+		// Uses the new CSS classes for the checkmarks!
+		const formatIcon = (passed) => passed ? '<span aria-hidden="true" class="status-pass">✅</span>' : '<span aria-hidden="true" class="status-fail">❌</span>';
+
+		let html = `
+			<div class="help-wrapper">
+			<h1 class="help-title">Page Completion Requirements</h1>
+			<p class="help-subtitle">Review the requirements below. You must complete all items marked with an ❌ to unlock the next page.</p>
+
+			<table class="help-table">
+			<tr>
+			<th>Requirement</th>
+			<th>Target</th>
+			<th>Current Progress</th>
+			<th>Status</th>
+			</tr>
+		`;
+
+		if (rules.watchTime > 0) html += `<tr><td>Time on Page</td><td>${rules.watchTime} seconds</td><td>${pageDelta.watchTime} seconds</td><td>${formatIcon(checks.watchTime)}</td></tr>`;
+		if (rules.score > 0) html += `<tr><td>Minimum Score</td><td>${Math.round(rules.score * 100)}%</td><td>${Math.round(scorePct * 100)}%</td><td>${formatIcon(checks.score)}</td></tr>`;
+		if (rules.scrolled) html += `<tr><td>Read Entire Article</td><td>Scroll to Bottom</td><td>${pageDelta.scrolled ? "Scrolled" : "Not Scrolled"}</td><td>${formatIcon(checks.scrolled)}</td></tr>`;
+		if (rules.videoProgress > 0) html += `<tr><td>Watch Video</td><td>${Math.round(rules.videoProgress * 100)}%</td><td>${Math.round(pageDelta.videoProgress * 100)}%</td><td>${formatIcon(checks.videoProgress)}</td></tr>`;
+		if (rules.requireSubmission) html += `<tr><td>Submit Quizzes</td><td>Submit all</td><td>${quizzesSatisfied ? "Submitted" : "Pending"}</td><td>${formatIcon(checks.requireSubmission)}</td></tr>`;
+
+		html += `</table>
+			<div class="help-btn-group-row">
+				<button class="help-action-btn auto-width" onclick="state.showPageHelp()">🔄 Refresh Status</button>
+				<button class="help-action-btn auto-width" onclick="state.showHelpMenu()">&larr; Back to Menu</button>
+				</div>
+			</div>
+		`;
+
+		this.helpContent.innerHTML = html;
+	},
+
+	showGeneralHelp: function() {
+		this.helpContent.innerHTML = `
+			<div class="help-wrapper">
+			<iframe src="help.html" class="help-iframe"></iframe>
+			<div class="help-btn-group-row" style="margin-top: 15px;">
+				<button class="help-action-btn auto-width" onclick="state.showHelpMenu()">&larr; Back to Menu</button>
+			</div>
+			</div>
+		`;
+	},
+
+	closeHelp: function() {
+		this.helpOverlay.style.display = "none";
+		this.helpContent.innerHTML = "";
+		this.lessonFrame.style.display = "block";
+		this.isPaused = false; // Unfreeze analytics
 	},
 };
 
