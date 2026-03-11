@@ -114,206 +114,6 @@ class CourseVideo extends CourseComponent {
 
 		// We use Light DOM, so we write directly to this.innerHTML
 		this.innerHTML = `
-		<style>
-			/* --- DEFAULT LAYOUT (Normal Page Flow) --- */
-			#video-container {
-				position: relative;
-				background-color: #000;
-				display: flex;
-				flex-direction: column;
-				width: 60%;
-				max-width: 100%;
-				/* Prevent text selection on double clicks */
-				user-select: none;
-			}
-
-			#vid-player {
-				width: 100%;
-				display: block;
-				/* Ensure video takes available space */
-				flex-grow: 1;
-				cursor: pointer;
-			}
-
-			#video-controls {
-				position: relative;
-				background-color: rgba(15, 15, 15, 0.95); /* Slightly darker for better contrast */
-				padding: 10px;
-				display: flex;
-				justify-content: space-between; /* Spreads items evenly */
-				align-items: center;
-				color: white;
-				width: 100%;
-				box-sizing: border-box;
-				z-index: 20;
-				transition: opacity 0.3s ease;
-				gap: 8px; /* Prevents items from squishing together */
-			}
-
-			#progress-container {
-				position: absolute;
-				top: 0;
-				left: 0;
-				width: 100%;
-				height: 3px; /* 3px is the sweet spot for sleekness + accessibility */
-				background-color: rgba(255, 255, 255, 0.2); /* Faint gray track */
-				pointer-events: none; /* Makes it completely unclickable/undraggable! */
-			}
-
-			#progress-fill {
-				height: 100%;
-				width: 0%;
-				background-color: #0d6efd; /* Bright blue to match the focus rings */
-				transition: width 0.1s linear; /* Smoothly glides as the video plays */
-			}
-
-			.icon-btn {
-				background: transparent;
-				border: none;
-				color: white; /* SVGs will inherit this color */
-				cursor: pointer;
-				width: 44px;     /* WCAG AAA Accessible Hit Target */
-				height: 44px;    /* WCAG AAA Accessible Hit Target */
-				border-radius: 50%; /* Circular hover effect */
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				transition: background-color 0.2s, transform 0.1s;
-				flex-shrink: 0; /* Prevents shrinking on small screens */
-			}
-
-			.icon-btn svg {
-				width: 24px;
-				height: 24px;
-				fill: currentColor; /* Matches the text color */
-				display: block; /* Remove the padding for letters like p, q, j */
-				margin: 0 auto; /* Center it on the button */
-			}
-
-			.icon-btn:hover {
-				background-color: rgba(255, 255, 255, 0.15);
-			}
-
-			.icon-btn:active {
-				transform: scale(0.95); /* Satisfying click animation */
-			}
-
-			/* Keyboard Navigation Focus Ring */
-			.icon-btn:focus-visible {
-				outline: 3px solid #0d6efd; /* Bright blue for high contrast against black */
-				outline-offset: 2px;
-			}
-
-			.speed-dropdown {
-				background-color: transparent;
-				color: white;
-				border: none;
-				border-radius: 4px;
-				padding: 4px 8px;
-				font-size: 1rem;
-				cursor: pointer;
-				margin-left: auto; /* Pushes it to the right */
-				margin-right: 10px;
-				transition: background-color 0.2s;
-			}
-
-			.speed-dropdown:hover {
-				background-color: rgba(255, 255, 255, 0.15);
-			}
-
-			.speed-dropdown:focus-visible {
-				outline: 3px solid #0d6efd;
-				outline-offset: 2px;
-			}
-
-			/* Style the options for when the menu opens (needed for desktop) */
-			.speed-dropdown option {
-				background-color: #222;
-				color: white;
-			}
-
-			.seek-overlay {
-				position: absolute;
-				top: 50%;
-				left: 50%;
-				transform: translate(-50%, -50%);
-				background: rgba(0, 0, 0, 0.7);
-				color: white;
-				padding: 15px 30px;
-				border-radius: 50px;
-				font-size: 2.5rem;
-				font-weight: bold;
-				pointer-events: none; /* Clicks pass right through it */
-				opacity: 0; /* Hidden by default */
-				z-index: 15;
-			}
-
-			.seek-animate {
-				animation: seek-pop 0.4s ease-out forwards;
-			}
-
-			@keyframes seek-pop {
-				0% { opacity: 1; transform: translate(-50%, -50%) scale(0.8); }
-				50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-				100% { opacity: 0; transform: translate(-50%, -50%) scale(1.2); }
-			}
-
-			/* --- FULL SCREEN OVERRIDES --- */
-
-			/* When the container is in full screen... */
-			#video-container:fullscreen {
-				justify-content: center; /* Center video vertically */
-				background: black;
-			}
-
-			/* Make controls float over the video at the bottom */
-			#video-container:fullscreen #video-controls {
-				position: absolute;
-				bottom: 0;
-				left: 0;
-				width: 100%;
-				background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent */
-				opacity: 0; /* Hidden by default */
-			}
-
-			/* The Trigger Zone (Bottom 15% of screen) */
-			#fs-hover-trigger {
-				display: none; /* Hidden normally */
-			}
-			#video-container:fullscreen #fs-hover-trigger {
-				display: block;
-				position: absolute;
-				bottom: 0;
-				left: 0;
-				width: 100%;
-				height: 15%; /* Active area */
-				z-index: 10; /* Above video, below controls */
-			}
-
-			/* Show controls when hovering the Trigger OR the Controls themselves */
-			#video-container:fullscreen #fs-hover-trigger:hover ~ #video-controls,
-			#video-container:fullscreen #video-controls:hover {
-				opacity: 1;
-			}
-
-
-			/* --- BUTTON STYLES --- */
-			#video-controls button {
-				background: transparent;
-				border: none;
-				color: white;
-				cursor: pointer;
-				font-size: 16px;
-				padding: 5px 10px;
-				transition: background 0.2s;
-			}
-			#video-controls button:hover {
-				background: rgba(255,255,255,0.2);
-				border-radius: 4px;
-			}
-			#speed-slider { margin: 0 10px; cursor: pointer; }
-		</style>
-
 		<div id="video-container">
 			<div id="fs-hover-trigger"></div>
 			<div id="seek-overlay" class="seek-overlay"></div>
@@ -838,23 +638,6 @@ class CourseQuiz extends CourseComponent {
 			form.addEventListener("copy", (e) => logSuspicious(e, "copy-attempt"));
 			form.addEventListener("paste", (e) => logSuspicious(e, "paste-attempt"));
 			form.addEventListener("selectstart", (e) => logSuspicious(e, "text-highlight"));
-
-			// Block printing of the exam
-			this.innerHTML = `
-				<style>
-				@media print {
-					.quiz-container { display: none !important; }
-					body::before {
-						content: "Printing this course materials is a violation of the academic integrity policy.";
-						display: block;
-						font-size: 24px;
-						font-weight: bold;
-						color: red;
-						text-align: center;
-						margin-top: 50px;
-					}
-				}
-				</style>`;
 		}
 
 		// Create hidden results text
@@ -866,9 +649,13 @@ class CourseQuiz extends CourseComponent {
 
 		// Render questions
 		questions.forEach((q, index) => {
-			const qDiv = document.createElement("div");
+			const qDiv = document.createElement("fieldset"); // Changed from div
 			qDiv.className = `question-block ${index % 2 === 0 ? "even" : "odd"}`;
-			qDiv.innerHTML = `<h3>${index + 1}. ${q.text}</h3>`;
+			qDiv.style.border = "none"; // Fieldsets have ugly default borders, removed them
+			qDiv.style.padding = "0";
+			qDiv.style.margin = "0 0 30px 0";
+
+			qDiv.innerHTML = `<legend style="font-size: 1.3rem; font-weight: bold; margin-bottom: 15px; line-height: 1.4; width: 100%;">${index + 1}. ${q.text}</legend>`;
 
 			// Add interaction logging to quiz elements
 			const logInteraction = () => {
