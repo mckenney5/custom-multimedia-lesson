@@ -132,21 +132,130 @@ class CourseVideo extends CourseComponent {
 				display: block;
 				/* Ensure video takes available space */
 				flex-grow: 1;
+				cursor: pointer;
 			}
 
 			#video-controls {
-				/* Default: Sit below the video */
-				position: static;
-				background-color: #222;
+				position: relative;
+				background-color: rgba(15, 15, 15, 0.95); /* Slightly darker for better contrast */
 				padding: 10px;
 				display: flex;
-				justify-content: space-around;
+				justify-content: space-between; /* Spreads items evenly */
 				align-items: center;
 				color: white;
 				width: 100%;
 				box-sizing: border-box;
-				z-index: 20; /* Always on top of triggers */
-				transition: opacity 0.3s ease; /* Smooth fade */
+				z-index: 20;
+				transition: opacity 0.3s ease;
+				gap: 8px; /* Prevents items from squishing together */
+			}
+
+			#progress-container {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 3px; /* 3px is the sweet spot for sleekness + accessibility */
+				background-color: rgba(255, 255, 255, 0.2); /* Faint gray track */
+				pointer-events: none; /* Makes it completely unclickable/undraggable! */
+			}
+
+			#progress-fill {
+				height: 100%;
+				width: 0%;
+				background-color: #0d6efd; /* Bright blue to match the focus rings */
+				transition: width 0.1s linear; /* Smoothly glides as the video plays */
+			}
+
+			.icon-btn {
+				background: transparent;
+				border: none;
+				color: white; /* SVGs will inherit this color */
+				cursor: pointer;
+				width: 44px;     /* WCAG AAA Accessible Hit Target */
+				height: 44px;    /* WCAG AAA Accessible Hit Target */
+				border-radius: 50%; /* Circular hover effect */
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				transition: background-color 0.2s, transform 0.1s;
+				flex-shrink: 0; /* Prevents shrinking on small screens */
+			}
+
+			.icon-btn svg {
+				width: 24px;
+				height: 24px;
+				fill: currentColor; /* Matches the text color */
+				display: block; /* Remove the padding for letters like p, q, j */
+				margin: 0 auto; /* Center it on the button */
+			}
+
+			.icon-btn:hover {
+				background-color: rgba(255, 255, 255, 0.15);
+			}
+
+			.icon-btn:active {
+				transform: scale(0.95); /* Satisfying click animation */
+			}
+
+			/* Keyboard Navigation Focus Ring */
+			.icon-btn:focus-visible {
+				outline: 3px solid #0d6efd; /* Bright blue for high contrast against black */
+				outline-offset: 2px;
+			}
+
+			.speed-dropdown {
+				background-color: transparent;
+				color: white;
+				border: none;
+				border-radius: 4px;
+				padding: 4px 8px;
+				font-size: 1rem;
+				cursor: pointer;
+				margin-left: auto; /* Pushes it to the right */
+				margin-right: 10px;
+				transition: background-color 0.2s;
+			}
+
+			.speed-dropdown:hover {
+				background-color: rgba(255, 255, 255, 0.15);
+			}
+
+			.speed-dropdown:focus-visible {
+				outline: 3px solid #0d6efd;
+				outline-offset: 2px;
+			}
+
+			/* Style the options for when the menu opens (needed for desktop) */
+			.speed-dropdown option {
+				background-color: #222;
+				color: white;
+			}
+
+			.seek-overlay {
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				background: rgba(0, 0, 0, 0.7);
+				color: white;
+				padding: 15px 30px;
+				border-radius: 50px;
+				font-size: 2.5rem;
+				font-weight: bold;
+				pointer-events: none; /* Clicks pass right through it */
+				opacity: 0; /* Hidden by default */
+				z-index: 15;
+			}
+
+			.seek-animate {
+				animation: seek-pop 0.4s ease-out forwards;
+			}
+
+			@keyframes seek-pop {
+				0% { opacity: 1; transform: translate(-50%, -50%) scale(0.8); }
+				50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+				100% { opacity: 0; transform: translate(-50%, -50%) scale(1.2); }
 			}
 
 			/* --- FULL SCREEN OVERRIDES --- */
@@ -207,29 +316,51 @@ class CourseVideo extends CourseComponent {
 
 		<div id="video-container">
 			<div id="fs-hover-trigger"></div>
-
+			<div id="seek-overlay" class="seek-overlay"></div>
 			<div id="loading-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); color: white; align-items: center; justify-content: center; z-index: 10; pointer-events: none; font-size: 1.2rem;">
 				<span class="spinner">⏳ Buffering...</span>
 			</div>
-
-			<h3 id="muted" style="color: red; position: absolute; top: 10px; left: 10px; z-index: 5; margin: 0;"></h3>
 
 			<video id="vid-player" src="${src}" poster="${poster}">
 				${captions ? `<track id="vid-captions" kind="captions" src="${captions}" srclang="en" label="English" default>` : ""}
 			</video>
 
 			<div id="video-controls">
-				<button id="play-pause" type="button">Play</button>
-				<button id="rewind" type="button">-5s</button>
-				<button id="forward" type="button">+5s</button>
+				<div id="progress-container" aria-hidden="true">
+					<div id="progress-fill"></div>
+				</div>
+				<button id="play-pause" class="icon-btn" type="button" aria-label="Play" title="Play">
+					<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+				</button>
 
-				<span id="time-display" style="font-family: monospace; font-variant-numeric: tabular-nums; min-width: 12ch; text-align: center;">0:00 / 0:00</span>
+				<button id="rewind" class="icon-btn" type="button" aria-label="Rewind ${this.seek} Seconds" title="Rewind ${this.seek}s">
+					<svg viewBox="0 0 24 24"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg>
+				</button>
 
-				<label for="speed-slider">Speed:</label>
-				<input type="range" id="speed-slider" min="0.5" max="2.0" step="0.1" value="1">
-				<span id="speed-value" style="display: inline-block; width: 3ch;">1x</span>
+				<button id="forward" class="icon-btn" type="button" aria-label="Forward ${this.seek} Seconds" title="Forward ${this.seek}s">
+					<svg viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
+				</button>
 
-				<button id="full-screen" type="button">Full Screen</button>
+				<button id="mute-btn" class="icon-btn" type="button" aria-label="Mute" title="Mute">
+					<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+				</button>
+
+				<span id="time-display" style="font-family: monospace; font-variant-numeric: tabular-nums; min-width: 10ch; text-align: center; margin: 0 10px;">0:00 / 0:00</span>
+
+				<label for="speed-select" class="sr-only" style="display: none;">Playback Speed</label>
+				<select id="speed-select" class="speed-dropdown" aria-label="Playback Speed" title="Playback Speed">
+					<option value="0.5">0.5x</option>
+					<option value="0.75">0.75x</option>
+					<option value="1" selected>1x</option>
+					<option value="1.25">1.25x</option>
+					<option value="1.5">1.5x</option>
+					<option value="1.75">1.75x</option>
+					<option value="2">2x</option>
+				</select>
+
+				<button id="full-screen" class="icon-btn" type="button" aria-label="Full Screen" title="Full Screen">
+					<svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+				</button>
 			</div>
 		</div>
 		`;
@@ -241,12 +372,14 @@ class CourseVideo extends CourseComponent {
 		this.timeDisplay = this.querySelector("#time-display");
 		this.rewindButton = this.querySelector("#rewind");
 		this.forwardButton = this.querySelector("#forward");
-		this.speedSlider = this.querySelector("#speed-slider");
-		this.speedSliderSpan = this.querySelector("#speed-value");
+		this.speedSelect = this.querySelector("#speed-select");
 		this.fullScreenButton = this.querySelector("#full-screen");
 		this.videoContainer = this.querySelector("#video-container");
-		this.muteBanner = this.querySelector("#muted");
+		this.muteBtn = this.querySelector("#mute-btn");
 		this.loadingOverlay = this.querySelector("#loading-overlay");
+		this.seekOverlay = this.querySelector("#seek-overlay");
+		this.progressFill = this.querySelector("#progress-fill");
+
 
 		// State tracking
 		this.lastLoggedPercent = 0;
@@ -259,6 +392,16 @@ class CourseVideo extends CourseComponent {
 	}
 
 	attachListeners() {
+
+		// Hardcoded SVG Icons
+		const ICONS = {
+			play: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
+			pause: '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>',
+			volumeOn: '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>',
+			volumeOff: '<svg viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>',
+			fullScreen: '<svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>',
+			exitFullScreen: '<svg viewBox="0 0 24 24"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>',
+		};
 
 		// -- Video Buffering
 		// Fires when the browser starts fetching the media
@@ -286,18 +429,44 @@ class CourseVideo extends CourseComponent {
 		this.playBtn.addEventListener("click", () => {
 			if (this.videoElem.paused) {
 				this.videoElem.play();
-				this.playBtn.textContent = "Pause";
-				this.send("VIDEO_PLAYING", this.videoElem.currentTime);
 			} else {
 				this.videoElem.pause();
-				this.playBtn.textContent = "Play";
-				this.send("VIDEO_PAUSED", this.videoElem.currentTime);
+			}
+		});
+
+		// Play / Pause on video area click
+		this.videoElem.addEventListener("click", () => {
+			if (this.videoElem.paused) {
+				this.videoElem.play();
+			} else {
+				this.videoElem.pause();
 			}
 		});
 
 		this.videoElem.addEventListener("play", () => {
-			// Track play time
+			// Track play time (your existing code)
 			this.lastTick = performance.now();
+
+			// Automatically update the UI to the Pause state
+			this.playBtn.innerHTML = ICONS.pause;
+			this.playBtn.setAttribute("aria-label", "Pause");
+			this.playBtn.title = "Pause";
+
+			// Send analytics
+			this.send("VIDEO_PLAYING", this.videoElem.currentTime);
+		});
+
+		this.videoElem.addEventListener("pause", () => {
+			// Automatically update the UI to the Play state
+			this.playBtn.innerHTML = ICONS.play;
+			this.playBtn.setAttribute("aria-label", "Play");
+			this.playBtn.title = "Play";
+
+			// Send analytics
+			this.send("VIDEO_PAUSED", this.videoElem.currentTime);
+
+			// Run your existing stats reporter
+			reportStats();
 		});
 
 		// Resume tracking when recovering from a buffer/skip
@@ -315,10 +484,34 @@ class CourseVideo extends CourseComponent {
 			this.lastTick = null;
 		});
 
+		const triggerSeekOverlay = (text, buttonElem) => {
+			// Set the dynamic text (e.g., "+5s")
+			this.seekOverlay.textContent = text;
+
+			// Disable the button to prevent buffering crashes
+			buttonElem.disabled = true;
+
+			// Reset and trigger the CSS animation
+			this.seekOverlay.classList.remove("seek-animate");
+			void this.seekOverlay.offsetWidth; // Browser HACK to force a UI repaint
+			this.seekOverlay.classList.add("seek-animate");
+
+			// Cooldown timer: Re-enable the button after 400ms (matches CSS animation duration)
+			setTimeout(() => {
+				buttonElem.disabled = false;
+				// Return focus to the button so keyboard users don't lose their place
+				buttonElem.focus();
+			}, 400);
+		};
+
 		this.rewindButton.addEventListener("click", () => {
 			this.videoElem.pause();
 			this.send("VIDEO_REWIND", this.videoElem.currentTime);
 			this.videoElem.currentTime -= this.seek;
+
+			// Trigger overlay
+			triggerSeekOverlay(`-${this.seek}s`, this.rewindButton);
+
 			this.videoElem.play();
 		});
 
@@ -326,16 +519,22 @@ class CourseVideo extends CourseComponent {
 			this.videoElem.pause();
 			this.send("VIDEO_FORWARD", this.videoElem.currentTime);
 			this.videoElem.currentTime += this.seek;
+
+			// Trigger overlay
+			triggerSeekOverlay(`+${this.seek}s`, this.forwardButton);
+
 			this.videoElem.play();
 		});
 
-		this.speedSlider.addEventListener("input", () => {
-			this.speedSliderSpan.textContent = this.speedSlider.value + "x";
-		});
+		this.speedSelect.addEventListener("change", () => {
+			// Convert the string value from the dropdown into a float
+			const newSpeed = parseFloat(this.speedSelect.value);
 
-		this.speedSlider.addEventListener("change", () => {
-			this.send("VIDEO_SPEED_CHANGE", `from ${this.videoElem.playbackRate} to ${this.speedSlider.value}`);
-			this.videoElem.playbackRate = this.speedSlider.value;
+			// Log the change
+			this.send("VIDEO_SPEED_CHANGE", `from ${this.videoElem.playbackRate} to ${newSpeed}`);
+
+			// Apply to video
+			this.videoElem.playbackRate = newSpeed;
 		});
 
 		this.fullScreenButton.addEventListener("click", () => {
@@ -346,11 +545,29 @@ class CourseVideo extends CourseComponent {
 		this.videoContainer.addEventListener("fullscreenchange", () => {
 			if (!document.fullscreenElement) {
 				this.send("VIDEO_NORMAL_SCREEN", "");
-				this.fullScreenButton.textContent = "Full Screen";
+				this.fullScreenButton.innerHTML = ICONS.fullScreen;
+				this.fullScreenButton.setAttribute("aria-label", "Full Screen");
+				this.fullScreenButton.title = "Full Screen";
 			} else {
 				this.send("VIDEO_FULL_SCREEN", "");
-				this.fullScreenButton.textContent = "Normal Screen";
+				this.fullScreenButton.innerHTML = ICONS.exitFullScreen;
+				this.fullScreenButton.setAttribute("aria-label", "Exit Full Screen");
+				this.fullScreenButton.title = "Exit Full Screen";
 			}
+		});
+
+		this.muteBtn.addEventListener("click", () => {
+			this.videoElem.muted = !this.videoElem.muted;
+			if (this.videoElem.muted) {
+				this.muteBtn.innerHTML = ICONS.volumeOff;
+				this.muteBtn.setAttribute("aria-label", "Unmute");
+				this.muteBtn.title = "Unmute";
+			} else {
+				this.muteBtn.innerHTML = ICONS.volumeOn;
+				this.muteBtn.setAttribute("aria-label", "Mute");
+				this.muteBtn.title = "Mute";
+			}
+			this.send("VIDEO_MUTED", this.videoElem.muted);
 		});
 
 		this.videoContainer.addEventListener("keydown", (e) =>{
@@ -374,9 +591,7 @@ class CourseVideo extends CourseComponent {
 					this.rewindButton.click();
 					break;
 				case "KeyM":
-					this.videoElem.muted = !this.videoElem.muted;
-					this.send("VIDEO_MUTED", "");
-					this.muteBanner.innerHTML = this.videoElem.muted ? "Video Muted" : "";
+					this.muteBtn.click();
 					break;
 			}
 		});
@@ -404,6 +619,9 @@ class CourseVideo extends CourseComponent {
 			const duration = this.videoElem.duration || 0; // Handle NaN if loading
 
 			const pct = (currentTime / duration);
+
+			// Fill the progress bar
+			this.progressFill.style.width = `${pct * 100}%`;
 
 			// Update UI with "Current / Total"
 			this.timeDisplay.textContent = `${this.formatTime(currentTime)} / ${this.formatTime(duration)}`;
