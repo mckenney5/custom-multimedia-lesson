@@ -140,6 +140,12 @@ body {
 	outline-offset: 4px;
 }
 
+#course-nav button:disabled {
+	opacity: 0.4; /* Dims the button significantly */
+	cursor: not-allowed;
+	pointer-events: none; /* Completely disables hover effects and clicks! */
+}
+
 /* Specific styling for the Reset/Test buttons (Rectangles) */
 #course-nav #reset,
 #course-nav #test {

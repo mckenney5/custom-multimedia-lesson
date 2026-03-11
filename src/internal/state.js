@@ -904,10 +904,24 @@ let state = {
 		}
 	},
 
-	showHelpMenu: function() {
+	toggleHelp: function(){
+		// Makes the ? nav button toggle from showing help menu or closing it
+		if (this.helpOverlay.style.display === "flex") {
+			this.closeHelp();
+		} else {
+			this.showHelpMenu();
+		}
+	},
+
+	showHelpMenu: function(){
+		// Displays the help menu from the ? nav button
 		this.isPaused = true;
 		this.lessonFrame.style.display = "none";
 		this.helpOverlay.style.display = "flex";
+
+		// Disable the navigation while the help menu is up
+		document.getElementById("prev").disabled = true;
+		document.getElementById("next").disabled = true;
 
 		this.helpContent.innerHTML = `
 			<div class="help-wrapper centered">
@@ -926,7 +940,8 @@ let state = {
 		`;
 	},
 
-	showPageHelp: function() {
+	showPageHelp: function(){
+		// A menu to show page rules to the user to see whats left
 		const page = this.data.pages[this.data.delta.currentPageIndex];
 		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
 		const rules = page.completionRules;
@@ -943,7 +958,7 @@ let state = {
 			score: scorePct >= rules.score,
 			scrolled: !rules.scrolled || pageDelta.scrolled,
 			videoProgress: pageDelta.videoProgress >= rules.videoProgress,
-			requireSubmission: quizzesSatisfied
+			requireSubmission: quizzesSatisfied,
 		};
 
 		// Uses the new CSS classes for the checkmarks!
@@ -980,7 +995,8 @@ let state = {
 		this.helpContent.innerHTML = html;
 	},
 
-	showGeneralHelp: function() {
+	showGeneralHelp: function(){
+		// Opens the help page on how to navigate the course
 		this.helpContent.innerHTML = `
 			<div class="help-wrapper">
 			<iframe src="help.html" class="help-iframe"></iframe>
@@ -991,12 +1007,19 @@ let state = {
 		`;
 	},
 
-	closeHelp: function() {
+	closeHelp: function(){
+		// Closes the help (aka ?) menu
 		this.helpOverlay.style.display = "none";
 		this.helpContent.innerHTML = "";
 		this.lessonFrame.style.display = "block";
 		this.isPaused = false; // Unfreeze analytics
+
+		// Reenable course navigation
+		document.getElementById("prev").disabled = false;
+		document.getElementById("next").disabled = false;
 	},
+
+
 };
 
 // --- End of Objects ---
