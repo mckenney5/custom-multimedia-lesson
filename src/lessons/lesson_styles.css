@@ -110,9 +110,19 @@ course-quiz {
 .question-block.odd { background-color: #fff; }
 
 .answer-row {
-	display: inline-block;
-	padding: 5px;
+	display: block; /* Changed from inline-block for a wider click target */
+	padding: 10px 15px; /* Larger padding */
 	cursor: pointer;
+	border-radius: 8px;
+	border: 2px solid transparent; /* Invisible border prevents jumping on hover */
+	transition: background-color 0.2s, border-color 0.2s;
+	margin-bottom: 5px;
+}
+
+.answer-row:hover,
+.answer-row:focus-within {
+	background-color: #f0f8ff; /* Soft contrast background */
+	border-color: var(--brand-100); /* Brand colored outline */
 }
 
 .btn-submit {
