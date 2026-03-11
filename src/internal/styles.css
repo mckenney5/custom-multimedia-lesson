@@ -429,3 +429,12 @@ body {
 		border-radius: 8px;
 	}
 }
+
+/* Lower animations for those who request it */
+@media (prefers-reduced-motion: reduce) {
+	* {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+		transform: none !important;
+	}
+}
