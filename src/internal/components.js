@@ -655,7 +655,7 @@ class CourseQuiz extends CourseComponent {
 			// Add interaction logging to quiz elements
 			const logInteraction = () => {
 				let values = [];
-				if (q.type === "short-answer") {
+				if (q.type === "short-answer"){
 					const el = this.querySelector(`input[name="${q.id}"]`);
 					if (el && el.value.trim() !== "") values = [el.value.trim()];
 				} else {
@@ -676,6 +676,7 @@ class CourseQuiz extends CourseComponent {
 				input.id = `${q.id}_text`;
 				input.style.width = "100%";
 				input.style.padding = "5px";
+				input.setAttribute("aria-label", `Answer for question: ${q.text}`);
 
 				// Restore saved state (savedAnswers[q.id] is an array of length 1)
 				if (savedAnswers[q.id] && savedAnswers[q.id].length > 0) {
