@@ -31,6 +31,7 @@ let state = {
 	isIdle: false, // Tracks if the user is idle on the site to help balance logs
 	focusTimer: null, // handles timing between focus checks
 	pageAPISecret: null,
+	currentTheme: "light",
 	initialized: false,
 
 	init: async function(frameId, bannerId, infoBar) {
@@ -180,6 +181,7 @@ let state = {
 		// assign the focus and blur to iframe if allowed
 		this.lessonFrame.addEventListener("load", () => {
 			try {
+				this.setTheme(this.currentTheme); // Set the theme on each page turn
 				const childWindow = this.lessonFrame.contentWindow;
 				childWindow.addEventListener("focus", onFocus);
 				childWindow.addEventListener("blur", onBlur);
@@ -1055,6 +1057,19 @@ let state = {
 		window.location.reload();
 	},
 
+	setTheme: function(themeName){
+		this.currentTheme = themeName;
+
+		// Apply to the parent HTML tag
+		if (themeName === "light") {
+			document.documentElement.removeAttribute("data-theme");
+		} else {
+			document.documentElement.setAttribute("data-theme", themeName);
+		}
+
+		// Send it to the child iframe
+		this.sendMessage("SET_THEME", themeName);
+	},
 
 };
 

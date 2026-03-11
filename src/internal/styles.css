@@ -1,125 +1,175 @@
+/* ==========================================================================
+ *  THEME VARIABLES & COLOR PALETTE
+ * ========================================================================== */
+:root {
+	/* Light Theme (Default) */
+	--bg-main: #f7f7f7;
+	--bg-panel: #ffffff;
+	--bg-content: linear-gradient(to right, #f5f5f5, #e0e0e0);
+	--text-main: #333333;
+	--text-muted: #666666;
+	--border-color: #cccccc;
+	--border-light: #eeeeee;
 
-/* Reset margins to prevent white gaps */
-body {
-	margin: 0;
-	font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Clean font */
-	height: 100vh; /* Force body to match screen height exactly */
-	display: flex; /* Turn body into a layout engine */
-	flex-direction: column; /* Stack items: Header -> Content -> Footer */
-	overflow: hidden; /* Disable scrollbar on the body itself */
-}
-
-:root{
+	/* Brand Coloring */
 	--h: 120;
 	--s: 20%;
 	--l-base: 38%;
-
-	/* Brand Coloring */
-	--brand-800: hsl(var(--h) var(--s) calc(var(--l-base) - 18%));
+	--brand: hsl(var(--h) var(--s) var(--l-base));
 	--brand-700: hsl(var(--h) var(--s) calc(var(--l-base) - 8%));
-	--brand: hsl(var(--h) var(--s) var(--l-base)); /* #629962 */
+	--brand-800: hsl(var(--h) var(--s) calc(var(--l-base) - 18%));
 	--brand-100: hsl(var(--h) var(--s) calc(var(--l-base) + 32%));
-	--brand-50:  hsl(var(--h) var(--s) calc(var(--l-base) + 62%));
-	--brand-text: #000000;
+	--brand-text: #ffffff; /* WCAG Compliant Contrast */
 
 	/* Standard red for resets/exits */
 	--danger-h: 354;
 	--danger-s: 70%;
 	--danger-l: 54%;
-
 	--danger: hsl(var(--danger-h) var(--danger-s) var(--danger-l));
 	--danger-hover: hsl(var(--danger-h) var(--danger-s) calc(var(--danger-l) - 10%));
-	--danger-100: hsl(var(--danger-h) var(--danger-s) calc(var(--danger-l) + 35%)); /* The auto-calculated focus ring */
+	--danger-100: hsl(var(--danger-h) var(--danger-s) calc(var(--danger-l) + 35%));
 }
 
-/* The Professional Header */
+[data-theme="dark"] {
+	/* Dark Theme Overrides */
+	--bg-main: #121212;
+	--bg-panel: #1e1e1e;
+	--bg-content: #1a1a1a;
+	--text-main: #f1f1f1;
+	--text-muted: #aaaaaa;
+	--border-color: #444444;
+	--border-light: #333333;
+
+	/* Desaturate the brand slightly for dark mode eye-strain */
+	--s: 15%;
+	--l-base: 45%;
+}
+
+[data-theme="high-contrast"] {
+	/* High Contrast Overrides (WCAG AAA) */
+	--bg-main: #000000;
+	--bg-panel: #000000;
+	--bg-content: #000000;
+	--text-main: #ffffff;
+	--text-muted: #ffffff;
+	--border-color: #ffffff;
+	--border-light: #ffffff;
+
+	/* Brand becomes high-visibility Yellow */
+	--brand: #ffff00;
+	--brand-800: #cccc00;
+	--brand-100: #ffffff;
+	--brand-text: #000000;
+}
+
+/* ==========================================================================
+ *  GLOBAL LAYOUT & TYPOGRAPHY
+ * ========================================================================== */
+body {
+	margin: 0;
+	font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	background: var(--bg-main);
+	color: var(--text-main);
+}
+
+/* ==========================================================================
+ *  HEADER (#top-bar)
+ * ========================================================================== */
 #top-bar {
-	flex: 0 0 60px; /* Don't grow, Don't shrink, 60px tall */
+	flex: 0 0 60px;
 	background-color: var(--brand);
 	display: flex;
-	justify-content: space-between; /* Pushes items to far left and right */
-	align-items: center; /* Vertically centers text */
-	padding: 0 20px; /* Breathing room on sides */
-	box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* Subtle depth shadow */
-	z-index: 10; /* Ensure shadow sits on top */
+	justify-content: space-between;
+	align-items: center;
+	padding: 0 20px;
+	box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+	z-index: 10;
 }
 
 .course-title {
 	font-size: 1.2rem;
 	font-weight: bold;
-	color: var(--brand-text)
+	color: var(--brand-text);
 }
 
 .user-info {
 	font-size: 0.9rem;
-	color: #666;
-	background: #ffffff;
+	color: var(--text-main);
+	background: var(--bg-panel);
 	padding: 5px 15px;
-	border-radius: 20px; /* Pill shape */
+	border-radius: 20px;
 }
 
-#course-body {
-	text-align: left;
-	background: #f7f7f7;
-	/* Removed margin-bottom; Flexbox handles spacing now */
-}
-
-/* Main Container: Acts as the Flex Parent */
-/* Main Container */
+/* ==========================================================================
+ *  MAIN CONTENT AREA (#lesson-content)
+ * ========================================================================== */
 #lesson-content {
 	flex: 1 1 auto;
-	background: linear-gradient(to right, #f5f5f5, #e0e0e0);
+	background: var(--bg-content);
 	display: flex;
 	flex-direction: row-reverse;
-
-	/* Rounded Corners */
 	border-radius: 1.5rem;
-
-	/* This cuts off the square corners of the sidebar/iframe inside */
 	overflow: hidden;
-
-	border: 1px solid #ccc;
-	margin: 10px; /* Keeps it floating so the curves are visible */
-
-	/* Optional: Add a shadow to emphasize the "floating card" effect */
+	border: 1px solid var(--border-color);
+	margin: 10px;
 	box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-	position: relative; /* Traps the absolute overlay inside this box */
-}
-
-#course-nav {
-	display: flex;
-	flex-direction: column; /* Stacks buttons vertically */
-	justify-content: flex-start; /* Aligns buttons to top */
-	align-items: center; /* Centers buttons horizontally */
-	width: 80px; /* Fixed sidebar width */
-	padding: 20px 5px;
-	background-color: #ffffff; /* Dark sidebar looks professional */
-	flex-shrink: 0; /* Prevents sidebar from squishing */
-	border-left: 1px solid #ddd; /* Subtle divider */
-
-	/* Accessibility: Allow internal scrolling if buttons overflow */
-	overflow-y: auto;
-	scrollbar-width: thin;
+	position: relative;
 }
 
 /* Left Side (Banner + Iframe) */
 #stage-area {
-	flex-grow: 1; /* Takes up all remaining width */
+	flex-grow: 1;
 	display: flex;
-	flex-direction: column; /* Stacks Banner on top of Iframe */
-	background: white;
+	flex-direction: column;
+	background: var(--bg-panel);
 	position: relative;
-	overflow: hidden; /* Stop the stage from scrolling, let iframe handle it */
+	overflow: hidden;
 }
 
-/* Buttons */
+#lesson-frame {
+	width: 100%;
+	height: 100%;
+	border: none;
+}
+
+#info-banner {
+	display: none;
+	background-color: #f8d7da;
+	color: #721c24;
+	padding: 10px;
+	text-align: center;
+	border-bottom: 1px solid #f5c6cb;
+	animation: slideDown 0.3s ease;
+}
+
+/* ==========================================================================
+ *  NAVIGATION BAR (#course-nav)
+ * ========================================================================== */
+#course-nav {
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-start;
+	align-items: center;
+	width: 80px;
+	padding: 20px 5px;
+	background-color: var(--bg-panel);
+	flex-shrink: 0;
+	border-left: 1px solid var(--border-color);
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+
 #course-nav button {
 	background-color: var(--brand);
 	color: var(--brand-text);
 	border: none;
-	border-radius: 50%; /* Circular buttons look nice in vertical bars */
+	border-radius: 50%;
 	cursor: pointer;
-	margin-bottom: 15px; /* Vertical spacing */
+	margin-bottom: 15px;
 	transition: transform 0.2s;
 	width: 50px;
 	height: 50px;
@@ -135,80 +185,59 @@ body {
 	transform: scale(1.1);
 }
 
-#course-nav button:focus {
+#course-nav button:focus-visible {
 	outline: 4px solid var(--brand-100);
 	outline-offset: 4px;
 }
 
 #course-nav button:disabled {
-	opacity: 0.4; /* Dims the button significantly */
+	opacity: 0.4;
 	cursor: not-allowed;
-	pointer-events: none; /* Completely disables hover effects and clicks! */
+	pointer-events: none;
 }
 
-/* Specific styling for the Reset/Test buttons (Rectangles) */
-#course-nav #reset,
-#course-nav #test {
-	background-color: var(--danger);
-	border-radius: 8px;
-	width: 60px;
-	height: auto;
-	padding: 8px 0;
-	font-size: 0.9rem;
-}
-
-
-/* Push Reset button to the bottom of the bar using margin-top: auto */
+/* Push Reset button to the bottom */
 .spacer {
-	flex-grow: 1; /* Pushes Reset/Test to bottom */
+	flex-grow: 1;
 }
 
-/* The Iframe */
-#lesson-frame {
-	width: 100%;
-	height: 100%; /* Fill the stage-area */
-	border: none;
-}
-
-/* The Banner */
-#info-banner {
-	display: none; /* Toggled by JS */
-	background-color: #f8d7da;
-	color: #721c24;
-	padding: 10px;
-	text-align: center;
-	border-bottom: 1px solid #f5c6cb;
-	animation: slideDown 0.3s ease;
-}
-
+/* ==========================================================================
+ *  INFO BAR
+ * ========================================================================== */
 #info-bar {
-	flex: 0 0 40px; /* Don't grow, Don't shrink, 40px tall */
+	flex: 0 0 40px;
 	width: 100%;
-
-	/* Styling to make it visible */
-	background-color: #333; /* Dark background */
-	color: white; /* White text */
-	display: flex; /* Flexbox makes aligning text easy */
-	align-items: center; /* Vertically center the text */
-	padding: 0 20px; /* Add side padding */
-	box-sizing: border-box; /* Ensures padding doesn't widen the bar */
-	z-index: 1000; /* Ensures it sits on top of everything */
-
-	/* Removed position: fixed logic */
+	background-color: var(--bg-panel);
+	color: var(--text-main);
+	border-top: 1px solid var(--border-color);
+	display: flex;
+	align-items: center;
+	justify-content: center; /* Centers the text perfectly */
+	font-size: 0.95rem;
+	font-weight: 500;
+	letter-spacing: 0.5px;
+	padding: 0 20px;
+	box-sizing: border-box;
+	z-index: 1000;
+	box-shadow: 0 -2px 10px rgba(0,0,0,0.05); /* Subtle upward shadow */
 }
 
+/* ==========================================================================
+ *  HELP MODAL & MENUS
+ * ========================================================================== */
 #help-overlay {
 	width: 100%;
 	height: 100%;
 	background-color: rgba(0, 0, 0, 0.85);
-	display: none; /* Toggled to 'flex' by JS */
+	display: none;
 	justify-content: center;
 	align-items: center;
 	z-index: 3000;
 }
 
 #help-modal {
-	background: #fff;
+	background: var(--bg-panel);
+	color: var(--text-main);
 	width: 90%;
 	height: 90%;
 	max-width: 900px;
@@ -217,6 +246,7 @@ body {
 	display: flex;
 	flex-direction: column;
 	box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+	border: 1px solid var(--border-color);
 }
 
 #help-content {
@@ -226,7 +256,7 @@ body {
 	border-radius: 8px;
 }
 
-#close-help,
+/* Help Buttons */
 .help-action-btn {
 	background-color: var(--brand);
 	color: var(--brand-text);
@@ -246,26 +276,32 @@ body {
 	max-width: 90%;
 }
 
-#close-help,
-.help-action-btn.danger {
-	background-color: var(--danger); /* Overrides the green brand color */
-}
-
-/* Specific hover for destructive buttons */
-#close-help:hover,
-.help-action-btn.danger:hover {
-	background-color: var(--danger-hover);
+.help-action-btn:hover {
+	background-color: var(--brand-800);
 	transform: scale(1.05);
 }
 
-/* Specific focus for destructive buttons */
-#close-help:focus,
-.help-action-btn.danger:focus {
-	outline: 4px solid var(--danger-100); /* Soft red halo */
+.help-action-btn:focus-visible {
+	outline: 4px solid var(--brand-100);
 	outline-offset: 4px;
 }
 
-/* Close button specific alignment */
+/* Danger Button Overrides */
+#close-help,
+.help-action-btn.danger {
+	background-color: var(--danger);
+}
+
+#close-help:hover,
+.help-action-btn.danger:hover {
+	background-color: var(--danger-hover);
+}
+
+#close-help:focus-visible,
+.help-action-btn.danger:focus-visible {
+	outline: 4px solid var(--danger-100);
+}
+
 #close-help {
 	align-self: center;
 	margin: 20px 0 0 0;
@@ -273,72 +309,12 @@ body {
 	min-width: 200px;
 }
 
-#close-help:hover,
-.help-action-btn:hover {
-	background-color: var(--danger-hover);
-	transform: scale(1.05);
-}
-
-#close-help:focus,
-.help-action-btn:focus {
-	outline: 4px solid var(--danger-100); /* Automatically generates a soft red halo */
-	outline-offset: 4px;
-}
-
-.answer-row input[type="radio"],
-.answer-row input[type="checkbox"] {
-	transform: scale(1.5); /* Blows up the tiny 13px box to a readable size */
-	margin-right: 15px; /* Adds breathing room between the box and the text */
-	cursor: pointer;
-	accent-color: var(--brand); /* Automatically tints the checked state to the brand color */
-}
-
-/* Align the row perfectly so the enlarged box doesn't push text out of line */
-.answer-row {
-	display: flex;
-	align-items: center; /* Vertically centers the checkbox with the text */
-	font-size: 1.15rem; /* Large, highly readable font */
-	line-height: 1.5;
-	color: #333;
-	padding: 10px 15px;
-	cursor: pointer;
-	border-radius: 8px;
-	border: 2px solid transparent;
-	transition: background-color 0.2s, border-color 0.2s;
-	margin-bottom: 5px;
-}
-
-.answer-row:hover,
-.answer-row:focus-within {
-	background-color: #f0f8ff;
-	border-color: var(--brand-100);
-}
-
-/* Short Answer Text Boxes */
-.question-block input[type="text"] {
-	font-size: 1.15rem; /* Prevents iOS auto-zoom and helps visually impaired */
-	padding: 12px 15px;
-	border: 2px solid #ccc;
-	border-radius: 8px;
-	width: 100%;
-	box-sizing: border-box; /* Keeps the input from spilling out of the container */
-	transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-/* Keyboard Navigation for Text Boxes */
-.question-block input[type="text"]:focus {
-	outline: none;
-	border-color: var(--brand);
-	box-shadow: 0 0 0 4px var(--brand-100); /* Matches your other focus rings */
-}
-
-/* Modifier class for buttons that sit side-by-side */
 .help-action-btn.auto-width {
 	width: auto;
 	padding: 15px 30px;
 }
 
-/* --- Clean UI Layout Classes for the JS injection --- */
+/* Help Menu Typography & Layout */
 .help-wrapper {
 	display: flex;
 	flex-direction: column;
@@ -351,9 +327,9 @@ body {
 
 .help-title {
 	font-size: 2.5rem;
-	color: #333;
+	color: var(--text-main);
 	margin-bottom: 10px;
-	border-bottom: 2px solid #eee;
+	border-bottom: 2px solid var(--border-light);
 	padding-bottom: 10px;
 	width: 100%;
 }
@@ -361,7 +337,7 @@ body {
 
 .help-subtitle {
 	font-size: 1.1rem;
-	color: #555;
+	color: var(--text-muted);
 	margin-bottom: 20px;
 }
 
@@ -387,32 +363,34 @@ body {
 	flex-grow: 1;
 	width: 100%;
 	max-width: 900px;
-	border: 1px solid #ccc;
+	border: 1px solid var(--border-color);
 	border-radius: 4px;
-	background: #f9f9f9;
+	background: var(--bg-main);
 }
 
-/* --- Table & Status Classes --- */
+/* Help Menu Tables */
 .help-table {
 	width: 90%;
 	max-width: 800px;
 	margin: 0 auto;
 	border-collapse: collapse;
-	background: #fff;
+	background: var(--bg-panel);
 	box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-	border: 1px solid #ddd;
+	border: 1px solid var(--border-color);
 	font-size: 1.1rem;
 }
 
 .help-table th {
-	background: #f4f4f4;
-	border-bottom: 2px solid #ccc;
+	background: var(--bg-main);
+	color: var(--text-main);
+	border-bottom: 2px solid var(--border-color);
 	padding: 15px;
 	text-align: center;
 }
 
 .help-table td {
-	border-bottom: 1px solid #ddd;
+	border-bottom: 1px solid var(--border-color);
+	color: var(--text-main);
 	padding: 15px;
 	text-align: center;
 }
@@ -420,50 +398,45 @@ body {
 .status-pass { color: #198754; font-size: 1.5em; }
 .status-fail { color: #dc3545; font-size: 1.5em; }
 
-
-/* --- MOBILE RESPONSIVENESS & ZOOM ACCESSIBILITY --- */
-/* Trigger if screen is narrow OR if screen is short (zoomed in) */
+/* ==========================================================================
+ *  MOBILE RESPONSIVENESS & ACCESSIBILITY
+ * ========================================================================== */
 @media (max-width: 768px), (max-height: 600px) {
-
-	/* 1. Un-fix the body height so scrolling works */
 	body {
 		height: auto;
 		overflow: auto;
 		display: block;
 	}
 
-	/* 2. Let content flow naturally */
 	#lesson-content {
-			flex-direction: column;
-			height: auto;
-			border-radius: 0;
-			border: none;
-			margin: 0;
+		flex-direction: column;
+		height: auto;
+		border-radius: 0;
+		border: none;
+		margin: 0;
 	}
 
-	/* 3. Reset Nav to Horizontal Row */
 	#course-nav {
-			flex-direction: row;
-			width: 100%;
-			height: auto;
-			justify-content: center;
-			padding: 10px;
-			border-left: none;
-			border-bottom: 1px solid #ddd;
-			overflow-y: visible;
+		flex-direction: row;
+		width: 100%;
+		height: auto;
+		justify-content: center;
+		padding: 10px;
+		border-left: none;
+		border-bottom: 1px solid var(--border-color);
+		overflow-y: visible;
 	}
+
 	#course-nav button {
-			margin: 0 10px;
-			margin-bottom: 0;
+		margin: 0 10px;
+		margin-bottom: 0;
 	}
 
-	/* 4. Ensure iframe is readable */
 	#lesson-frame {
-			height: 600px;
-			min-height: 50vh;
+		height: 600px;
+		min-height: 50vh;
 	}
 
-	/* 5. Let bars flow naturally */
 	#top-bar, #info-bar {
 		flex: none;
 		position: static;
@@ -477,7 +450,6 @@ body {
 	}
 }
 
-/* Lower animations for those who request it */
 @media (prefers-reduced-motion: reduce) {
 	* {
 		animation-duration: 0.01ms !important;
