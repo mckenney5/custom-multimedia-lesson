@@ -1048,6 +1048,44 @@ let state = {
 		document.getElementById("next").disabled = false;
 	},
 
+	toggleSettings: function(){
+		if (this.helpOverlay.style.display === "flex") {
+			this.closeHelp(); // We reuse closeHelp since it just closes the modal
+		} else {
+			this.showSettingsMenu();
+		}
+	},
+
+	showSettingsMenu: function(){
+		this.isPaused = true;
+		this.lessonFrame.style.display = "none";
+		this.helpOverlay.style.display = "flex";
+
+		document.getElementById("prev").disabled = true;
+		document.getElementById("next").disabled = true;
+
+		// Check the current theme so the dropdown shows the correct active choice
+		const lightSel = this.currentTheme === "light" ? "selected" : "";
+		const darkSel = this.currentTheme === "dark" ? "selected" : "";
+		const hcSel = this.currentTheme === "high-contrast" ? "selected" : "";
+
+		this.helpContent.innerHTML = `
+			<div class="help-wrapper centered">
+				<h1 class="help-title no-border">Course Settings</h1>
+				<p class="help-subtitle" style="margin-bottom: 40px;">Adjust your course preferences below.</p>
+
+				<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; width: 100%; max-width: 350px;">
+					<label for="theme-select" style="font-size: 1.2rem; font-weight: bold; color: var(--text-main);">Color Theme</label>
+					<select id="theme-select" onchange="state.setTheme(this.value)" style="width: 100%; padding: 12px; font-size: 1.1rem; border-radius: 8px; border: 2px solid var(--border-color); background: var(--bg-main); color: var(--text-main); cursor: pointer;">
+					<option value="light" ${lightSel}>Light Mode (Default)</option>
+					<option value="dark" ${darkSel}>Dark Mode</option>
+					<option value="high-contrast" ${hcSel}>High Contrast</option>
+					</select>
+				</div>
+			</div>
+		`;
+	},
+
 	refreshBrowser: function(){
 		// A simple button to refresh the web page for the user
 		// Force a save just in case
