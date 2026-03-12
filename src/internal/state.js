@@ -389,7 +389,7 @@ let state = {
 			console.error("Cannot go to next page until the state is initialized. Run state.init() first");
 			return false;
 		}
-		this.infoBanner.style.display = ""; //reset banner
+		this.infoBanner.style.display = "none"; //reset banner
 
 		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
 
@@ -794,13 +794,28 @@ let state = {
 	},
 
 	bannerMessage: function(message, isError=true){
+		// Shows a message in a banner at the top center
+
+		let role = "";
+		let icon = "";
+
 		if(isError){
-			this.infoBanner.style = "background-color: #f8d7da; color: #721c24;";
+			this.infoBanner.className = "error";
+			icon = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
+			role = "alert";
 		} else {
-			this.infoBanner.style = "background-color: #fff3cd; color: #856404;";
+			this.infoBanner.className = "warning";
+			icon = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>';
+			role = "status";
 		}
-		this.infoBanner.innerHTML = `<p>${message}</p>`;
-		this.infoBanner.style.display = "block";
+
+		this.infoBanner.innerHTML = `
+			${icon}
+			<span role="${role}">${message}</span>
+		`;
+
+		// Displays using Flexbox so the icon and text aligns perfectly
+		this.infoBanner.style.display = "flex";
 	},
 
 	log: function(message){
