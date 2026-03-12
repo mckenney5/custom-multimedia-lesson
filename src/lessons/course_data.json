@@ -72,6 +72,7 @@
 		{
 			"id": "quiz2",
 			"type": "quiz",
+			"options": ["show-wrong", "show-answer", "disable-anticheat"],
 			"questions": [
 			{
 				"id": "Q3",
@@ -118,6 +119,7 @@
 		{
 			"id": "quiz3",
 			"type": "quiz",
+			"options": [],
 			"questions": [
 			{
 				"id": "Q5",
@@ -144,6 +146,7 @@
 		{
 			"id": "quiz4",
 			"type": "quiz",
+			"options": [],
 			"questions": [
 			{
 				"id": "Q7",

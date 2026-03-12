@@ -673,6 +673,8 @@ let state = {
 							questions: compConfig.questions,
 							userAnswers: compState.userAnswers || {},
 							attemptsLeft: page.completionRules.attempts - (compState.attempts || 0),
+							options: compConfig.options || [],
+							hasAttempted: (compState.attempts || 0) > 0,
 						};
 						// Send with ID
 						this.lessonFrame.contentWindow.postMessage({

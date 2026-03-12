@@ -30,6 +30,11 @@ class CourseComponent extends HTMLElement {
 		if(this._boundDataHandler){
 			window.removeEventListener("student-data", this._boundDataHandler);
 		}
+
+		// Stop text to speech in components
+		if ("speechSynthesis" in window) {
+			window.speechSynthesis.cancel();
+		}
 	}
 
 	// --- HELPER METHODS ---
@@ -39,6 +44,31 @@ class CourseComponent extends HTMLElement {
 	 * @param {string} type - Event ID (e.g., "VIDEO_PLAY")
 	 * @param {any} message - The data payload
 	 */
+
+	speak(text) {
+		if (!("speechSynthesis" in window)) {
+			console.warn("Text-to-Speech not supported in this browser.");
+			return;
+		}
+
+		// Always stop whatever is currently talking
+		window.speechSynthesis.cancel();
+
+		// If the user clicked the exact same button while it was talking, just leave it silenced
+		if (this._lastSpeech === text) {
+			this._lastSpeech = null;
+			return;
+		}
+
+		// Otherwise, queue up the new speech
+		this._lastSpeech = text;
+		const utterance = new SpeechSynthesisUtterance(text);
+
+		// Clear the tracking variable when the speech finishes naturally
+		utterance.onend = () => { this._lastSpeech = null; };
+
+		window.speechSynthesis.speak(utterance);
+	}
 
 	requestStudentData() {
 		this.send("GET_STUDENT_DATA", "");
@@ -116,8 +146,8 @@ class CourseVideo extends CourseComponent {
 		this.innerHTML = `
 		<div id="video-container">
 			<div id="fs-hover-trigger"></div>
-			<div id="seek-overlay" class="seek-overlay"></div>
-			<div id="loading-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); color: white; align-items: center; justify-content: center; z-index: 10; pointer-events: none; font-size: 1.2rem;">
+			<div id="seek-overlay" class="seek-overlay" aria-hidden="true"></div>
+			<div id="loading-overlay" role="status" aria-live="polite" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); color: white; align-items: center; justify-content: center; z-index: 10; pointer-events: none; font-size: 1.2rem;">
 				<span class="spinner">⏳ Buffering...</span>
 			</div>
 
@@ -147,7 +177,6 @@ class CourseVideo extends CourseComponent {
 
 				<span id="time-display" style="font-family: monospace; font-variant-numeric: tabular-nums; min-width: 10ch; text-align: center; margin: 0 10px;">0:00 / 0:00</span>
 
-				<label for="speed-select" class="sr-only" style="display: none;">Playback Speed</label>
 				<select id="speed-select" class="speed-dropdown" aria-label="Playback Speed" title="Playback Speed">
 					<option value="0.5">0.5x</option>
 					<option value="0.75">0.75x</option>
@@ -497,14 +526,21 @@ class CourseArticle extends CourseComponent {
 	}
 
 	attachListeners() {
-		// 1. Bind the scroll function so we can remove it cleanly later
+		// Bind the scroll function so we can remove it cleanly later
 		this._onScroll = this.checkScroll.bind(this);
 
-		// 2. Attach to Window (Global scroll)
+		// Attach to Window (Global scroll)
 		window.addEventListener("scroll", this._onScroll);
 
-		// 3. Check immediately (In case the text is short and fits on one screen)
+		// Check immediately (In case the text is short and fits on one screen)
 		this.checkScroll();
+
+		// Set up text to speech if a button called read-article is present
+		this.querySelector("#read-article") ? this.querySelector("#read-article").addEventListener("click", () => {
+			// Grabs all the text inside the article tag and reads it
+			this.speak(this.textContent);
+		}) : NaN;
+
 	}
 
 	checkScroll() {
@@ -620,8 +656,13 @@ class CourseQuiz extends CourseComponent {
 		const form = document.createElement("div");
 		form.className = "quiz-container";
 
+		// Check if anti-cheat is currently active on this specific quiz
+		const AntiCheatActive = !this.options.includes("disable-anticheat");
+		console.log("Options: ");
+		console.log(this.options);
+
 		// Disables and checks for copy+paste / right click / text selection
-		if (!this.options.includes("disable-anticheat")) {
+		if (AntiCheatActive) {
 			const logSuspicious = (e, actionName) => {
 				// Exception: Allow students to highlight text INSIDE their short-answer boxes to edit typos
 				if (e.target.tagName === "INPUT" && e.type === "selectstart") return;
@@ -649,13 +690,51 @@ class CourseQuiz extends CourseComponent {
 
 		// Render questions
 		questions.forEach((q, index) => {
-			const qDiv = document.createElement("fieldset"); // Changed from div
+			const qDiv = document.createElement("fieldset");
 			qDiv.className = `question-block ${index % 2 === 0 ? "even" : "odd"}`;
-			qDiv.style.border = "none"; // Fieldsets have ugly default borders, removed them
+			qDiv.style.border = "none";
 			qDiv.style.padding = "0";
 			qDiv.style.margin = "0 0 30px 0";
 
-			qDiv.innerHTML = `<legend style="font-size: 1.3rem; font-weight: bold; margin-bottom: 15px; line-height: 1.4; width: 100%;">${index + 1}. ${q.text}</legend>`;
+			let ttsButtonHTML = "";
+			let scriptToRead = "";
+
+			// Only build the script and the button HTML if anti-cheat prevents screen readers
+			if (AntiCheatActive) {
+				scriptToRead = `Question ${index + 1}. ${q.text}. `;
+				if (q.type === "short-answer") {
+					scriptToRead += "Please type your answer in the text box.";
+				} else if (q.possibleAnswers) {
+					scriptToRead += "The options are: ";
+					q.possibleAnswers.forEach((ans, i) => {
+						scriptToRead += `Option ${i + 1}: ${ans}. `;
+					});
+				}
+
+				ttsButtonHTML = `
+					<button type="button" class="tts-btn" aria-label="Read question aloud" title="Read Aloud" style="background: transparent; border: none; cursor: pointer; color: var(--brand); flex-shrink: 0; padding: 2px; border-radius: 50%;">
+					<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+					</button>
+				`;
+			}
+
+			// Inject the Legend (The TTS button will just be blank if anti-cheat is off)
+			const legendText = `${index + 1}. ${q.text}`;
+			qDiv.innerHTML = `
+				<legend style="font-size: 1.3rem; font-weight: bold; margin-bottom: 15px; line-height: 1.4; width: 100%; display: flex; align-items: flex-start; gap: 10px;">
+					${ttsButtonHTML}
+					<span>${legendText}</span>
+				</legend>
+			`;
+
+			// Only attach the event listener if the button was actually created
+			if (AntiCheatActive) {
+				const ttsBtn = qDiv.querySelector(".tts-btn");
+				ttsBtn.addEventListener("click", (e) => {
+					e.preventDefault();
+					this.speak(scriptToRead);
+				});
+			}
 
 			// Add interaction logging to quiz elements
 			const logInteraction = () => {
