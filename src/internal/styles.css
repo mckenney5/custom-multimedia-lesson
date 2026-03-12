@@ -69,6 +69,7 @@ body {
 	margin: 0;
 	font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 	height: 100vh;
+	height: 100dvh; /* Prevents mobile browser UI from hiding the footer */
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
@@ -437,20 +438,16 @@ body {
  *  MOBILE RESPONSIVENESS & ACCESSIBILITY
  * ========================================================================== */
 @media (max-width: 768px), (max-height: 600px) {
-	body {
-		height: auto;
-		overflow: auto;
-		display: block;
-	}
 
+	/* Stack the navigation on top of the iframe */
 	#lesson-content {
 		flex-direction: column;
-		height: auto;
 		border-radius: 0;
 		border: none;
 		margin: 0;
 	}
 
+	/* Format the Nav as a horizontal row */
 	#course-nav {
 		flex-direction: row;
 		width: 100%;
@@ -467,14 +464,9 @@ body {
 		margin-bottom: 0;
 	}
 
+	/* Let the iframe fill the remaining space and handle its own scrolling */
 	#lesson-frame {
-		height: 600px;
-		min-height: 50vh;
-	}
-
-	#top-bar, #info-bar {
-		flex: none;
-		position: static;
+		height: 100%;
 	}
 
 	#help-content {
