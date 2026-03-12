@@ -32,6 +32,7 @@ let state = {
 	focusTimer: null, // handles timing between focus checks
 	pageAPISecret: null,
 	currentTheme: "light",
+	lastActiveElement: null, // Holds last tabbed element for keyboard use
 	initialized: false,
 
 	init: async function(frameId, bannerId, infoBar) {
@@ -951,6 +952,8 @@ let state = {
 
 	showHelpMenu: function(){
 		// Displays the help menu from the ? nav button
+
+		this.lastActiveElement = document.activeElement; // Save last tabbed element
 		this.isPaused = true;
 		this.lessonFrame.style.display = "none";
 		this.helpOverlay.style.display = "flex";
@@ -961,7 +964,7 @@ let state = {
 
 		this.helpContent.innerHTML = `
 			<div class="help-wrapper centered">
-				<h1 class="help-title no-border">Course Help</h1>
+				<h1 id="modal-title" class="help-title no-border">Course Help</h1>
 				<p class="help-subtitle" style="margin-bottom: 40px;">Select an option below to continue.
 				<br><br> If you run into an issue during the course,
 				go through each menu, from top to bottom, until the issue is resolved</p>
@@ -984,6 +987,12 @@ let state = {
 				</div>
 			</div>
 		`;
+
+		// Move tab selection
+		setTimeout(() => {
+			const closeBtn = document.getElementById("close-help");
+			if (closeBtn) closeBtn.focus();
+		}, 50);
 	},
 
 	showPageHelp: function(){
@@ -1054,7 +1063,7 @@ let state = {
 	},
 
 	closeHelp: function(){
-		// Closes the help (aka ?) menu
+		// Closes the Help (aka ?) menu and Settings menu
 		this.helpOverlay.style.display = "none";
 		this.helpContent.innerHTML = "";
 		this.lessonFrame.style.display = "block";
@@ -1063,6 +1072,12 @@ let state = {
 		// Reenable course navigation
 		document.getElementById("prev").disabled = false;
 		document.getElementById("next").disabled = false;
+
+		// Move tabbed element back
+		if (this.lastActiveElement) {
+			this.lastActiveElement.focus();
+			this.lastActiveElement = null;
+		}
 	},
 
 	toggleSettings: function(){
@@ -1074,6 +1089,9 @@ let state = {
 	},
 
 	showSettingsMenu: function(){
+		// Very similar to the Help (?) button
+
+		this.lastActiveElement = document.activeElement; // Save tab selection
 		this.isPaused = true;
 		this.lessonFrame.style.display = "none";
 		this.helpOverlay.style.display = "flex";
@@ -1088,7 +1106,7 @@ let state = {
 
 		this.helpContent.innerHTML = `
 			<div class="help-wrapper centered">
-				<h1 class="help-title no-border">Course Settings</h1>
+				<h1 id="modal-title" class="help-title no-border">Course Settings</h1>
 				<p class="help-subtitle" style="margin-bottom: 40px;">Adjust your course preferences below.</p>
 
 				<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; width: 100%; max-width: 350px;">
@@ -1101,6 +1119,12 @@ let state = {
 				</div>
 			</div>
 		`;
+
+		// Move tab selection
+		setTimeout(() => {
+			const closeBtn = document.getElementById("close-help");
+			if (closeBtn) closeBtn.focus();
+		}, 50);
 	},
 
 	refreshBrowser: function(){
