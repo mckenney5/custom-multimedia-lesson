@@ -81,27 +81,27 @@ body {
  *  HEADER (#top-bar)
  * ========================================================================== */
 #top-bar {
-	flex: 0 0 60px;
+	flex: 0 0 48px;
 	background-color: var(--brand);
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	padding: 0 20px;
-	box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+	padding: 0 15px;
+	box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 	z-index: 10;
 }
 
 .course-title {
-	font-size: 1.2rem;
+	font-size: 1.1rem;
 	font-weight: bold;
 	color: var(--brand-text);
 }
 
 .user-info {
-	font-size: 0.9rem;
+	font-size:0.85rem;
 	color: var(--text-main);
 	background: var(--bg-panel);
-	padding: 5px 15px;
+	padding: 4px 12px;
 	border-radius: 20px;
 }
 
@@ -113,11 +113,11 @@ body {
 	background: var(--bg-content);
 	display: flex;
 	flex-direction: row-reverse;
-	border-radius: 1.5rem;
-	overflow: hidden;
+	margin: 12px;
+	border-radius: 12px;
 	border: 1px solid var(--border-color);
-	margin: 10px;
-	box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+	overflow: hidden; /* Neatly clips the nav bar and iframe to the rounded corners */
 	position: relative;
 }
 
@@ -155,8 +155,8 @@ body {
 	flex-direction: column;
 	justify-content: flex-start;
 	align-items: center;
-	width: 80px;
-	padding: 20px 5px;
+	width: 60px;
+	padding: 15px 5px;
 	background-color: var(--bg-panel);
 	flex-shrink: 0;
 	border-left: 1px solid var(--border-color);
@@ -172,9 +172,11 @@ body {
 	cursor: pointer;
 	margin-bottom: 15px;
 	transition: transform 0.2s;
-	width: 50px;
-	height: 50px;
-	font-size: 1.2rem;
+
+	/* ACCESSIBILITY FLOOR: Shrunk to the WCAG 44x44 minimum */
+	width: 44px;
+	height: 44px;
+
 	display: flex;
 	justify-content: center;
 	align-items: center;
@@ -206,21 +208,21 @@ body {
  *  INFO BAR
  * ========================================================================== */
 #info-bar {
-	flex: 0 0 40px;
+	flex: 0 0 32px; /* SHRUNK: Was 40px */
 	width: 100%;
 	background-color: var(--bg-panel);
 	color: var(--text-main);
 	border-top: 1px solid var(--border-color);
 	display: flex;
 	align-items: center;
-	justify-content: center; /* Centers the text perfectly */
-	font-size: 0.95rem;
+	justify-content: center;
+	font-size: 0.85rem; /* Slightly smaller text */
 	font-weight: 500;
 	letter-spacing: 0.5px;
-	padding: 0 20px;
+	padding: 0 15px;
 	box-sizing: border-box;
 	z-index: 1000;
-	box-shadow: 0 -2px 10px rgba(0,0,0,0.05); /* Subtle upward shadow */
+	box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
 }
 
 /* ==========================================================================
