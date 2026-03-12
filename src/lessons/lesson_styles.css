@@ -2,14 +2,53 @@
  *  THEME VARIABLES (Course Creators can override these)
  * ========================================================================== */
 :root {
-	/* Default Accessible #629962 Green Brand */
+	--bg-main: #f7f7f7;
+	--bg-panel: #ffffff;
+	--bg-content: linear-gradient(to right, #f5f5f5, #e0e0e0);
+	--text-main: #333333;
+	--text-muted: #666666;
+	--border-color: #cccccc;
+	--border-light: #eeeeee;
+
 	--brand-h: 120;
 	--brand-s: 20%;
 	--brand-l: 38%;
-
 	--brand: hsl(var(--brand-h) var(--brand-s) var(--brand-l));
-	--brand-100: hsl(var(--brand-h) var(--brand-s) calc(var(--brand-l) + 32%)); /* Auto-generated focus ring */
+	--brand-100: hsl(var(--brand-h) var(--brand-s) calc(var(--brand-l) + 32%));
 	--brand-text: #ffffff;
+}
+
+:root[data-theme="dark"] {
+	--bg-main: #121212;
+	--bg-panel: #1e1e1e;
+	--bg-content: #1a1a1a;
+	--text-main: #f1f1f1;
+	--text-muted: #aaaaaa;
+	--border-color: #444444;
+	--border-light: #333333;
+
+	--brand-s: 15%;
+	--brand-l-base: 45%;
+}
+
+:root[data-theme="high-contrast"] {
+	--bg-main: #000000;
+	--bg-panel: #000000;
+	--bg-content: #000000;
+	--text-main: #ffffff;
+	--text-muted: #ffffff;
+	--border-color: #ffffff;
+	--border-light: #ffffff;
+
+	--brand: #ffff00;
+	--brand-800: #cccc00;
+	--brand-100: #ffffff;
+	--brand-text: #000000;
+}
+
+body {
+	background: var(--bg-main);
+	color: var(--text-main);
 }
 
 /* ==========================================================================
@@ -162,7 +201,7 @@
 	align-items: center;
 	font-size: 1.15rem;
 	line-height: 1.5;
-	color: #333;
+	color: var(--text-main);
 	padding: 10px 15px;
 	cursor: pointer;
 	border-radius: 8px;
@@ -173,7 +212,7 @@
 
 .answer-row:hover,
 .answer-row:focus-within {
-	background-color: #f0f8ff;
+	background-color: rgba(128, 128, 128, 0.15);
 	border-color: var(--brand-100);
 }
 
@@ -209,7 +248,7 @@
 
 .btn-submit {
 	background-color: var(--brand);
-	color: white;
+	color: var(--brand-text);
 	padding: 10px 20px;
 	border: none;
 	border-radius: 4px;

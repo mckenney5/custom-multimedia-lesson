@@ -30,7 +30,7 @@
 	--danger-100: hsl(var(--danger-h) var(--danger-s) calc(var(--danger-l) + 35%));
 }
 
-[data-theme="dark"] {
+:root[data-theme="dark"] {
 	/* Dark Theme Overrides */
 	--bg-main: #121212;
 	--bg-panel: #1e1e1e;
@@ -45,7 +45,7 @@
 	--l-base: 45%;
 }
 
-[data-theme="high-contrast"] {
+:root[data-theme="high-contrast"] {
 	/* High Contrast Overrides (WCAG AAA) */
 	--bg-main: #000000;
 	--bg-panel: #000000;
@@ -288,8 +288,43 @@ body {
 
 /* Danger Button Overrides */
 #close-help,
+.help-action-btn {
+	background-color: var(--brand);
+	color: var(--brand-text);
+	border: none;
+	border-radius: 50px;
+	padding: 15px 40px;
+	font-size: 1.2rem;
+	font-weight: bold;
+	cursor: pointer;
+	box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+	transition: background-color 0.2s, transform 0.2s;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	width: 350px;
+	max-width: 90%;
+}
+
+/* Specific Hover & Focus */
+#close-help:hover,
+.help-action-btn:hover {
+	background-color: var(--brand-800);
+	transform: scale(1.05);
+}
+
+#close-help:focus-visible,
+.help-action-btn:focus-visible {
+	outline: 4px solid var(--brand-100);
+	outline-offset: 4px;
+}
+
+/* Danger Button Color Overrides */
+#close-help,
 .help-action-btn.danger {
 	background-color: var(--danger);
+	color: #ffffff; /* Explicitly ensure danger text is always white */
 }
 
 #close-help:hover,
