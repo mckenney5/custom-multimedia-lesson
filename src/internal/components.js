@@ -679,6 +679,8 @@ class CourseQuiz extends CourseComponent {
 			form.addEventListener("copy", (e) => logSuspicious(e, "copy-attempt"));
 			form.addEventListener("paste", (e) => logSuspicious(e, "paste-attempt"));
 			form.addEventListener("selectstart", (e) => logSuspicious(e, "text-highlight"));
+			form.addEventListener("dragstart", (e) => logSuspicious(e, "text-drag-attempt"));
+			form.addEventListener("beforeprint", (e) => logSuspicious(e, "print-attempt"));
 		}
 
 		// Create hidden results text
