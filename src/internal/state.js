@@ -316,43 +316,40 @@ let state = {
 	},
 
 	handleLastPage: function(){
-		if(this.checkCourseCompletion()){
-			// if all the course rules are met
+		// Checks if we are done with the course
+		if(!this.checkCourseCompletion()) return false;
 
-			// Calculate score
-			const grade = this.calculateOverallGrade();
-			const gradeString = String(grade.ratio * 100); // <-- percentage grade as a string
-			journaler.log("COURSE_COMPLETE", gradeString);
-			journaler.transmit("FINAL", journaler.report().join("\n"), true); // <-- send final data, send expanded analytics as a CSV, high priority
+		// Calculate score and log
+		const grade = this.calculateOverallGrade();
+		const gradeString = String(Math.round(grade.ratio * 100));
+		journaler.log("COURSE_COMPLETE", gradeString);
+		journaler.transmit("FINAL", journaler.report().join("\n"), true);
 
-			lms.setScore(grade.earnedScore, grade.maxScore); // <-- send course score to the LMS
+		lms.setScore(grade.earnedScore, grade.maxScore);
 
-			const minimumGrade = this.data.courseRules.minimumGrade;
-			const completeOnly = this.data.courseRules.completeOnly;
-			const studentsCanFail = this.data.courseRules.studentsCanFail;
+		const minimumGrade = this.data.courseRules.minimumGrade;
+		const completeOnly = this.data.courseRules.completeOnly;
+		const studentsCanFail = this.data.courseRules.studentsCanFail;
 
-			if(completeOnly){
-				lms.setStatus("completed");
-			} else if(studentsCanFail){
-				if(grade.ratio < minimumGrade){
-					lms.setStatus("failed");
-				} else {
-					lms.setStatus("passed");
-				}
+		let hasPassed = true;
+
+		if(completeOnly){
+			lms.setStatus("completed");
+		} else if(studentsCanFail){
+			if(grade.ratio < minimumGrade){
+				lms.setStatus("failed");
+				hasPassed = false;
 			} else {
-				// we made it to the end and the student did not do well enough
-				// break the sad news, restart the course
-				alert(`You did not score high enough (you got a ${gradeString}% and needed a ${grade.ratio * 100}%). Click okay to retry`);
-				this.reset(); // TODO find a nicer way to do this and probably log attempts, like a soft reset
+				lms.setStatus("passed");
 			}
-
-			// Show the last page
-			this.data.delta.currentPageIndex = this.data.pages.length -1 ;
-			this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
-			return true;
 		} else {
-			return false;
+			// If they can't fail, but didn't meet the score, we treat it as a fail/retry state
+			hasPassed = grade.ratio >= minimumGrade;
 		}
+
+		// Show final screen
+		this.showEndScreen(hasPassed, gradeString, Math.round(minimumGrade * 100));
+		return true;
 	},
 
 	finalizePage: function(){
@@ -371,22 +368,19 @@ let state = {
 	},
 
 	advancePage: function(){
-		// Can you tell I had so many off by one bugs?
-		const lastPage = this.data.pages.length-1;
-		const secondToLastPage = lastPage -1;
+		// Goes to the next page
+		const lastPage = this.data.pages.length - 1;
 		const currentPage = this.data.delta.currentPageIndex;
 
-		if(currentPage === secondToLastPage){
-			// see if we can finish the course
+		if(currentPage === lastPage){
+			// If we are on the final page, try to finish the course
 			if(this.checkCourseCompletion()){
 				this.handleLastPage();
 			} else {
-				this.bannerMessage("You have not finished all course requirements. Review your work and try again");
+				this.bannerMessage("You have not finished all course requirements. Review your work and try again.");
 			}
-		} else if(currentPage === lastPage){
-			// Do nothing. We are at the end of the pages
 		} else {
-			// if the next page is just another page
+			// Just go to the next page
 			this.data.delta.currentPageIndex += 1;
 			this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
 		}
@@ -516,8 +510,8 @@ let state = {
 		window.document.body.innerHTML = "<h2>Course disabled</h2>";
 
 		// remove event listeners
-		window.onbeforeunload = () => console.log("Stoping prompt");
-		window.onunload = () => console.log("Stoping quit");
+		window.onbeforeunload = () => console.log("Stopping prompt");
+		window.onunload = () => console.log("Stopping quit");
 
 		// nuke the state and its modules
 		state = "";
@@ -1085,6 +1079,143 @@ let state = {
 			this.lastActiveElement.focus();
 			this.lastActiveElement = null;
 		}
+	},
+
+	showEndScreen: function(hasPassed, scoreString, requiredScoreString) {
+		// End of course pop up
+
+		this.isPaused = true;
+		this.lessonFrame.style.display = "none";
+		this.helpOverlay.style.display = "flex";
+
+		// Lock navigation
+		document.getElementById("prev").disabled = true;
+		document.getElementById("next").disabled = true;
+		this.lastActiveElement = document.activeElement;
+
+		const certConfig = this.data.courseRules.certificate || {};
+		const showCertButton = hasPassed && certConfig.enabled;
+
+		// Build the messaging based on pass/fail
+		let title = hasPassed ? "🎉 Course Completed!" : "⚠️ Course Incomplete";
+		let message = hasPassed
+			? `Congratulations! You have successfully finished the course with a score of <strong>${scoreString}%</strong>.`
+			: `You reached the end, but you scored <strong>${scoreString}%</strong>. A score of <strong>${requiredScoreString}%</strong> is required to pass.`;
+
+		let certButtonHTML = showCertButton
+			? `<button class="help-action-btn" onclick="state.printCertificate()" style="background-color: var(--brand); color: var(--brand-text);">🖨️ Print Certificate</button>`
+			: "";
+
+		this.helpContent.innerHTML = `
+		<div class="help-wrapper centered" style="text-align: center;">
+			<h1 id="modal-title" class="help-title no-border">${title}</h1>
+			<p class="help-subtitle" style="margin-bottom: 30px; font-size: 1.2rem;">${message}</p>
+
+			<div class="help-btn-group-col" style="align-items: center;">
+				${certButtonHTML}
+				<button class="help-action-btn auto-width" onclick="state.closeHelp()">🔙 Review Course Materials</button>
+				<button class="help-action-btn danger auto-width" onclick="state.quit()">🚪 Exit Course</button>
+				</div>
+		</div>
+		`;
+
+		setTimeout(() => {
+			const closeBtn = document.getElementById("close-help");
+			if (closeBtn) closeBtn.focus();
+		}, 50);
+	},
+
+	printCertificate: function() {
+		// Generates and prints the end of course cert
+		const certConfig = this.data.courseRules.certificate || {};
+		const printArea = document.getElementById("certificate-print-area");
+
+		if (!printArea) {
+			console.error("Unable to find print area for the cert!");
+			return;
+		}
+
+		// Gather our template variables
+		const student = this.studentName || "Student";
+		const scoreString = String(Math.round(this.calculateOverallGrade().ratio * 100));
+		const dateString = new Date().toLocaleDateString();
+
+		// Time tracking
+		const totalSeconds = this.data.delta.totalCourseSeconds || 0;
+		const totalMinutes = String(Math.floor(totalSeconds / 60));
+		// Uses parseFloat to cleanly drop trailing zeros (e.g., 1.50 becomes 1.5)
+		const totalHours = String(parseFloat((totalSeconds / 3600).toFixed(2)));
+		const minimumLength = String(this.data.courseRules.minimumMinutes || 0);
+
+		// Text Replacer Engine
+		const titleText = certConfig.title || "Certificate of Completion";
+		let bodyText = certConfig.body || "This certifies that {{studentName}} completed the course on {{date}} with a score of {{score}}%.";
+
+		bodyText = bodyText.replace(/{{studentName}}/g, student);
+		bodyText = bodyText.replace(/{{score}}/g, scoreString);
+		bodyText = bodyText.replace(/{{date}}/g, dateString);
+		bodyText = bodyText.replace(/{{totalMinutes}}/g, totalMinutes);
+		bodyText = bodyText.replace(/{{totalHours}}/g, totalHours);
+		bodyText = bodyText.replace(/{{minimumLength}}/g, minimumLength);
+		bodyText = bodyText.replace(/\n/g, "<br>");
+
+		// Optional Image Engine (Checks if the variables exist in JSON)
+		const logoHTML = certConfig.logoUrl
+			? `<img src="${certConfig.logoUrl}" style="max-height: 80px; margin-bottom: 20px;" alt="" />`
+			: "";
+
+		const signatureHTML = certConfig.signatureUrl
+			? `
+			<div style="width: 250px; font-size: 1.2rem;">
+				<div style="border-bottom: 2px solid #333; height: 50px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 5px;">
+					<img src="${certConfig.signatureUrl}" style="max-height: 45px; margin-bottom: -2px;" alt="Signature" />
+				</div>
+				Instructor Signature
+			</div>
+			`
+			: "";
+
+		const watermarkHTML = certConfig.watermarkUrl
+			? `<img src="${certConfig.watermarkUrl}" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 75%; max-height: 75%; opacity: 0.12; z-index: 0; pointer-events: none;" alt="" />`
+			: "";
+
+		// Inject the HTML (Using Flexbox to align the bottom columns perfectly)
+		printArea.innerHTML = `
+		${watermarkHTML}
+
+		<h1 style="position: absolute; top: 30px; left: 50%; transform: translateX(-50%); width: 100%; max-width: 900px; text-align: center; z-index: 10; padding-bottom: 15px; margin: 0; font-size: 3.5rem; text-transform: uppercase; letter-spacing: 2px;">
+		${titleText}
+		</h1>
+
+		<div style="position: relative; z-index: 1; margin: 130px auto; width: 100%; max-width: 900px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+		${logoHTML}
+		<p style="font-size: 1.8rem; line-height: 1.6; margin: 0;">
+		${bodyText}
+		</p>
+		</div>
+
+		<div style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; justify-content: space-around; align-items: flex-end; width: 100%; max-width: 900px; z-index: 10; padding-top: 15px;">
+
+		<div style="width: 250px; font-size: 1.2rem;">
+		<div style="border-bottom: 2px solid #333; height: 50px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; margin-bottom: 5px;">
+		${dateString}
+		</div>
+		Date
+		</div>
+
+		<div style="width: 250px; font-size: 1.2rem;">
+		<div style="border-bottom: 2px solid #333; height: 50px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; margin-bottom: 5px;">
+		${scoreString}%
+		</div>
+		Score
+		</div>
+
+		${signatureHTML}
+		</div>
+			`;
+
+		// Trigger the browser's native print dialog
+		window.print();
 	},
 
 	toggleSettings: function(){

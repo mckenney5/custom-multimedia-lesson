@@ -555,3 +555,58 @@ body {
 		transform: none !important;
 	}
 }
+
+/* ==========================================================================
+ * CERTIFICATE PRINTING ENGINE
+ * ========================================================================== */
+@media print {
+	/* Remove margins so the print is only one page */
+	html, body {
+		width: 100%;
+		height: 100%;
+		margin: 0 !important;
+		padding: 0 !important;
+		overflow: hidden !important;
+	}
+
+	/* Hide the entire course UI, modals, and banners */
+	body > *:not(#certificate-print-area) {
+		display: none !important;
+	}
+
+	/* Show only the certificate area */
+	#certificate-print-area {
+	display: flex !important;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	text-align: center;
+
+	/* Force it to take up the whole printed page */
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+
+	/* Styling the cert */
+	font-family: 'Georgia', serif; /* Classic certificate font */
+	color: #333 !important;
+	background-color: white !important;
+	padding: 40px;
+	box-sizing: border-box;
+	border: 15px solid var(--brand, #0056b3); /* Uses your brand color for the border */
+	}
+
+	/* Force the printer into Landscape mode and remove default margins */
+	@page {
+		size: landscape;
+		margin: 0.5cm;
+	}
+
+	/* Force background colors to print (fixes Chrome/Safari stripping colors) */
+	body {
+		-webkit-print-color-adjust: exact !important;
+		print-color-adjust: exact !important;
+	}
+}
