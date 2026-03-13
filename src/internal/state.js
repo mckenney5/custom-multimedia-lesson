@@ -117,7 +117,7 @@ let state = {
 				if (this.helpOverlay && this.helpOverlay.style.display === "flex") {
 					e.preventDefault();
 					this.closeHelp();
-				} else if (this.infoBanner.style.display === "block") {
+				} else if (this.infoBanner.style.display === "flex") {
 					// Check if banner visible
 					e.preventDefault();
 					this.infoBanner.style.display = "none";
