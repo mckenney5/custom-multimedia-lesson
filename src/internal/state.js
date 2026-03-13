@@ -300,12 +300,19 @@ let state = {
 	},
 
 	updateInfo: function (){
-		// updates the info bar on the bottom of the UI
+		// Updates the info bar on the bottom of the UI
 		const currentPage = this.data.delta.currentPageIndex+1;
 		const pageCount = this.data.pages.length;
-		const progress = Math.round((this.data.delta.progress/(this.data.pages.length-1))*100);
 
-		this.infoBar.innerHTML = `<p>Page: ${currentPage}/${pageCount} (${progress}%)</p>`;
+		// Prevent divide-by-zero if there is only 1 page in the whole course
+		const totalSteps = Math.max(1, pageCount - 1);
+		const progress = Math.round((this.data.delta.progress / totalSteps) * 100);
+
+		// Inject the background fill div and the text span
+		this.infoBar.innerHTML = `
+			<div id="info-bar-fill" style="width: ${progress}%;"></div>
+			<span id="info-bar-text">Page ${currentPage} of ${pageCount} &nbsp;&nbsp;&bull;&nbsp;&nbsp; ${progress}% Complete</span>
+		`;
 	},
 
 	handleLastPage: function(){
