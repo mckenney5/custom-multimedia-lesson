@@ -506,6 +506,89 @@ body {
 .status-fail { color: #dc3545; font-size: 1.5em; }
 
 /* ==========================================================================
+ * VIDEO PLAYER COMPONENT
+ * ========================================================================== */
+#video-container {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	background: #000000;
+}
+
+#vid-player {
+	flex-grow: 1;
+	object-fit: contain;
+}
+
+#video-controls {
+	display: flex;
+	align-items: center;
+	background: var(--bg-panel);
+	padding: 10px 15px;
+	border-top: 1px solid var(--border-color);
+	gap: 10px;
+	position: relative;
+}
+
+#progress-container {
+	width: 100%;
+	height: 6px;
+	background: var(--border-light);
+	position: absolute;
+	top: -6px; /* Places it directly on top of the control bar */
+	left: 0;
+	z-index: 5;
+}
+
+#progress-fill {
+	height: 100%;
+	background: var(--brand);
+	width: 0%;
+	transition: width 0.1s linear;
+}
+
+.icon-btn {
+	background: transparent;
+	color: var(--text-main);
+	border: none;
+	width: 40px;
+	height: 40px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+	transition: background 0.2s, transform 0.1s;
+}
+
+.icon-btn:hover {
+	background: var(--border-light);
+}
+
+.icon-btn:focus-visible {
+	outline: 3px solid var(--brand);
+	outline-offset: 2px;
+}
+
+.icon-btn svg {
+	width: 24px;
+	height: 24px;
+	fill: currentColor;
+}
+
+.speed-dropdown {
+	background: var(--bg-main);
+	color: var(--text-main);
+	border: 1px solid var(--border-color);
+	padding: 6px 10px;
+	border-radius: 4px;
+	font-weight: bold;
+	cursor: pointer;
+}
+
+/* ==========================================================================
  *  MOBILE RESPONSIVENESS & ACCESSIBILITY
  * ========================================================================== */
 @media (max-width: 768px), (max-height: 600px) {
