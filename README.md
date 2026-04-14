@@ -1,6 +1,6 @@
 Custom Multimedia Lesson
 ========================
-CML (v A0.3.0) — _A small, lightweight, interactive lesson application_
+CML (v A0.4.0) — _A small, lightweight, interactive lesson application_
 
 ## Description
 This is a web application made from vanilla JavaScript, CSS, and HTML5. Its job is to facilitate a custom multi-page lesson.
@@ -74,11 +74,19 @@ Here is what the settings look like, starting with the overall course rules:
 
 ```JSON
 {
-	"courseRules": {
-		"minimumMinutes": 1.5,
-		"minimumGrade": 0.70,
-		"completeOnly": false,
-		"studentsCanFail": true
+"courseRules": {
+	"minimumMinutes": 0.5,
+	"minimumGrade": 0.70,
+	"completeOnly": false,
+	"studentsCanFail": true,
+	"certificate": {
+		"enabled": true,
+		"title": "Certificate of Completion",
+		"body": "This certifies that\n\n<b>{{studentName}}</b>\n\nhas successfully completed the mandated {{minimumLength}} minutes of training. Total Course Time: {{totalHours}} Hours ({{totalMinutes}} Minutes)\nFinal Score: {{score}}%",
+		"logoUrl": "media/brand_logo.png",
+		"signatureUrl": "media/instructor_sig.png",
+		"watermarkUrl": "media/seal_watermark.png"
+	}
 },
 ```
 
@@ -89,6 +97,7 @@ Here is what the settings look like, starting with the overall course rules:
 | `minimumGrade`    | The lowest grade to get a pass for the whole course                                                    |
 | `completeOnly`    | Pass the student only if they completed every page. Do not report a grade                              |
 | `studentsCanFail` | A failing grade will be reported to the LMS. If false, students must restart the course if they failed |
+| `certificate`     | Optional cert at the end of the course with custom messages, branding, and data                        |
 
 
 ### Page Set Up
@@ -104,11 +113,11 @@ The page object looks like this, NOTE: *page order matters* :
 ```
 
 
-| Property    | Notes                                |
-|-------------|--------------------------------------|
-| `type`      | The page type (article, video, quiz) |
-| `name`      | The file name of the page            |
-| (details)   | Not currently used                   |
+| Property    | Notes                                       |
+|-------------|---------------------------------------------|
+| `type`      | The page type (article, video, quiz, multi) |
+| `name`      | The file name of the page                   |
+| (details)   | Not currently used                          |
 
 
 #### Possible Types
@@ -132,12 +141,35 @@ The page object looks like this, NOTE: *page order matters* :
 		- attempts:  How many attempts the student gets before blocking their submission
 
 #### Questions Object
+
+Question Module Options
+```JSON
+"id": "quiz1",
+"type": "quiz",
+"options": ["show-wrong", "show-answer", "disable-anticheat"],
+```
+
+| Property           | Notes                                               |
+|--------------------|-----------------------------------------------------|
+| `id`               | The unique identifier of a question module          |
+| `type`             | The type of module (quiz in this case)              |
+| `options`          | Settings flags that can enable or disable features  |
+
+
+| Property            | Notes                                                 |
+|---------------------|-------------------------------------------------------|
+| `show-wrong`        | Mark which answers are wrong                          |
+| `show-answer`       | Shows the correct answers when the student finishes   |
+| `disable-anticheat` | Unblocks right-click, select, copy+paste, and similal |
+
+
 Common question set up:
 
 ```JSON
 		"questions": [
 		{
 			"id": "Q1",
+			"type": "multiple-choice",
 			"text": "The sky is blue.",
 			"correctAnswers": ["True"],
 			"possibleAnswers": ["True", "False"],
@@ -147,9 +179,9 @@ Common question set up:
 		},
 		{
 			"id": "Q2",
+			"type": "short-answer",
 			"text": "What is 3 + 1",
-			"correctAnswers": ["4"],
-			"possibleAnswers": ["1", "2", "3", "4"],
+			"correctAnswers": ["4", "four"],
 			"pointValue": 1,
 			"isCorrect": null,
 			"choices": []
@@ -161,7 +193,7 @@ Common question set up:
 | Property           | Notes                                               |
 |--------------------|-----------------------------------------------------|
 | `id`               | The unique identifier of a question, used analytics |
-| `type`             | The type of quesiton like multiple-choice           |
+| `type`             | The type of question like multiple-choice           |
 | `text`             | The question that the student is asked              |
 | `correctAnswers`   | A list of the correct answers                       |
 | `possibleAnswers`  | The choices the student has                         |
@@ -187,18 +219,20 @@ points of every page and adding the total earned points. Dividing earned / possi
 			"score": 0.7,
 			"scrolled": false,
 			"attempts": 3,
-			"videoProgress" : 0.0
+			"videoProgress" : 0.0,
+			"requireSubmission": false
 		},
 ```
 
 
-| Property           | Notes                                                                    |
-|--------------------|--------------------------------------------------------------------------|
-| `watchTime`        | How long the student must be on that page                                |
-| `score`            | The minimum score to move on to the next page (use 0 to disable)         |
-| `scrolled`         | The student must scroll to the bottom                                    |
-| `attempts`         | The ammount of time the student can submit quiz answers                  |
-| `videoProgress`    | The percentage of the video that must be watched. 1.0 is the whole video | 
+| Property            | Notes                                                                    |
+|---------------------|--------------------------------------------------------------------------|
+| `watchTime`         | How long the student must be on that page                                |
+| `score`             | The minimum score to move on to the next page (use 0 to disable)         |
+| `scrolled`          | The student must scroll to the bottom                                    |
+| `attempts`          | The ammount of time the student can submit quiz answers                  |
+| `videoProgress`     | The percentage of the video that must be watched. 1.0 is the whole video | 
+| `requireSubmission` | Something must be submitted by the student to move on (e.g. a quiz)      | 
 
 
 ### Creating a page in HTML
