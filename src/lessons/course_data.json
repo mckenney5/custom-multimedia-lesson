@@ -3,7 +3,15 @@
 		"minimumMinutes": 0.5,
 		"minimumGrade": 0.70,
 		"completeOnly": false,
-		"studentsCanFail": true
+		"studentsCanFail": true,
+		"certificate": {
+			"enabled": true,
+			"title": "Certificate of Completion",
+			"body": "This certifies that\n\n<b>{{studentName}}</b>\n\nhas successfully completed the mandated {{minimumLength}} minutes of training. Total Course Time: {{totalHours}} Hours ({{totalMinutes}} Minutes)\nFinal Score: {{score}}%",
+			"logoUrl": "media/brand_logo.png",
+			"signatureUrl": "media/instructor_sig.png",
+			"watermarkUrl": "media/seal_watermark.png"
+		}
 	},
 	"pages": [
 	{
@@ -72,6 +80,7 @@
 		{
 			"id": "quiz2",
 			"type": "quiz",
+			"options": ["show-wrong", "show-answer", "disable-anticheat"],
 			"questions": [
 			{
 				"id": "Q3",
@@ -118,6 +127,7 @@
 		{
 			"id": "quiz3",
 			"type": "quiz",
+			"options": [],
 			"questions": [
 			{
 				"id": "Q5",
@@ -144,6 +154,7 @@
 		{
 			"id": "quiz4",
 			"type": "quiz",
+			"options": [],
 			"questions": [
 			{
 				"id": "Q7",

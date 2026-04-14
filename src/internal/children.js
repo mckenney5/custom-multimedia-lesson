@@ -158,6 +158,9 @@ const child = {
 			case "QUIZ_RESULTS":
 				this.events.fire("quiz-results", message);
 				break;
+			case "SET_THEME":
+				document.documentElement.setAttribute("data-theme", message);
+				break;
 			default:
 				console.error("Child: Unknown message from parent --> ", event);
 				break;

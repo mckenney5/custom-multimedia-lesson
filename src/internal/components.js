@@ -30,6 +30,11 @@ class CourseComponent extends HTMLElement {
 		if(this._boundDataHandler){
 			window.removeEventListener("student-data", this._boundDataHandler);
 		}
+
+		// Stop text to speech in components
+		if ("speechSynthesis" in window) {
+			window.speechSynthesis.cancel();
+		}
 	}
 
 	// --- HELPER METHODS ---
@@ -39,6 +44,31 @@ class CourseComponent extends HTMLElement {
 	 * @param {string} type - Event ID (e.g., "VIDEO_PLAY")
 	 * @param {any} message - The data payload
 	 */
+
+	speak(text) {
+		if (!("speechSynthesis" in window)) {
+			console.warn("Text-to-Speech not supported in this browser.");
+			return;
+		}
+
+		// Always stop whatever is currently talking
+		window.speechSynthesis.cancel();
+
+		// If the user clicked the exact same button while it was talking, just leave it silenced
+		if (this._lastSpeech === text) {
+			this._lastSpeech = null;
+			return;
+		}
+
+		// Otherwise, queue up the new speech
+		this._lastSpeech = text;
+		const utterance = new SpeechSynthesisUtterance(text);
+
+		// Clear the tracking variable when the speech finishes naturally
+		utterance.onend = () => { this._lastSpeech = null; };
+
+		window.speechSynthesis.speak(utterance);
+	}
 
 	requestStudentData() {
 		this.send("GET_STUDENT_DATA", "");
@@ -109,124 +139,57 @@ class CourseVideo extends CourseComponent {
 	render() {
 		const src = this.attr("src");
 		const poster = this.attr("poster");
+		const captions = this.attr("captions"); // allows for adding CC to the atributes like <course-video src="vid.mp4" captions="subs.vtt"></course-video>
 		this.seek = 5; // How far FF and RW move the video
 
 		// We use Light DOM, so we write directly to this.innerHTML
 		this.innerHTML = `
-		<style>
-			/* --- DEFAULT LAYOUT (Normal Page Flow) --- */
-			#video-container {
-				position: relative;
-				background-color: #000;
-				display: flex;
-				flex-direction: column;
-				width: 60%;
-				max-width: 100%;
-				/* Prevent text selection on double clicks */
-				user-select: none;
-			}
-
-			#vid-player {
-				width: 100%;
-				display: block;
-				/* Ensure video takes available space */
-				flex-grow: 1;
-			}
-
-			#video-controls {
-				/* Default: Sit below the video */
-				position: static;
-				background-color: #222;
-				padding: 10px;
-				display: flex;
-				justify-content: space-around;
-				align-items: center;
-				color: white;
-				width: 100%;
-				box-sizing: border-box;
-				z-index: 20; /* Always on top of triggers */
-				transition: opacity 0.3s ease; /* Smooth fade */
-			}
-
-			/* --- FULL SCREEN OVERRIDES --- */
-
-			/* When the container is in full screen... */
-			#video-container:fullscreen {
-				justify-content: center; /* Center video vertically */
-				background: black;
-			}
-
-			/* Make controls float over the video at the bottom */
-			#video-container:fullscreen #video-controls {
-				position: absolute;
-				bottom: 0;
-				left: 0;
-				width: 100%;
-				background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent */
-				opacity: 0; /* Hidden by default */
-			}
-
-			/* The Trigger Zone (Bottom 15% of screen) */
-			#fs-hover-trigger {
-				display: none; /* Hidden normally */
-			}
-			#video-container:fullscreen #fs-hover-trigger {
-				display: block;
-				position: absolute;
-				bottom: 0;
-				left: 0;
-				width: 100%;
-				height: 15%; /* Active area */
-				z-index: 10; /* Above video, below controls */
-			}
-
-			/* Show controls when hovering the Trigger OR the Controls themselves */
-			#video-container:fullscreen #fs-hover-trigger:hover ~ #video-controls,
-			#video-container:fullscreen #video-controls:hover {
-				opacity: 1;
-			}
-
-
-			/* --- BUTTON STYLES --- */
-			#video-controls button {
-				background: transparent;
-				border: none;
-				color: white;
-				cursor: pointer;
-				font-size: 16px;
-				padding: 5px 10px;
-				transition: background 0.2s;
-			}
-			#video-controls button:hover {
-				background: rgba(255,255,255,0.2);
-				border-radius: 4px;
-			}
-			#speed-slider { margin: 0 10px; cursor: pointer; }
-		</style>
-
 		<div id="video-container">
 			<div id="fs-hover-trigger"></div>
-
-			<div id="loading-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); color: white; align-items: center; justify-content: center; z-index: 10; pointer-events: none; font-size: 1.2rem;">
+			<div id="seek-overlay" class="seek-overlay" aria-hidden="true"></div>
+			<div id="loading-overlay" role="status" aria-live="polite" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); color: white; align-items: center; justify-content: center; z-index: 10; pointer-events: none; font-size: 1.2rem;">
 				<span class="spinner">⏳ Buffering...</span>
 			</div>
 
-			<h3 id="muted" style="color: red; position: absolute; top: 10px; left: 10px; z-index: 5; margin: 0;"></h3>
-
-			<video id="vid-player" src="${src}" poster="${poster}"></video>
+			<video id="vid-player" src="${src}" poster="${poster}">
+				${captions ? `<track id="vid-captions" kind="captions" src="${captions}" srclang="en" label="English" default>` : ""}
+			</video>
 
 			<div id="video-controls">
-				<button id="play-pause" type="button">Play</button>
-				<button id="rewind" type="button">-5s</button>
-				<button id="forward" type="button">+5s</button>
+				<div id="progress-container" aria-hidden="true">
+					<div id="progress-fill"></div>
+				</div>
+				<button id="play-pause" class="icon-btn" type="button" aria-label="Play" title="Play">
+					<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+				</button>
 
-				<span id="time-display" style="font-family: monospace; font-variant-numeric: tabular-nums; min-width: 12ch; text-align: center;">0:00 / 0:00</span>
+				<button id="rewind" class="icon-btn" type="button" aria-label="Rewind ${this.seek} Seconds" title="Rewind ${this.seek}s">
+					<svg viewBox="0 0 24 24"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg>
+				</button>
 
-				<label for="speed-slider">Speed:</label>
-				<input type="range" id="speed-slider" min="0.5" max="2.0" step="0.1" value="1">
-				<span id="speed-value" style="display: inline-block; width: 3ch;">1x</span>
+				<button id="forward" class="icon-btn" type="button" aria-label="Forward ${this.seek} Seconds" title="Forward ${this.seek}s">
+					<svg viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
+				</button>
 
-				<button id="full-screen" type="button">Full Screen</button>
+				<button id="mute-btn" class="icon-btn" type="button" aria-label="Mute" title="Mute">
+					<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+				</button>
+
+				<span id="time-display" style="font-family: monospace; font-variant-numeric: tabular-nums; min-width: 10ch; text-align: center; margin: 0 10px;">0:00 / 0:00</span>
+
+				<select id="speed-select" class="speed-dropdown" aria-label="Playback Speed" title="Playback Speed">
+					<option value="0.5">0.5x</option>
+					<option value="0.75">0.75x</option>
+					<option value="1" selected>1x</option>
+					<option value="1.25">1.25x</option>
+					<option value="1.5">1.5x</option>
+					<option value="1.75">1.75x</option>
+					<option value="2">2x</option>
+				</select>
+
+				<button id="full-screen" class="icon-btn" type="button" aria-label="Full Screen" title="Full Screen">
+					<svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+				</button>
 			</div>
 		</div>
 		`;
@@ -238,12 +201,14 @@ class CourseVideo extends CourseComponent {
 		this.timeDisplay = this.querySelector("#time-display");
 		this.rewindButton = this.querySelector("#rewind");
 		this.forwardButton = this.querySelector("#forward");
-		this.speedSlider = this.querySelector("#speed-slider");
-		this.speedSliderSpan = this.querySelector("#speed-value");
+		this.speedSelect = this.querySelector("#speed-select");
 		this.fullScreenButton = this.querySelector("#full-screen");
 		this.videoContainer = this.querySelector("#video-container");
-		this.muteBanner = this.querySelector("#muted");
+		this.muteBtn = this.querySelector("#mute-btn");
 		this.loadingOverlay = this.querySelector("#loading-overlay");
+		this.seekOverlay = this.querySelector("#seek-overlay");
+		this.progressFill = this.querySelector("#progress-fill");
+
 
 		// State tracking
 		this.lastLoggedPercent = 0;
@@ -256,6 +221,16 @@ class CourseVideo extends CourseComponent {
 	}
 
 	attachListeners() {
+
+		// Hardcoded SVG Icons
+		const ICONS = {
+			play: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
+			pause: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>',
+			volumeOn: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>',
+			volumeOff: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>',
+			fullScreen: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>',
+			exitFullScreen: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>',
+		};
 
 		// -- Video Buffering
 		// Fires when the browser starts fetching the media
@@ -283,18 +258,44 @@ class CourseVideo extends CourseComponent {
 		this.playBtn.addEventListener("click", () => {
 			if (this.videoElem.paused) {
 				this.videoElem.play();
-				this.playBtn.textContent = "Pause";
-				this.send("VIDEO_PLAYING", this.videoElem.currentTime);
 			} else {
 				this.videoElem.pause();
-				this.playBtn.textContent = "Play";
-				this.send("VIDEO_PAUSED", this.videoElem.currentTime);
+			}
+		});
+
+		// Play / Pause on video area click
+		this.videoElem.addEventListener("click", () => {
+			if (this.videoElem.paused) {
+				this.videoElem.play();
+			} else {
+				this.videoElem.pause();
 			}
 		});
 
 		this.videoElem.addEventListener("play", () => {
-			// Track play time
+			// Track play time (your existing code)
 			this.lastTick = performance.now();
+
+			// Automatically update the UI to the Pause state
+			this.playBtn.innerHTML = ICONS.pause;
+			this.playBtn.setAttribute("aria-label", "Pause");
+			this.playBtn.title = "Pause";
+
+			// Send analytics
+			this.send("VIDEO_PLAYING", this.videoElem.currentTime);
+		});
+
+		this.videoElem.addEventListener("pause", () => {
+			// Automatically update the UI to the Play state
+			this.playBtn.innerHTML = ICONS.play;
+			this.playBtn.setAttribute("aria-label", "Play");
+			this.playBtn.title = "Play";
+
+			// Send analytics
+			this.send("VIDEO_PAUSED", this.videoElem.currentTime);
+
+			// Run your existing stats reporter
+			reportStats();
 		});
 
 		// Resume tracking when recovering from a buffer/skip
@@ -312,10 +313,34 @@ class CourseVideo extends CourseComponent {
 			this.lastTick = null;
 		});
 
+		const triggerSeekOverlay = (text, buttonElem) => {
+			// Set the dynamic text (e.g., "+5s")
+			this.seekOverlay.textContent = text;
+
+			// Disable the button to prevent buffering crashes
+			buttonElem.disabled = true;
+
+			// Reset and trigger the CSS animation
+			this.seekOverlay.classList.remove("seek-animate");
+			void this.seekOverlay.offsetWidth; // Browser HACK to force a UI repaint
+			this.seekOverlay.classList.add("seek-animate");
+
+			// Cooldown timer: Re-enable the button after 400ms (matches CSS animation duration)
+			setTimeout(() => {
+				buttonElem.disabled = false;
+				// Return focus to the button so keyboard users don't lose their place
+				buttonElem.focus();
+			}, 400);
+		};
+
 		this.rewindButton.addEventListener("click", () => {
 			this.videoElem.pause();
 			this.send("VIDEO_REWIND", this.videoElem.currentTime);
 			this.videoElem.currentTime -= this.seek;
+
+			// Trigger overlay
+			triggerSeekOverlay(`-${this.seek}s`, this.rewindButton);
+
 			this.videoElem.play();
 		});
 
@@ -323,16 +348,22 @@ class CourseVideo extends CourseComponent {
 			this.videoElem.pause();
 			this.send("VIDEO_FORWARD", this.videoElem.currentTime);
 			this.videoElem.currentTime += this.seek;
+
+			// Trigger overlay
+			triggerSeekOverlay(`+${this.seek}s`, this.forwardButton);
+
 			this.videoElem.play();
 		});
 
-		this.speedSlider.addEventListener("input", () => {
-			this.speedSliderSpan.textContent = this.speedSlider.value + "x";
-		});
+		this.speedSelect.addEventListener("change", () => {
+			// Convert the string value from the dropdown into a float
+			const newSpeed = parseFloat(this.speedSelect.value);
 
-		this.speedSlider.addEventListener("change", () => {
-			this.send("VIDEO_SPEED_CHANGE", `from ${this.videoElem.playbackRate} to ${this.speedSlider.value}`);
-			this.videoElem.playbackRate = this.speedSlider.value;
+			// Log the change
+			this.send("VIDEO_SPEED_CHANGE", `from ${this.videoElem.playbackRate} to ${newSpeed}`);
+
+			// Apply to video
+			this.videoElem.playbackRate = newSpeed;
 		});
 
 		this.fullScreenButton.addEventListener("click", () => {
@@ -343,11 +374,29 @@ class CourseVideo extends CourseComponent {
 		this.videoContainer.addEventListener("fullscreenchange", () => {
 			if (!document.fullscreenElement) {
 				this.send("VIDEO_NORMAL_SCREEN", "");
-				this.fullScreenButton.textContent = "Full Screen";
+				this.fullScreenButton.innerHTML = ICONS.fullScreen;
+				this.fullScreenButton.setAttribute("aria-label", "Full Screen");
+				this.fullScreenButton.title = "Full Screen";
 			} else {
 				this.send("VIDEO_FULL_SCREEN", "");
-				this.fullScreenButton.textContent = "Normal Screen";
+				this.fullScreenButton.innerHTML = ICONS.exitFullScreen;
+				this.fullScreenButton.setAttribute("aria-label", "Exit Full Screen");
+				this.fullScreenButton.title = "Exit Full Screen";
 			}
+		});
+
+		this.muteBtn.addEventListener("click", () => {
+			this.videoElem.muted = !this.videoElem.muted;
+			if (this.videoElem.muted) {
+				this.muteBtn.innerHTML = ICONS.volumeOff;
+				this.muteBtn.setAttribute("aria-label", "Unmute");
+				this.muteBtn.title = "Unmute";
+			} else {
+				this.muteBtn.innerHTML = ICONS.volumeOn;
+				this.muteBtn.setAttribute("aria-label", "Mute");
+				this.muteBtn.title = "Mute";
+			}
+			this.send("VIDEO_MUTED", this.videoElem.muted);
 		});
 
 		this.videoContainer.addEventListener("keydown", (e) =>{
@@ -371,9 +420,7 @@ class CourseVideo extends CourseComponent {
 					this.rewindButton.click();
 					break;
 				case "KeyM":
-					this.videoElem.muted = !this.videoElem.muted;
-					this.send("VIDEO_MUTED", "");
-					this.muteBanner.innerHTML = this.videoElem.muted ? "Video Muted" : "";
+					this.muteBtn.click();
 					break;
 			}
 		});
@@ -401,6 +448,9 @@ class CourseVideo extends CourseComponent {
 			const duration = this.videoElem.duration || 0; // Handle NaN if loading
 
 			const pct = (currentTime / duration);
+
+			// Fill the progress bar
+			this.progressFill.style.width = `${pct * 100}%`;
 
 			// Update UI with "Current / Total"
 			this.timeDisplay.textContent = `${this.formatTime(currentTime)} / ${this.formatTime(duration)}`;
@@ -476,14 +526,21 @@ class CourseArticle extends CourseComponent {
 	}
 
 	attachListeners() {
-		// 1. Bind the scroll function so we can remove it cleanly later
+		// Bind the scroll function so we can remove it cleanly later
 		this._onScroll = this.checkScroll.bind(this);
 
-		// 2. Attach to Window (Global scroll)
+		// Attach to Window (Global scroll)
 		window.addEventListener("scroll", this._onScroll);
 
-		// 3. Check immediately (In case the text is short and fits on one screen)
+		// Check immediately (In case the text is short and fits on one screen)
 		this.checkScroll();
+
+		// Set up text to speech if a button called read-article is present
+		this.querySelector("#read-article") ? this.querySelector("#read-article").addEventListener("click", () => {
+			// Grabs all the text inside the article tag and reads it
+			this.speak(this.textContent);
+		}) : NaN;
+
 	}
 
 	checkScroll() {
@@ -599,8 +656,13 @@ class CourseQuiz extends CourseComponent {
 		const form = document.createElement("div");
 		form.className = "quiz-container";
 
+		// Check if anti-cheat is currently active on this specific quiz
+		const AntiCheatActive = !this.options.includes("disable-anticheat");
+		console.log("Options: ");
+		console.log(this.options);
+
 		// Disables and checks for copy+paste / right click / text selection
-		if (!this.options.includes("disable-anticheat")) {
+		if (AntiCheatActive) {
 			const logSuspicious = (e, actionName) => {
 				// Exception: Allow students to highlight text INSIDE their short-answer boxes to edit typos
 				if (e.target.tagName === "INPUT" && e.type === "selectstart") return;
@@ -617,23 +679,8 @@ class CourseQuiz extends CourseComponent {
 			form.addEventListener("copy", (e) => logSuspicious(e, "copy-attempt"));
 			form.addEventListener("paste", (e) => logSuspicious(e, "paste-attempt"));
 			form.addEventListener("selectstart", (e) => logSuspicious(e, "text-highlight"));
-
-			// Block printing of the exam
-			this.innerHTML = `
-				<style>
-				@media print {
-					.quiz-container { display: none !important; }
-					body::before {
-						content: "Printing this course materials is a violation of the academic integrity policy.";
-						display: block;
-						font-size: 24px;
-						font-weight: bold;
-						color: red;
-						text-align: center;
-						margin-top: 50px;
-					}
-				}
-				</style>`;
+			form.addEventListener("dragstart", (e) => logSuspicious(e, "text-drag-attempt"));
+			form.addEventListener("beforeprint", (e) => logSuspicious(e, "print-attempt"));
 		}
 
 		// Create hidden results text
@@ -645,14 +692,56 @@ class CourseQuiz extends CourseComponent {
 
 		// Render questions
 		questions.forEach((q, index) => {
-			const qDiv = document.createElement("div");
+			const qDiv = document.createElement("fieldset");
 			qDiv.className = `question-block ${index % 2 === 0 ? "even" : "odd"}`;
-			qDiv.innerHTML = `<h3>${index + 1}. ${q.text}</h3>`;
+			qDiv.style.border = "none";
+			qDiv.style.padding = "0";
+			qDiv.style.margin = "0 0 30px 0";
+
+			let ttsButtonHTML = "";
+			let scriptToRead = "";
+
+			// Only build the script and the button HTML if anti-cheat prevents screen readers
+			if (AntiCheatActive) {
+				scriptToRead = `Question ${index + 1}. ${q.text}. `;
+				if (q.type === "short-answer") {
+					scriptToRead += "Please type your answer in the text box.";
+				} else if (q.possibleAnswers) {
+					scriptToRead += "The options are: ";
+					q.possibleAnswers.forEach((ans, i) => {
+						scriptToRead += `Option ${i + 1}: ${ans}. `;
+					});
+				}
+
+				ttsButtonHTML = `
+					<button type="button" class="tts-btn" aria-label="Read question aloud" title="Read Aloud" style="background: transparent; border: none; cursor: pointer; color: var(--brand); flex-shrink: 0; padding: 2px; border-radius: 50%;">
+					<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+					</button>
+				`;
+			}
+
+			// Inject the Legend (The TTS button will just be blank if anti-cheat is off)
+			const legendText = `${index + 1}. ${q.text}`;
+			qDiv.innerHTML = `
+				<legend style="font-size: 1.3rem; font-weight: bold; margin-bottom: 15px; line-height: 1.4; width: 100%; display: flex; align-items: flex-start; gap: 10px;">
+					${ttsButtonHTML}
+					<span>${legendText}</span>
+				</legend>
+			`;
+
+			// Only attach the event listener if the button was actually created
+			if (AntiCheatActive) {
+				const ttsBtn = qDiv.querySelector(".tts-btn");
+				ttsBtn.addEventListener("click", (e) => {
+					e.preventDefault();
+					this.speak(scriptToRead);
+				});
+			}
 
 			// Add interaction logging to quiz elements
 			const logInteraction = () => {
 				let values = [];
-				if (q.type === "short-answer") {
+				if (q.type === "short-answer"){
 					const el = this.querySelector(`input[name="${q.id}"]`);
 					if (el && el.value.trim() !== "") values = [el.value.trim()];
 				} else {
@@ -673,6 +762,7 @@ class CourseQuiz extends CourseComponent {
 				input.id = `${q.id}_text`;
 				input.style.width = "100%";
 				input.style.padding = "5px";
+				input.setAttribute("aria-label", `Answer for question: ${q.text}`);
 
 				// Restore saved state (savedAnswers[q.id] is an array of length 1)
 				if (savedAnswers[q.id] && savedAnswers[q.id].length > 0) {
