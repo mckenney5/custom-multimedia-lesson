@@ -1,117 +1,228 @@
+/* ==========================================================================
+ *  THEME VARIABLES & COLOR PALETTE
+ * ========================================================================== */
+:root {
+	/* Light Theme (Default) */
+	--bg-main: #f7f7f7;
+	--bg-panel: #ffffff;
+	--bg-content: linear-gradient(to right, #f5f5f5, #e0e0e0);
+	--text-main: #333333;
+	--text-muted: #666666;
+	--border-color: #cccccc;
+	--border-light: #eeeeee;
 
-/* Reset margins to prevent white gaps */
-body {
-	margin: 0;
-	font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Clean font */
-	height: 100vh; /* Force body to match screen height exactly */
-	display: flex; /* Turn body into a layout engine */
-	flex-direction: column; /* Stack items: Header -> Content -> Footer */
-	overflow: hidden; /* Disable scrollbar on the body itself */
-}
-
-:root{
+	/* Brand Coloring */
 	--h: 120;
 	--s: 20%;
 	--l-base: 38%;
-	--brand-800: hsl(var(--h) var(--s) calc(var(--l-base) - 18%));
+	--brand: hsl(var(--h) var(--s) var(--l-base));
 	--brand-700: hsl(var(--h) var(--s) calc(var(--l-base) - 8%));
-	--brand: hsl(var(--h) var(--s) var(--l-base)); /* #629962 */
+	--brand-800: hsl(var(--h) var(--s) calc(var(--l-base) - 18%));
 	--brand-100: hsl(var(--h) var(--s) calc(var(--l-base) + 32%));
-	--brand-50:  hsl(var(--h) var(--s) calc(var(--l-base) + 62%));
-	--brand-text: #ffffff
+	--brand-text: #ffffff; /* WCAG Compliant Contrast */
+
+	/* Standard red for resets/exits */
+	--danger-h: 354;
+	--danger-s: 70%;
+	--danger-l: 54%;
+	--danger: hsl(var(--danger-h) var(--danger-s) var(--danger-l));
+	--danger-hover: hsl(var(--danger-h) var(--danger-s) calc(var(--danger-l) - 10%));
+	--danger-100: hsl(var(--danger-h) var(--danger-s) calc(var(--danger-l) + 35%));
+
+	/* Banner */
+	--error-bg: #f8d7da;
+	--error-text: #721c24;
+	--error-border: #f5c6cb;
+
+	--warning-bg: #fff3cd;
+	--warning-text: #856404;
+	--warning-border: #ffeeba;
 }
 
-/* The Professional Header */
+:root[data-theme="dark"] {
+	/* Dark Theme Overrides */
+	--bg-main: #121212;
+	--bg-panel: #1e1e1e;
+	--bg-content: #1a1a1a;
+	--text-main: #f1f1f1;
+	--text-muted: #aaaaaa;
+	--border-color: #444444;
+	--border-light: #333333;
+
+	/* Desaturate the brand slightly for dark mode eye-strain */
+	--s: 15%;
+	--l-base: 45%;
+
+	/* Banner */
+	--error-bg: #4a191e;
+	--error-text: #ffb3b8;
+	--error-border: #842029;
+
+	--warning-bg: #4d3a02;
+	--warning-text: #ffda6a;
+	--warning-border: #664d03;
+}
+
+:root[data-theme="high-contrast"] {
+	/* High Contrast Overrides (WCAG AAA) */
+	--bg-main: #000000;
+	--bg-panel: #000000;
+	--bg-content: #000000;
+	--text-main: #ffffff;
+	--text-muted: #ffffff;
+	--border-color: #ffffff;
+	--border-light: #ffffff;
+
+	/* Brand becomes high-visibility Yellow */
+	--brand: #ffff00;
+	--brand-800: #cccc00;
+	--brand-100: #ffffff;
+	--brand-text: #000000;
+
+	/* Banner */
+	--error-bg: #000000;
+	--error-text: #ff3333;
+	--error-border: #ff3333;
+
+	--warning-bg: #000000;
+	--warning-text: #ffff00;
+	--warning-border: #ffff00;
+}
+
+/* ==========================================================================
+ *  GLOBAL LAYOUT & TYPOGRAPHY
+ * ========================================================================== */
+body {
+	margin: 0;
+	font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+	height: 100vh;
+	height: 100dvh; /* Prevents mobile browser UI from hiding the footer */
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	background: var(--bg-main);
+	color: var(--text-main);
+}
+
+/* ==========================================================================
+ *  HEADER (#top-bar)
+ * ========================================================================== */
 #top-bar {
-	flex: 0 0 60px; /* Don't grow, Don't shrink, 60px tall */
+	flex: 0 0 48px;
 	background-color: var(--brand);
 	display: flex;
-	justify-content: space-between; /* Pushes items to far left and right */
-	align-items: center; /* Vertically centers text */
-	padding: 0 20px; /* Breathing room on sides */
-	box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* Subtle depth shadow */
-	z-index: 10; /* Ensure shadow sits on top */
+	justify-content: space-between;
+	align-items: center;
+	padding: 0 15px;
+	box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+	z-index: 10;
 }
 
 .course-title {
-	font-size: 1.2rem;
+	font-size: 1.1rem;
 	font-weight: bold;
-	color: var(--brand-text)
+	color: var(--brand-text);
 }
 
 .user-info {
-	font-size: 0.9rem;
-	color: #666;
-	background: #ffffff;
-	padding: 5px 15px;
-	border-radius: 20px; /* Pill shape */
+	font-size:0.85rem;
+	color: var(--text-main);
+	background: var(--bg-panel);
+	padding: 4px 12px;
+	border-radius: 20px;
 }
 
-#course-body {
-	text-align: left;
-	background: #f7f7f7;
-	/* Removed margin-bottom; Flexbox handles spacing now */
-}
-
-/* Main Container: Acts as the Flex Parent */
-/* Main Container */
+/* ==========================================================================
+ *  MAIN CONTENT AREA (#lesson-content)
+ * ========================================================================== */
 #lesson-content {
 	flex: 1 1 auto;
-	background: linear-gradient(to right, #f5f5f5, #e0e0e0);
+	background: var(--bg-content);
 	display: flex;
 	flex-direction: row-reverse;
-
-	/* RESTORED: Rounded Corners */
-	border-radius: 1.5rem;
-
-	/* CRITICAL: This cuts off the square corners of the sidebar/iframe inside */
-	overflow: hidden;
-
-	border: 1px solid #ccc;
-	margin: 10px; /* Keeps it floating so the curves are visible */
-
-	/* Optional: Add a shadow to emphasize the "floating card" effect */
-	box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-}
-
-#course-nav {
-	display: flex;
-	flex-direction: column; /* Stacks buttons vertically */
-	justify-content: flex-start; /* Aligns buttons to top */
-	align-items: center; /* Centers buttons horizontally */
-	width: 80px; /* Fixed sidebar width */
-	padding: 20px 5px;
-	background-color: #ffffff; /* Dark sidebar looks professional */
-	flex-shrink: 0; /* Prevents sidebar from squishing */
-	border-left: 1px solid #ddd; /* Subtle divider */
-
-	/* Accessibility: Allow internal scrolling if buttons overflow */
-	overflow-y: auto;
-	scrollbar-width: thin;
+	margin: 12px;
+	border-radius: 12px;
+	border: 1px solid var(--border-color);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+	overflow: hidden; /* Neatly clips the nav bar and iframe to the rounded corners */
+	position: relative;
 }
 
 /* Left Side (Banner + Iframe) */
 #stage-area {
-	flex-grow: 1; /* Takes up all remaining width */
+	flex-grow: 1;
 	display: flex;
-	flex-direction: column; /* Stacks Banner on top of Iframe */
-	background: white;
+	flex-direction: column;
+	background: var(--bg-panel);
 	position: relative;
-	overflow: hidden; /* Stop the stage from scrolling, let iframe handle it */
+	overflow: hidden;
 }
 
-/* Buttons */
+#lesson-frame {
+	width: 100%;
+	height: 100%;
+	border: none;
+}
+
+#info-banner {
+	display: none;
+	padding: 12px 15px;
+	text-align: center;
+	font-weight: 600; /* Bolder text for readability */
+	border-bottom: 2px solid;
+	animation: slideDown 0.3s ease;
+	z-index: 50; /* Ensures it pops over the iframe */
+
+	/* Flexbox helps align icons with text */
+	display: none; /* Keep hidden by default, JS will change this to flex */
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+}
+
+/* Banner Modifiers */
+#info-banner.error {
+	background-color: var(--error-bg);
+	color: var(--error-text);
+	border-color: var(--error-border);
+}
+
+#info-banner.warning {
+	background-color: var(--warning-bg);
+	color: var(--warning-text);
+	border-color: var(--warning-border);
+}
+
+/* ==========================================================================
+ *  NAVIGATION BAR (#course-nav)
+ * ========================================================================== */
+#course-nav {
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-start;
+	align-items: center;
+	width: 60px;
+	padding: 15px 5px;
+	background-color: var(--bg-panel);
+	flex-shrink: 0;
+	border-left: 1px solid var(--border-color);
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+
 #course-nav button {
 	background-color: var(--brand);
 	color: var(--brand-text);
 	border: none;
-	border-radius: 50%; /* Circular buttons look nice in vertical bars */
+	border-radius: 50%;
 	cursor: pointer;
-	margin-bottom: 15px; /* Vertical spacing */
+	margin-bottom: 15px;
 	transition: transform 0.2s;
-	width: 50px;
-	height: 50px;
-	font-size: 1.2rem;
+
+	/* ACCESSIBILITY FLOOR: Shrunk to the WCAG 44x44 minimum */
+	width: 44px;
+	height: 44px;
+
 	display: flex;
 	justify-content: center;
 	align-items: center;
@@ -123,106 +234,462 @@ body {
 	transform: scale(1.1);
 }
 
-/* Specific styling for the Reset/Test buttons (Rectangles) */
-#course-nav #reset,
-#course-nav #test {
-	background-color: #dc3545; /* Red for reset */
-	border-radius: 8px;
-	width: 60px;
-	height: auto;
-	padding: 8px 0;
-	font-size: 0.9rem;
+#course-nav button:focus-visible {
+	outline: 4px solid var(--brand-100);
+	outline-offset: 4px;
 }
 
-#course-nav #test {
-	background-color: #6c757d; /* Grey for test */
+#course-nav button:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+	pointer-events: none;
 }
 
-/* Push Reset button to the bottom of the bar using margin-top: auto */
+/* Push Reset button to the bottom */
 .spacer {
-	flex-grow: 1; /* Pushes Reset/Test to bottom */
+	flex-grow: 1;
 }
 
-/* The Iframe */
-#lesson-frame {
-	width: 100%;
-	height: 100%; /* Fill the stage-area */
-	border: none;
-}
-
-/* The Banner */
-#info-banner {
-	display: none; /* Toggled by JS */
-	background-color: #f8d7da;
-	color: #721c24;
-	padding: 10px;
-	text-align: center;
-	border-bottom: 1px solid #f5c6cb;
-	animation: slideDown 0.3s ease;
-}
-
+/* ==========================================================================
+ *  INFO BAR
+ * ========================================================================== */
 #info-bar {
-	flex: 0 0 40px; /* Don't grow, Don't shrink, 40px tall */
+	flex: 0 0 32px;
 	width: 100%;
+	background-color: var(--bg-panel);
+	color: var(--text-main);
+	border-top: 1px solid var(--border-color);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.85rem;
+	font-weight: 500;
+	letter-spacing: 0.5px;
+	padding: 0 15px;
+	box-sizing: border-box;
+	z-index: 1000;
+	box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
 
-	/* Styling to make it visible */
-	background-color: #333; /* Dark background */
-	color: white; /* White text */
-	display: flex; /* Flexbox makes aligning text easy */
-	align-items: center; /* Vertically center the text */
-	padding: 0 20px; /* Add side padding */
-	box-sizing: border-box; /* Ensures padding doesn't widen the bar */
-	z-index: 1000; /* Ensures it sits on top of everything */
+	/* Progress Bar Container Setup */
+	position: relative;
+	overflow: hidden;
+}
 
-	/* Removed position: fixed logic */
+/* The Background Fill */
+#info-bar-fill {
+	position: absolute;
+	top: 0;
+	left: 0;
+	height: 100%;
+	width: 0%; /* JavaScript controls this */
+	background-color: var(--brand);
+	opacity: 0.15; /* Subtle tint so text is perfectly readable */
+	transition: width 0.4s ease-out; /* Smooth animation when turning pages */
+	z-index: 0;
 }
 
 
-/* --- MOBILE RESPONSIVENESS & ZOOM ACCESSIBILITY --- */
-/* Trigger if screen is narrow OR if screen is short (zoomed in) */
+#info-bar-text {
+	position: relative;
+	z-index: 1; /* Pops the text above the background fill */
+}
+
+/* ==========================================================================
+ *  HELP MODAL & MENUS
+ * ========================================================================== */
+#help-overlay {
+	width: 100%;
+	height: 100%;
+	background-color: rgba(0, 0, 0, 0.85);
+	display: none;
+	justify-content: center;
+	align-items: center;
+	z-index: 3000;
+}
+
+#help-modal {
+	background: var(--bg-panel);
+	color: var(--text-main);
+	width: 90%;
+	height: 90%;
+	max-width: 900px;
+	border-radius: 8px;
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+	border: 1px solid var(--border-color);
+}
+
+#help-content {
+	flex-grow: 1;
+	padding: 30px;
+	overflow-y: auto;
+	border-radius: 8px;
+}
+
+/* Help Buttons */
+.help-action-btn {
+	background-color: var(--brand);
+	color: var(--brand-text);
+	border: none;
+	border-radius: 50px;
+	padding: 15px 40px;
+	font-size: 1.2rem;
+	font-weight: bold;
+	cursor: pointer;
+	box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+	transition: background-color 0.2s, transform 0.2s;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	width: 350px;
+	max-width: 90%;
+}
+
+.help-action-btn:hover {
+	background-color: var(--brand-800);
+	transform: scale(1.05);
+}
+
+.help-action-btn:focus-visible {
+	outline: 4px solid var(--brand-100);
+	outline-offset: 4px;
+}
+
+/* Danger Button Overrides */
+#close-help,
+.help-action-btn {
+	background-color: var(--brand);
+	color: var(--brand-text);
+	border: none;
+	border-radius: 50px;
+	padding: 15px 40px;
+	font-size: 1.2rem;
+	font-weight: bold;
+	cursor: pointer;
+	box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+	transition: background-color 0.2s, transform 0.2s;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	width: 350px;
+	max-width: 90%;
+}
+
+/* Specific Hover & Focus */
+#close-help:hover,
+.help-action-btn:hover {
+	background-color: var(--brand-800);
+	transform: scale(1.05);
+}
+
+#close-help:focus-visible,
+.help-action-btn:focus-visible {
+	outline: 4px solid var(--brand-100);
+	outline-offset: 4px;
+}
+
+/* Danger Button Color Overrides */
+#close-help,
+.help-action-btn.danger {
+	background-color: var(--danger);
+	color: #ffffff; /* Explicitly ensure danger text is always white */
+}
+
+#close-help:hover,
+.help-action-btn.danger:hover {
+	background-color: var(--danger-hover);
+}
+
+#close-help:focus-visible,
+.help-action-btn.danger:focus-visible {
+	outline: 4px solid var(--danger-100);
+}
+
+#close-help {
+	align-self: center;
+	margin: 20px 0 0 0;
+	width: auto;
+	min-width: 200px;
+}
+
+.help-action-btn.auto-width {
+	width: auto;
+	padding: 15px 30px;
+}
+
+/* Help Menu Typography & Layout */
+.help-wrapper {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	height: 100%;
+	width: 100%;
+	text-align: center;
+}
+.help-wrapper.centered { justify-content: center; }
+
+.help-title {
+	font-size: 2.5rem;
+	color: var(--text-main);
+	margin-bottom: 10px;
+	border-bottom: 2px solid var(--border-light);
+	padding-bottom: 10px;
+	width: 100%;
+}
+.help-title.no-border { border-bottom: none; }
+
+.help-subtitle {
+	font-size: 1.1rem;
+	color: var(--text-muted);
+	margin-bottom: 20px;
+}
+
+.help-btn-group-col {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	align-items: center;
+	width: 100%;
+	margin-top: 20px;
+}
+
+.help-btn-group-row {
+	display: flex;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 15px;
+	width: 100%;
+	margin-top: 30px;
+}
+
+.help-iframe {
+	flex-grow: 1;
+	width: 100%;
+	max-width: 900px;
+	border: 1px solid var(--border-color);
+	border-radius: 4px;
+	background: var(--bg-main);
+}
+
+/* Help Menu Tables */
+.help-table {
+	width: 90%;
+	max-width: 800px;
+	margin: 0 auto;
+	border-collapse: collapse;
+	background: var(--bg-panel);
+	box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+	border: 1px solid var(--border-color);
+	font-size: 1.1rem;
+}
+
+.help-table th {
+	background: var(--bg-main);
+	color: var(--text-main);
+	border-bottom: 2px solid var(--border-color);
+	padding: 15px;
+	text-align: center;
+}
+
+.help-table td {
+	border-bottom: 1px solid var(--border-color);
+	color: var(--text-main);
+	padding: 15px;
+	text-align: center;
+}
+
+.status-pass { color: #198754; font-size: 1.5em; }
+.status-fail { color: #dc3545; font-size: 1.5em; }
+
+/* ==========================================================================
+ * VIDEO PLAYER COMPONENT
+ * ========================================================================== */
+#video-container {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	background: #000000;
+}
+
+#vid-player {
+	flex-grow: 1;
+	object-fit: contain;
+}
+
+#video-controls {
+	display: flex;
+	align-items: center;
+	background: var(--bg-panel);
+	padding: 10px 15px;
+	border-top: 1px solid var(--border-color);
+	gap: 10px;
+	position: relative;
+}
+
+#progress-container {
+	width: 100%;
+	height: 6px;
+	background: var(--border-light);
+	position: absolute;
+	top: -6px; /* Places it directly on top of the control bar */
+	left: 0;
+	z-index: 5;
+}
+
+#progress-fill {
+	height: 100%;
+	background: var(--brand);
+	width: 0%;
+	transition: width 0.1s linear;
+}
+
+.icon-btn {
+	background: transparent;
+	color: var(--text-main);
+	border: none;
+	width: 40px;
+	height: 40px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+	transition: background 0.2s, transform 0.1s;
+}
+
+.icon-btn:hover {
+	background: var(--border-light);
+}
+
+.icon-btn:focus-visible {
+	outline: 3px solid var(--brand);
+	outline-offset: 2px;
+}
+
+.icon-btn svg {
+	width: 24px;
+	height: 24px;
+	fill: currentColor;
+}
+
+.speed-dropdown {
+	background: var(--bg-main);
+	color: var(--text-main);
+	border: 1px solid var(--border-color);
+	padding: 6px 10px;
+	border-radius: 4px;
+	font-weight: bold;
+	cursor: pointer;
+}
+
+/* ==========================================================================
+ *  MOBILE RESPONSIVENESS & ACCESSIBILITY
+ * ========================================================================== */
 @media (max-width: 768px), (max-height: 600px) {
 
-	/* 1. Un-fix the body height so scrolling works */
-	body {
-		height: auto;
-		overflow: auto;
-		display: block;
-	}
-
-	/* 2. Let content flow naturally */
+	/* Stack the navigation on top of the iframe */
 	#lesson-content {
-			flex-direction: column;
-			height: auto;
-			border-radius: 0;
-			border: none;
-			margin: 0;
+		flex-direction: column;
+		border-radius: 0;
+		border: none;
+		margin: 0;
 	}
 
-	/* 3. Reset Nav to Horizontal Row */
+	/* Format the Nav as a horizontal row */
 	#course-nav {
-			flex-direction: row;
-			width: 100%;
-			height: auto;
-			justify-content: center;
-			padding: 10px;
-			border-left: none;
-			border-bottom: 1px solid #ddd;
-			overflow-y: visible;
+		flex-direction: row;
+		width: 100%;
+		height: auto;
+		justify-content: center;
+		padding: 10px;
+		border-left: none;
+		border-bottom: 1px solid var(--border-color);
+		overflow-y: visible;
 	}
+
 	#course-nav button {
-			margin: 0 10px;
-			margin-bottom: 0;
+		margin: 0 10px;
+		margin-bottom: 0;
 	}
 
-	/* 4. Ensure iframe is readable */
+	/* Let the iframe fill the remaining space and handle its own scrolling */
 	#lesson-frame {
-			height: 600px;
-			min-height: 50vh;
+		height: 100%;
 	}
 
-	/* 5. Let bars flow naturally */
-	#top-bar, #info-bar {
-		flex: none;
-		position: static;
+	#help-content {
+		flex-grow: 1;
+		padding: 30px;
+		overflow-y: auto;
+		border-radius: 8px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	* {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+		transform: none !important;
+	}
+}
+
+/* ==========================================================================
+ * CERTIFICATE PRINTING ENGINE
+ * ========================================================================== */
+@media print {
+	/* Remove margins so the print is only one page */
+	html, body {
+		width: 100%;
+		height: 100%;
+		margin: 0 !important;
+		padding: 0 !important;
+		overflow: hidden !important;
+	}
+
+	/* Hide the entire course UI, modals, and banners */
+	body > *:not(#certificate-print-area) {
+		display: none !important;
+	}
+
+	/* Show only the certificate area */
+	#certificate-print-area {
+	display: flex !important;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	text-align: center;
+
+	/* Force it to take up the whole printed page */
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+
+	/* Styling the cert */
+	font-family: 'Georgia', serif; /* Classic certificate font */
+	color: #333 !important;
+	background-color: white !important;
+	padding: 40px;
+	box-sizing: border-box;
+	border: 15px solid var(--brand, #0056b3); /* Uses your brand color for the border */
+	}
+
+	/* Force the printer into Landscape mode and remove default margins */
+	@page {
+		size: landscape;
+		margin: 0.5cm;
+	}
+
+	/* Force background colors to print (fixes Chrome/Safari stripping colors) */
+	body {
+		-webkit-print-color-adjust: exact !important;
+		print-color-adjust: exact !important;
 	}
 }

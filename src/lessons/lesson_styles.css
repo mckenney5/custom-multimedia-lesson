@@ -1,123 +1,254 @@
-:root{
-	--h: 120;
-	--s: 20%;
-	--l-base: 38%;
-	--brand-800: hsl(var(--h) var(--s) calc(var(--l-base) - 18%));
-	--brand-700: hsl(var(--h) var(--s) calc(var(--l-base) - 8%));
-	--brand: hsl(var(--h) var(--s) var(--l-base)); /* #629962 */
-	--brand-100: hsl(var(--h) var(--s) calc(var(--l-base) + 32%));
-	--brand-50:  hsl(var(--h) var(--s) calc(var(--l-base) + 62%));
-	--brand-text: #ffffff
+/* ==========================================================================
+ *  THEME VARIABLES (Course Creators can override these)
+ * ========================================================================== */
+:root {
+	--bg-main: #f7f7f7;
+	--bg-panel: #ffffff;
+	--bg-content: linear-gradient(to right, #f5f5f5, #e0e0e0);
+	--text-main: #333333;
+	--text-muted: #666666;
+	--border-color: #cccccc;
+	--border-light: #eeeeee;
+
+	--brand-h: 120;
+	--brand-s: 20%;
+	--brand-l: 38%;
+	--brand: hsl(var(--brand-h) var(--brand-s) var(--brand-l));
+	--brand-100: hsl(var(--brand-h) var(--brand-s) calc(var(--brand-l) + 32%));
+	--brand-text: #ffffff;
 }
 
-/* The Container for Video + Controls */
+:root[data-theme="dark"] {
+	--bg-main: #121212;
+	--bg-panel: #1e1e1e;
+	--bg-content: #1a1a1a;
+	--text-main: #f1f1f1;
+	--text-muted: #aaaaaa;
+	--border-color: #444444;
+	--border-light: #333333;
+
+	--brand-s: 15%;
+	--brand-l-base: 45%;
+}
+
+:root[data-theme="high-contrast"] {
+	--bg-main: #000000;
+	--bg-panel: #000000;
+	--bg-content: #000000;
+	--text-main: #ffffff;
+	--text-muted: #ffffff;
+	--border-color: #ffffff;
+	--border-light: #ffffff;
+
+	--brand: #ffff00;
+	--brand-800: #cccc00;
+	--brand-100: #ffffff;
+	--brand-text: #000000;
+}
+
+body {
+	background: var(--bg-main);
+	color: var(--text-main);
+}
+
+/* ==========================================================================
+ *  VIDEO PLAYER COMPONENT STYLES
+ * ========================================================================== */
 #video-container {
-	position: relative; /* Allows absolute positioning inside if needed later */
-	width: 100%;
-	max-width: 800px; /* Optional: restricts max width on desktop */
-	margin: 0 auto; /* Centers the player */
-	background: #000; /* Black background for the container itself */
+	position: relative;
+	background-color: #000;
+	display: flex;
+	flex-direction: column;
+	width: 100%; /* Better for responsiveness */
+	max-width: 100%;
+	user-select: none;
 }
 
-/* The Video Element */
 #vid-player {
 	width: 100%;
-	display: block; /* Removes extra space below video */
+	display: block;
+	flex-grow: 1;
+	cursor: pointer;
 }
 
-/* The Control Bar */
 #video-controls {
-	background-color: rgba(0, 0, 0, 0.6); /* Semitransparent Black */
+	position: relative;
+	background-color: rgba(15, 15, 15, 0.95);
 	padding: 10px;
 	display: flex;
-	justify-content: space-around; /* Spreads buttons out */
+	justify-content: space-between;
 	align-items: center;
 	color: white;
-	position: absolute;
-	bottom: 0;
 	width: 100%;
 	box-sizing: border-box;
+	z-index: 20;
+	gap: 8px;
 }
 
-/* Flat Buttons */
-#video-controls button {
+/* Icon Buttons */
+.icon-btn {
 	background: transparent;
 	border: none;
 	color: white;
 	cursor: pointer;
-	font-size: 16px;
-	padding: 5px 10px;
-	border-radius: 4px;
-	transition: background 0.3s;
+	width: 44px; /* WCAG AAA Hit Target */
+	height: 44px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: background-color 0.2s, transform 0.1s;
+	flex-shrink: 0;
 }
 
-/* Visual Feedback on Hover */
-#video-controls button:hover {
-	background: rgba(255, 255, 255, 0.2);
-}
-
-/* Slider Styling */
-#speed-slider {
-	cursor: pointer;
-	margin: 0 10px;
-}
-
-#speed-value {
-	/* 1. Allows the span to accept a width */
-	display: inline-block;
-
-	/* 2. Reserves space for roughly 3-4 characters (e.g., "1.5x") */
-	width: 4ch;
-
-	/* 3. Centers the text inside that reserved space */
-	text-align: center;
-}
-
-#play-pause {
-	/* 1. Allows the span to accept a width */
-	display: inline-block;
-
-	/* 2. Reserves space for roughly 4-5 characters with padding (e.g., " Pause ") */
-	width: 7ch;
-
-	/* 3. Centers the text inside that reserved space */
-	text-align: center;
-}
-
-#time-display {
-	/* font stack, goes left to right until it finds a font */
-	font-family: "Liberation Mono", monospace;
-
-	/* Keeps numbers the same width */
-	font-variant-numeric: tabular-nums;
-}
-
-/* --- Quiz Component --- */
-course-quiz {
+.icon-btn svg {
+	width: 24px;
+	height: 24px;
+	fill: currentColor;
 	display: block;
-	max-width: 800px;
-	margin: 0 auto;
+	margin: 0 auto; /* Centers perfectly */
 }
 
-.question-block {
-	padding: 15px;
-	border: 1px solid #ddd;
-	margin-bottom: 10px;
+.icon-btn:hover { background-color: rgba(255, 255, 255, 0.15); }
+.icon-btn:active { transform: scale(0.95); }
+.icon-btn:focus-visible {
+	outline: 3px solid #0d6efd;
+	outline-offset: 2px;
+}
+
+/* Speed Dropdown */
+.speed-dropdown {
+	background-color: transparent;
+	color: white;
+	border: none;
 	border-radius: 4px;
+	padding: 4px 8px;
+	font-size: 1rem;
+	cursor: pointer;
+	margin-left: auto;
+	margin-right: 10px;
+}
+.speed-dropdown:hover { background-color: rgba(255, 255, 255, 0.15); }
+.speed-dropdown:focus-visible { outline: 3px solid #0d6efd; outline-offset: 2px; }
+.speed-dropdown option { background-color: #222; color: white; }
+
+/* Progress Bar */
+#progress-container {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 3px;
+	background-color: rgba(255, 255, 255, 0.2);
+	pointer-events: none;
+}
+#progress-fill {
+	height: 100%;
+	width: 0%;
+	background-color: #0d6efd;
+	transition: width 0.1s linear;
 }
 
-.question-block.even { background-color: #f9f9f9; }
-.question-block.odd { background-color: #fff; }
+/* Seek Overlay Animation */
+.seek-overlay {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	background: rgba(0, 0, 0, 0.7);
+	color: white;
+	padding: 15px 30px;
+	border-radius: 50px;
+	font-size: 2.5rem;
+	font-weight: bold;
+	pointer-events: none;
+	opacity: 0;
+	z-index: 15;
+}
+.seek-animate { animation: seek-pop 0.4s ease-out forwards; }
+@keyframes seek-pop {
+	0% { opacity: 1; transform: translate(-50%, -50%) scale(0.8); }
+	50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+	100% { opacity: 0; transform: translate(-50%, -50%) scale(1.2); }
+}
+
+/* Fullscreen Overrides */
+#video-container:fullscreen { justify-content: center; background: black; }
+#video-container:fullscreen #video-controls {
+	position: absolute; bottom: 0; left: 0; width: 100%;
+	background-color: rgba(0, 0, 0, 0.7); opacity: 0;
+}
+#fs-hover-trigger { display: none; }
+#video-container:fullscreen #fs-hover-trigger {
+	display: block; position: absolute; bottom: 0; left: 0; width: 100%; height: 15%; z-index: 10;
+}
+#video-container:fullscreen #fs-hover-trigger:hover ~ #video-controls,
+#video-container:fullscreen #video-controls:hover { opacity: 1; }
+
+/* ==========================================================================
+ *  QUIZ COMPONENT STYLES
+ * ========================================================================== */
+.answer-row input[type="radio"],
+.answer-row input[type="checkbox"] {
+	transform: scale(1.5);
+	margin-right: 15px;
+	cursor: pointer;
+	accent-color: var(--brand);
+}
 
 .answer-row {
-	display: inline-block;
-	padding: 5px;
+	display: flex;
+	align-items: center;
+	font-size: 1.15rem;
+	line-height: 1.5;
+	color: var(--text-main);
+	padding: 10px 15px;
 	cursor: pointer;
+	border-radius: 8px;
+	border: 2px solid transparent;
+	transition: background-color 0.2s, border-color 0.2s;
+	margin-bottom: 5px;
+}
+
+.answer-row:hover,
+.answer-row:focus-within {
+	background-color: rgba(128, 128, 128, 0.15);
+	border-color: var(--brand-100);
+}
+
+.question-block input[type="text"] {
+	font-size: 1.15rem;
+	padding: 12px 15px;
+	border: 2px solid #ccc;
+	border-radius: 8px;
+	width: 100%;
+	box-sizing: border-box;
+	transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.question-block input[type="text"]:focus {
+	outline: none;
+	border-color: var(--brand);
+	box-shadow: 0 0 0 4px var(--brand-100);
+}
+
+/* Anti-Cheat Print Block */
+@media print {
+	.quiz-container { display: none !important; }
+	body::before {
+		content: "Printing these course materials is a violation of the academic integrity policy.";
+		display: block;
+		font-size: 24px;
+		font-weight: bold;
+		color: red;
+		text-align: center;
+		margin-top: 50px;
+	}
 }
 
 .btn-submit {
-	background-color: var(--brand); /* #629962 */
-	color: white;
+	background-color: var(--brand);
+	color: var(--brand-text);
 	padding: 10px 20px;
 	border: none;
 	border-radius: 4px;

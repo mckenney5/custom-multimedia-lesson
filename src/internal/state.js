@@ -20,6 +20,9 @@ let state = {
 	lessonFrame: null,	 // Will hold the iframe element
 	infoBanner: null, // Will hold the banner element
 	infoBar: null, // Will hold progress for the user and other info
+	helpOverlay: null, // The overlay of the help window
+	helpContent: null, // Content of the help window
+	isPaused: false, // Flag to pause timers when the user is looking at the help window
 	pauseSave: false, // Flag to pause the save on a reset
 	test: null, // Used for debugging
 	studentName: "",
@@ -28,6 +31,8 @@ let state = {
 	isIdle: false, // Tracks if the user is idle on the site to help balance logs
 	focusTimer: null, // handles timing between focus checks
 	pageAPISecret: null,
+	currentTheme: "light",
+	lastActiveElement: null, // Holds last tabbed element for keyboard use
 	initialized: false,
 
 	init: async function(frameId, bannerId, infoBar) {
@@ -46,30 +51,34 @@ let state = {
 		// Set the date and time of us starting today. TODO consider not using the user for time
 		this.sessionStartTime = Date.now();
 
-		// finds the required iframe and banner
+		// Finds the required iframe and banner
 		this.lessonFrame = document.getElementById(frameId);
 		this.infoBanner = document.getElementById(bannerId);
 		this.infoBar = document.getElementById(infoBar);
 
-		// attempt to load the course (static data)
+		// Set up help window
+		this.helpOverlay = document.getElementById("help-overlay");
+		this.helpContent = document.getElementById("help-content");
+
+		// Attempt to load the course (static data)
 		await this.loadCourseData();
 
-		// attempt to load the saved state
+		// Attempt to load the saved state
 		await this.loadSave();
 
-		// set up API Secret for the pages (auth)
+		// Set up API Secret for the pages (auth)
 		this.pageAPISecret = this.generatePasscode();
 
-		// load last webpage we were on
+		// Load last webpage we were on
 		this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
 
-		// start event listeners and timers
+		// Start event listeners and timers
 		this.startEventListeners();
 
-		// update the UI bar
+		// Update the UI bar
 		this.updateInfo();
 
-		// mark done
+		// Mark done
 		this.initialized = true;
 	},
 
@@ -101,6 +110,42 @@ let state = {
 		// make infoBanner close on click
 		this.infoBanner.addEventListener("click", () => {this.infoBanner.style.display = "none";});
 
+		// Add the Esc key as a shortcut to closing the info banner
+		const handleShortcuts = (e) => {
+			if (e.key === "Escape" || e.code === "Escape") {
+				// Check if Help Modal is open
+				if (this.helpOverlay && this.helpOverlay.style.display === "flex") {
+					e.preventDefault();
+					this.closeHelp();
+				} else if (this.infoBanner.style.display === "flex") {
+					// Check if banner visible
+					e.preventDefault();
+					this.infoBanner.style.display = "none";
+				}
+				// If not visible and not in help, do nothing
+			}
+
+			if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
+				return;
+			}
+
+			// PageDown = Next Page
+			if (e.key === "PageDown") {
+				e.preventDefault();
+				this.next();
+			}
+
+			// PageUp = Previous Page
+			if (e.key === "PageUp") {
+				e.preventDefault();
+				this.prev();
+			}
+
+		};
+
+		// Attach to parent window
+		window.addEventListener("keydown", handleShortcuts);
+
 		// turn on visibility tracking
 		document.addEventListener("visibilitychange", () => {
 			const type = document.hidden ?  "VISIBILITY_HIDDEN" : "VISIBILITY_VISIBLE";
@@ -121,6 +166,7 @@ let state = {
 		};
 
 		const onBlur = () => {
+			if (this.isPaused) return; // Disabled when looking at help menu
 			this.focusTimer = setTimeout(() => {
 				if(!this.isIdle){
 					this.isIdle = true;
@@ -136,10 +182,12 @@ let state = {
 		// assign the focus and blur to iframe if allowed
 		this.lessonFrame.addEventListener("load", () => {
 			try {
+				this.setTheme(this.currentTheme); // Set the theme on each page turn
 				const childWindow = this.lessonFrame.contentWindow;
 				childWindow.addEventListener("focus", onFocus);
 				childWindow.addEventListener("blur", onBlur);
 				childWindow.document.addEventListener("click", onFocus);
+				childWindow.addEventListener("keydown", handleShortcuts); // For info banner
 
 				// assign the focus and blur to parent if possible
 				// browsers will ignore repeat identical event listeners
@@ -155,6 +203,7 @@ let state = {
 
 		// track the time in the course and the current page
 		setInterval(() => {
+			if (this.isPaused) return; // Disabled when looking at help menu
 			if(++this.data.delta.totalCourseSeconds % 60 == 0){
 				if(!debugging) this.save();
 			}
@@ -251,52 +300,56 @@ let state = {
 	},
 
 	updateInfo: function (){
-		// updates the info bar on the bottom of the UI
+		// Updates the info bar on the bottom of the UI
 		const currentPage = this.data.delta.currentPageIndex+1;
 		const pageCount = this.data.pages.length;
-		const progress = Math.round((this.data.delta.progress/(this.data.pages.length-1))*100);
 
-		this.infoBar.innerHTML = `<p>Page: ${currentPage}/${pageCount} (${progress}%)</p>`;
+		// Prevent divide-by-zero if there is only 1 page in the whole course
+		const totalSteps = Math.max(1, pageCount - 1);
+		const progress = Math.round((this.data.delta.progress / totalSteps) * 100);
+
+		// Inject the background fill div and the text span
+		this.infoBar.innerHTML = `
+			<div id="info-bar-fill" style="width: ${progress}%;"></div>
+			<span id="info-bar-text">Page ${currentPage} of ${pageCount} &nbsp;&nbsp;&bull;&nbsp;&nbsp; ${progress}% Complete</span>
+		`;
 	},
 
 	handleLastPage: function(){
-		if(this.checkCourseCompletion()){
-			// if all the course rules are met
+		// Checks if we are done with the course
+		if(!this.checkCourseCompletion()) return false;
 
-			// Calculate score
-			const grade = this.calculateOverallGrade();
-			const gradeString = String(grade.ratio * 100); // <-- percentage grade as a string
-			journaler.log("COURSE_COMPLETE", gradeString);
-			journaler.transmit("FINAL", journaler.report().join("\n"), true); // <-- send final data, send expanded analytics as a CSV, high priority
+		// Calculate score and log
+		const grade = this.calculateOverallGrade();
+		const gradeString = String(Math.round(grade.ratio * 100));
+		journaler.log("COURSE_COMPLETE", gradeString);
+		journaler.transmit("FINAL", journaler.report().join("\n"), true);
 
-			lms.setScore(grade.earnedScore, grade.maxScore); // <-- send course score to the LMS
+		lms.setScore(grade.earnedScore, grade.maxScore);
 
-			const minimumGrade = this.data.courseRules.minimumGrade;
-			const completeOnly = this.data.courseRules.completeOnly;
-			const studentsCanFail = this.data.courseRules.studentsCanFail;
+		const minimumGrade = this.data.courseRules.minimumGrade;
+		const completeOnly = this.data.courseRules.completeOnly;
+		const studentsCanFail = this.data.courseRules.studentsCanFail;
 
-			if(completeOnly){
-				lms.setStatus("completed");
-			} else if(studentsCanFail){
-				if(grade.ratio < minimumGrade){
-					lms.setStatus("failed");
-				} else {
-					lms.setStatus("passed");
-				}
+		let hasPassed = true;
+
+		if(completeOnly){
+			lms.setStatus("completed");
+		} else if(studentsCanFail){
+			if(grade.ratio < minimumGrade){
+				lms.setStatus("failed");
+				hasPassed = false;
 			} else {
-				// we made it to the end and the student did not do well enough
-				// break the sad news, restart the course
-				alert(`You did not score high enough (you got a ${gradeString}% and needed a ${grade.ratio * 100}%). Click okay to retry`);
-				this.reset(); // TODO find a nicer way to do this and probably log attempts, like a soft reset
+				lms.setStatus("passed");
 			}
-
-			// Show the last page
-			this.data.delta.currentPageIndex = this.data.pages.length -1 ;
-			this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
-			return true;
 		} else {
-			return false;
+			// If they can't fail, but didn't meet the score, we treat it as a fail/retry state
+			hasPassed = grade.ratio >= minimumGrade;
 		}
+
+		// Show final screen
+		this.showEndScreen(hasPassed, gradeString, Math.round(minimumGrade * 100));
+		return true;
 	},
 
 	finalizePage: function(){
@@ -315,22 +368,19 @@ let state = {
 	},
 
 	advancePage: function(){
-		// Can you tell I had so many off by one bugs?
-		const lastPage = this.data.pages.length-1;
-		const secondToLastPage = lastPage -1;
+		// Goes to the next page
+		const lastPage = this.data.pages.length - 1;
 		const currentPage = this.data.delta.currentPageIndex;
 
-		if(currentPage === secondToLastPage){
-			// see if we can finish the course
+		if(currentPage === lastPage){
+			// If we are on the final page, try to finish the course
 			if(this.checkCourseCompletion()){
 				this.handleLastPage();
 			} else {
-				this.bannerMessage("You have not finished all course requirements. Review your work and try again");
+				this.bannerMessage("You have not finished all course requirements. Review your work and try again.");
 			}
-		} else if(currentPage === lastPage){
-			// Do nothing. We are at the end of the pages
 		} else {
-			// if the next page is just another page
+			// Just go to the next page
 			this.data.delta.currentPageIndex += 1;
 			this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
 		}
@@ -341,7 +391,7 @@ let state = {
 			console.error("Cannot go to next page until the state is initialized. Run state.init() first");
 			return false;
 		}
-		this.infoBanner.style.display = ""; //reset banner
+		this.infoBanner.style.display = "none"; //reset banner
 
 		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
 
@@ -460,8 +510,8 @@ let state = {
 		window.document.body.innerHTML = "<h2>Course disabled</h2>";
 
 		// remove event listeners
-		window.onbeforeunload = () => console.log("Stoping prompt");
-		window.onunload = () => console.log("Stoping quit");
+		window.onbeforeunload = () => console.log("Stopping prompt");
+		window.onunload = () => console.log("Stopping quit");
 
 		// nuke the state and its modules
 		state = "";
@@ -625,6 +675,8 @@ let state = {
 							questions: compConfig.questions,
 							userAnswers: compState.userAnswers || {},
 							attemptsLeft: page.completionRules.attempts - (compState.attempts || 0),
+							options: compConfig.options || [],
+							hasAttempted: (compState.attempts || 0) > 0,
 						};
 						// Send with ID
 						this.lessonFrame.contentWindow.postMessage({
@@ -746,13 +798,28 @@ let state = {
 	},
 
 	bannerMessage: function(message, isError=true){
+		// Shows a message in a banner at the top center
+
+		let role = "";
+		let icon = "";
+
 		if(isError){
-			this.infoBanner.style = "background-color: #f8d7da; color: #721c24;";
+			this.infoBanner.className = "error";
+			icon = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
+			role = "alert";
 		} else {
-			this.infoBanner.style = "background-color: #fff3cd; color: #856404;";
+			this.infoBanner.className = "warning";
+			icon = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>';
+			role = "status";
 		}
-		this.infoBanner.innerHTML = `<p>${message}</p>`;
-		this.infoBanner.style.display = "block";
+
+		this.infoBanner.innerHTML = `
+			${icon}
+			<span role="${role}">${message}</span>
+		`;
+
+		// Displays using Flexbox so the icon and text aligns perfectly
+		this.infoBanner.style.display = "flex";
 	},
 
 	log: function(message){
@@ -874,6 +941,353 @@ let state = {
 			console.error("Failed to load course data: ", error);
 		}
 	},
+
+	toggleHelp: function(){
+		// Makes the ? nav button toggle from showing help menu or closing it
+		if (this.helpOverlay.style.display === "flex") {
+			this.closeHelp();
+		} else {
+			this.showHelpMenu();
+		}
+	},
+
+	showHelpMenu: function(){
+		// Displays the help menu from the ? nav button
+
+		this.lastActiveElement = document.activeElement; // Save last tabbed element
+		this.isPaused = true;
+		this.lessonFrame.style.display = "none";
+		this.helpOverlay.style.display = "flex";
+
+		// Disable the navigation while the help menu is up
+		document.getElementById("prev").disabled = true;
+		document.getElementById("next").disabled = true;
+
+		this.helpContent.innerHTML = `
+			<div class="help-wrapper centered">
+				<h1 id="modal-title" class="help-title no-border">Course Help</h1>
+				<p class="help-subtitle" style="margin-bottom: 40px;">Select an option below to continue.
+				<br><br> If you run into an issue during the course,
+				go through each menu, from top to bottom, until the issue is resolved</p>
+				<div class="help-btn-group-col">
+					<button class="help-action-btn" onclick="state.showPageHelp()">
+						📄 Help with Current Page
+					</button>
+
+					<button class="help-action-btn" onclick="state.showGeneralHelp()">
+						❓ General Course Help
+					</button>
+
+					<button class="help-action-btn" onclick="state.refreshBrowser()">
+					🔄 Refresh This Web Page
+					</button>
+
+					<button class="help-action-btn danger" onclick="state.reset()">
+						⚠️ Reset Course Progress
+					</button>
+				</div>
+			</div>
+		`;
+
+		// Move tab selection
+		setTimeout(() => {
+			const closeBtn = document.getElementById("close-help");
+			if (closeBtn) closeBtn.focus();
+		}, 50);
+	},
+
+	showPageHelp: function(){
+		// A menu to show page rules to the user to see whats left
+		const page = this.data.pages[this.data.delta.currentPageIndex];
+		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
+		const rules = page.completionRules;
+		const scorePct = page.maxScore > 0 ? (pageDelta.score / page.maxScore) : 0;
+
+		let quizzesSatisfied = true;
+		if (rules.requireSubmission) {
+			const quizComponents = (page.components || []).filter(c => c.type === "quiz");
+			quizzesSatisfied = quizComponents.every(q => pageDelta.components[q.id] && pageDelta.components[q.id].completed);
+		}
+
+		const checks = {
+			watchTime: pageDelta.watchTime >= rules.watchTime,
+			score: scorePct >= rules.score,
+			scrolled: !rules.scrolled || pageDelta.scrolled,
+			videoProgress: pageDelta.videoProgress >= rules.videoProgress,
+			requireSubmission: quizzesSatisfied,
+		};
+
+		// Uses the new CSS classes for the checkmarks!
+		const formatIcon = (passed) => passed ? '<span aria-hidden="true" class="status-pass">✅</span>' : '<span aria-hidden="true" class="status-fail">❌</span>';
+
+		let html = `
+			<div class="help-wrapper">
+			<h1 class="help-title">Page Completion Requirements</h1>
+			<p class="help-subtitle">Review the requirements below. You must complete all items marked with an ❌ to unlock the next page.</p>
+
+			<table class="help-table">
+			<tr>
+			<th>Requirement</th>
+			<th>Target</th>
+			<th>Current Progress</th>
+			<th>Status</th>
+			</tr>
+		`;
+
+		if (rules.watchTime > 0) html += `<tr><td>Time on Page</td><td>${rules.watchTime} seconds</td><td>${pageDelta.watchTime} seconds</td><td>${formatIcon(checks.watchTime)}</td></tr>`;
+		if (rules.score > 0) html += `<tr><td>Minimum Score</td><td>${Math.round(rules.score * 100)}%</td><td>${Math.round(scorePct * 100)}%</td><td>${formatIcon(checks.score)}</td></tr>`;
+		if (rules.scrolled) html += `<tr><td>Read Entire Article</td><td>Scroll to Bottom</td><td>${pageDelta.scrolled ? "Scrolled" : "Not Scrolled"}</td><td>${formatIcon(checks.scrolled)}</td></tr>`;
+		if (rules.videoProgress > 0) html += `<tr><td>Watch Video</td><td>${Math.round(rules.videoProgress * 100)}%</td><td>${Math.round(pageDelta.videoProgress * 100)}%</td><td>${formatIcon(checks.videoProgress)}</td></tr>`;
+		if (rules.requireSubmission) html += `<tr><td>Submit Quizzes</td><td>Submit all</td><td>${quizzesSatisfied ? "Submitted" : "Pending"}</td><td>${formatIcon(checks.requireSubmission)}</td></tr>`;
+
+		html += `</table>
+			<div class="help-btn-group-row">
+				<button class="help-action-btn auto-width" onclick="state.showPageHelp()">🔄 Refresh Status</button>
+				<button class="help-action-btn auto-width" onclick="state.showHelpMenu()">&larr; Back to Menu</button>
+				</div>
+			</div>
+		`;
+
+		this.helpContent.innerHTML = html;
+	},
+
+	showGeneralHelp: function(){
+		// Opens the help page on how to navigate the course
+		this.helpContent.innerHTML = `
+			<div class="help-wrapper">
+			<iframe src="help.html" class="help-iframe"></iframe>
+			<div class="help-btn-group-row" style="margin-top: 15px;">
+				<button class="help-action-btn auto-width" onclick="state.showHelpMenu()">&larr; Back to Menu</button>
+			</div>
+			</div>
+		`;
+	},
+
+	closeHelp: function(){
+		// Closes the Help (aka ?) menu and Settings menu
+		this.helpOverlay.style.display = "none";
+		this.helpContent.innerHTML = "";
+		this.lessonFrame.style.display = "block";
+		this.isPaused = false; // Unfreeze analytics
+
+		// Reenable course navigation
+		document.getElementById("prev").disabled = false;
+		document.getElementById("next").disabled = false;
+
+		// Move tabbed element back
+		if (this.lastActiveElement) {
+			this.lastActiveElement.focus();
+			this.lastActiveElement = null;
+		}
+	},
+
+	showEndScreen: function(hasPassed, scoreString, requiredScoreString) {
+		// End of course pop up
+
+		this.isPaused = true;
+		this.lessonFrame.style.display = "none";
+		this.helpOverlay.style.display = "flex";
+
+		// Lock navigation
+		document.getElementById("prev").disabled = true;
+		document.getElementById("next").disabled = true;
+		this.lastActiveElement = document.activeElement;
+
+		const certConfig = this.data.courseRules.certificate || {};
+		const showCertButton = hasPassed && certConfig.enabled;
+
+		// Build the messaging based on pass/fail
+		let title = hasPassed ? "🎉 Course Completed!" : "⚠️ Course Incomplete";
+		let message = hasPassed
+			? `Congratulations! You have successfully finished the course with a score of <strong>${scoreString}%</strong>.`
+			: `You reached the end, but you scored <strong>${scoreString}%</strong>. A score of <strong>${requiredScoreString}%</strong> is required to pass.`;
+
+		let certButtonHTML = showCertButton
+			? `<button class="help-action-btn" onclick="state.printCertificate()" style="background-color: var(--brand); color: var(--brand-text);">🖨️ Print Certificate</button>`
+			: "";
+
+		this.helpContent.innerHTML = `
+		<div class="help-wrapper centered" style="text-align: center;">
+			<h1 id="modal-title" class="help-title no-border">${title}</h1>
+			<p class="help-subtitle" style="margin-bottom: 30px; font-size: 1.2rem;">${message}</p>
+
+			<div class="help-btn-group-col" style="align-items: center;">
+				${certButtonHTML}
+				<button class="help-action-btn auto-width" onclick="state.closeHelp()">🔙 Review Course Materials</button>
+				<button class="help-action-btn danger auto-width" onclick="state.quit()">🚪 Exit Course</button>
+				</div>
+		</div>
+		`;
+
+		setTimeout(() => {
+			const closeBtn = document.getElementById("close-help");
+			if (closeBtn) closeBtn.focus();
+		}, 50);
+	},
+
+	printCertificate: function() {
+		// Generates and prints the end of course cert
+		const certConfig = this.data.courseRules.certificate || {};
+		const printArea = document.getElementById("certificate-print-area");
+
+		if (!printArea) {
+			console.error("Unable to find print area for the cert!");
+			return;
+		}
+
+		// Gather our template variables
+		const student = this.studentName || "Student";
+		const scoreString = String(Math.round(this.calculateOverallGrade().ratio * 100));
+		const dateString = new Date().toLocaleDateString();
+
+		// Time tracking
+		const totalSeconds = this.data.delta.totalCourseSeconds || 0;
+		const totalMinutes = String(Math.floor(totalSeconds / 60));
+		// Uses parseFloat to cleanly drop trailing zeros (e.g., 1.50 becomes 1.5)
+		const totalHours = String(parseFloat((totalSeconds / 3600).toFixed(2)));
+		const minimumLength = String(this.data.courseRules.minimumMinutes || 0);
+
+		// Text Replacer Engine
+		const titleText = certConfig.title || "Certificate of Completion";
+		let bodyText = certConfig.body || "This certifies that {{studentName}} completed the course on {{date}} with a score of {{score}}%.";
+
+		bodyText = bodyText.replace(/{{studentName}}/g, student);
+		bodyText = bodyText.replace(/{{score}}/g, scoreString);
+		bodyText = bodyText.replace(/{{date}}/g, dateString);
+		bodyText = bodyText.replace(/{{totalMinutes}}/g, totalMinutes);
+		bodyText = bodyText.replace(/{{totalHours}}/g, totalHours);
+		bodyText = bodyText.replace(/{{minimumLength}}/g, minimumLength);
+		bodyText = bodyText.replace(/\n/g, "<br>");
+
+		// Optional Image Engine (Checks if the variables exist in JSON)
+		const logoHTML = certConfig.logoUrl
+			? `<img src="${certConfig.logoUrl}" style="max-height: 80px; margin-bottom: 20px;" alt="" />`
+			: "";
+
+		const signatureHTML = certConfig.signatureUrl
+			? `
+			<div style="width: 250px; font-size: 1.2rem;">
+				<div style="border-bottom: 2px solid #333; height: 50px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 5px;">
+					<img src="${certConfig.signatureUrl}" style="max-height: 45px; margin-bottom: -2px;" alt="Signature" />
+				</div>
+				Instructor Signature
+			</div>
+			`
+			: "";
+
+		const watermarkHTML = certConfig.watermarkUrl
+			? `<img src="${certConfig.watermarkUrl}" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 75%; max-height: 75%; opacity: 0.12; z-index: 0; pointer-events: none;" alt="" />`
+			: "";
+
+		// Inject the HTML (Using Flexbox to align the bottom columns perfectly)
+		printArea.innerHTML = `
+		${watermarkHTML}
+
+		<h1 style="position: absolute; top: 30px; left: 50%; transform: translateX(-50%); width: 100%; max-width: 900px; text-align: center; z-index: 10; padding-bottom: 15px; margin: 0; font-size: 3.5rem; text-transform: uppercase; letter-spacing: 2px;">
+		${titleText}
+		</h1>
+
+		<div style="position: relative; z-index: 1; margin: 130px auto; width: 100%; max-width: 900px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+		${logoHTML}
+		<p style="font-size: 1.8rem; line-height: 1.6; margin: 0;">
+		${bodyText}
+		</p>
+		</div>
+
+		<div style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; justify-content: space-around; align-items: flex-end; width: 100%; max-width: 900px; z-index: 10; padding-top: 15px;">
+
+		<div style="width: 250px; font-size: 1.2rem;">
+		<div style="border-bottom: 2px solid #333; height: 50px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; margin-bottom: 5px;">
+		${dateString}
+		</div>
+		Date
+		</div>
+
+		<div style="width: 250px; font-size: 1.2rem;">
+		<div style="border-bottom: 2px solid #333; height: 50px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; margin-bottom: 5px;">
+		${scoreString}%
+		</div>
+		Score
+		</div>
+
+		${signatureHTML}
+		</div>
+			`;
+
+		// Trigger the browser's native print dialog
+		window.print();
+	},
+
+	toggleSettings: function(){
+		if (this.helpOverlay.style.display === "flex") {
+			this.closeHelp(); // We reuse closeHelp since it just closes the modal
+		} else {
+			this.showSettingsMenu();
+		}
+	},
+
+	showSettingsMenu: function(){
+		// Very similar to the Help (?) button
+
+		this.lastActiveElement = document.activeElement; // Save tab selection
+		this.isPaused = true;
+		this.lessonFrame.style.display = "none";
+		this.helpOverlay.style.display = "flex";
+
+		document.getElementById("prev").disabled = true;
+		document.getElementById("next").disabled = true;
+
+		// Check the current theme so the dropdown shows the correct active choice
+		const lightSel = this.currentTheme === "light" ? "selected" : "";
+		const darkSel = this.currentTheme === "dark" ? "selected" : "";
+		const hcSel = this.currentTheme === "high-contrast" ? "selected" : "";
+
+		this.helpContent.innerHTML = `
+			<div class="help-wrapper centered">
+				<h1 id="modal-title" class="help-title no-border">Course Settings</h1>
+				<p class="help-subtitle" style="margin-bottom: 40px;">Adjust your course preferences below.</p>
+
+				<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; width: 100%; max-width: 350px;">
+					<label for="theme-select" style="font-size: 1.2rem; font-weight: bold; color: var(--text-main);">Color Theme</label>
+					<select id="theme-select" onchange="state.setTheme(this.value)" style="width: 100%; padding: 12px; font-size: 1.1rem; border-radius: 8px; border: 2px solid var(--border-color); background: var(--bg-main); color: var(--text-main); cursor: pointer;">
+					<option value="light" ${lightSel}>Light Mode (Default)</option>
+					<option value="dark" ${darkSel}>Dark Mode</option>
+					<option value="high-contrast" ${hcSel}>High Contrast</option>
+					</select>
+				</div>
+			</div>
+		`;
+
+		// Move tab selection
+		setTimeout(() => {
+			const closeBtn = document.getElementById("close-help");
+			if (closeBtn) closeBtn.focus();
+		}, 50);
+	},
+
+	refreshBrowser: function(){
+		// A simple button to refresh the web page for the user
+		// Force a save just in case
+		this.save();
+
+		// Reload the entire web app. The main page leaving event will prompt
+		window.location.reload();
+	},
+
+	setTheme: function(themeName){
+		this.currentTheme = themeName;
+
+		// Apply to the parent HTML tag
+		if (themeName === "light") {
+			document.documentElement.removeAttribute("data-theme");
+		} else {
+			document.documentElement.setAttribute("data-theme", themeName);
+		}
+
+		// Send it to the child iframe
+		this.sendMessage("SET_THEME", themeName);
+	},
+
 };
 
 // --- End of Objects ---
