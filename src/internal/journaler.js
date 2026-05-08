@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 const journaler = {
 	/* Takes in data, encodes, and decodes, and translates */
 	_delimiter: "^",
@@ -165,7 +166,7 @@ const journaler = {
 		return new TextDecoder().decode(decompressed);
 	},
 
-	_getOffest: function(){
+	_getOffset: function(){
 		/* Calculates Date.now() - _startTime, converts it to seconds, and returns it as a Base36 string. Used for logging timestamps. */
 		const offsetMS = Date.now() - this._startTime;
 		const offsetS = Math.floor(offsetMS/1000);
@@ -224,7 +225,7 @@ const journaler = {
 
 	log: function(action, value){
 		/* The Main Recorder. Accepts a code (e.g., "NAV") and a value (e.g., "2"). Automatically calculates the time offset and pushes the compressed string to the buffer. */
-		const timeStamp = this._toBase36(this._getOffest());
+		const timeStamp = this._toBase36(this._getOffset());
 		const encoded = this._encoding[action];
 
 		// convert the object
@@ -245,7 +246,7 @@ const journaler = {
 		const userID = userIDNum || this._userID;
 		const log = fullLog || this._currentLog;
 
-		this.startTime = baseTime; //if we are running in stand alone, we need a time ref
+		this._startTime = baseTime; //if we are running in stand alone, we need a time ref
 		// TODO calculate start time from the first log entry, that entry should contain the unix time
 
 		const rows = log.map(r => {
@@ -296,12 +297,16 @@ const journaler = {
 	sanitize: function(str){
 		// Removes delimiters from the string
 		// Currently replaces them with nothing
+		
+		// Coerce to string to handle non-string inputs gracefully (null, undefined, numbers)
+		const s = String(str);
+		
 		const filter = [this._delimiter, this._logDelimiter, this._logHeadDelimiter];
 
 		let clean = "";
-		for(let i = 0; i < str.length; i++){
-			if(!filter.includes(str[i])){
-				clean += str[i];
+		for(let i = 0; i < s.length; i++){
+			if(!filter.includes(s[i])){
+				clean += s[i];
 			}
 		}
 		return clean;
@@ -342,9 +347,15 @@ const journaler = {
 
 		if(saveString.startsWith(this._compressionPrefix) && !this._supportsCompression){
 			//if the user started this course on a modern browser but loaded progress on an old one...
-			const reset = state.alert("IMPORTANT: Your progress cannot be reloaded on this browser. Continuing will wipe your progress. Are you sure you want to RESTART THE COURSE?");
-			if(!reset){
-				state.lockDown();
+			if (typeof state !== "undefined" && state.alert) {
+				const reset = state.alert("IMPORTANT: Your progress cannot be reloaded on this browser. Continuing will wipe your progress. Are you sure you want to RESTART THE COURSE?");
+				if(!reset){
+					if (state.lockDown) state.lockDown();
+					return null;
+				}
+			} else {
+				// state not available, cannot confirm with user - fail safely
+				console.error("Journaler: Cannot decompress and state module not available for user confirmation");
 				return null;
 			}
 		}
