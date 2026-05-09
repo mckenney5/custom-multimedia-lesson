@@ -19,7 +19,7 @@ const child = {
 			const index = this.eventList.findIndex(e => e.event === eventName &&
 				e.funcName === functionPtr);
 			if(index === -1){
-				console.warn(`Could not remove event '${type}': Listener not found.`);
+				console.warn(`Could not remove event '${eventName}': Listener not found.`);
 				return;
 			}
 
@@ -110,12 +110,18 @@ const child = {
 			return;
 		}
 		// FIXED: Include 'id' in the postMessage payload
-		window.parent.postMessage({
+		const message = {
 			type: subject,
 			message: body,
-			code: this.pageAPICode,
-			id: id,
-		}, this.parentOrigin);
+			code: this.pageAPICode
+		};
+		
+		// Only include id if it's not null or undefined
+		if(id !== null && id !== undefined){
+			message.id = id;
+		}
+		
+		window.parent.postMessage(message, this.parentOrigin);
 	},
 
 	receive: function(event){
