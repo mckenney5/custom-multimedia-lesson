@@ -8,7 +8,7 @@ const { expect } = require('@playwright/test');
  */
 async function setupPage(page) {
   await page.goto('http://localhost:8080');
-  await page.waitForFunction(() => typeof journaler !== 'undefined');
+  await page.waitForFunction(() => typeof journaler !== 'undefined' && typeof lms !== 'undefined');
   return page;
 }
 

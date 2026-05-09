@@ -5,6 +5,9 @@ let lms = {
 
 	init: function(lmsType="detect") {
 		// set or detects the LMS type
+
+		if(this.initialized) console.warn("LMS already initialized");
+
 		if(lmsType === "detect"){
 			let connected = false;
 			if(window.pipwerks){
@@ -66,7 +69,7 @@ let lms = {
 
 	setScore: function(score, maxScore){
 		if(!this.initialized) return false;
-		this.driver.setScore(score, maxScore);
+		return this.driver.setScore(score, maxScore);
 	},
 
 	setStatus: function(status){
@@ -96,12 +99,17 @@ let Scorm12Adapter = {
 		let errCode = pipwerks.SCORM.debug.getCode();
 		let errInfo = pipwerks.SCORM.debug.getInfo(errCode);
 		let errDiag = pipwerks.SCORM.debug.getDiagnosticInfo(errCode);
-		const err = new Error(`${this.name} LMS Errror [${errCode}] '${errInfo}'. Diagnostic Details: '${errDiag}'.`);
+		const err = new Error(`${this.name} LMS Error [${errCode}] '${errInfo}'. Diagnostic Details: '${errDiag}'.`);
 		console.error(`${err}\nStack --> ${err.stack}`);
 		return (errCode == "0"); //return true on no error
 	},
 
 	_dataOverLimit: function(data, limit){
+		// Handle non-string data (null, undefined, numbers, etc.) as over limit
+		if(typeof data !== "string"){
+			console.error("Save data must be a string, received: " + typeof data);
+			return true;
+		}
 		if(data.length > limit){
 			console.error(`Save data of ${data.length} chars is over the limit of ${limit}! Save rejected.`);
 			return true;
@@ -112,7 +120,7 @@ let Scorm12Adapter = {
 	},
 
 	_commit: function(){
-		if(debugging) console.log("Sending changes to LMS");
+		if(typeof debugging !== 'undefined' && debugging) console.log("Sending changes to LMS");
 		const status = pipwerks.SCORM.save();
 		if(!status) this._throwError();
 		return status;
@@ -125,14 +133,22 @@ let Scorm12Adapter = {
 	},
 
 	_formatTime: function(ms){
-		// SCORM 1.2 requires HHHH:MM:SS.SS
+		// SCORM 1.2 requires HHHH:MM:SS.SS (4-digit hours)
+		// Handle edge cases: negative, NaN, Infinity all become 0
+		ms = ms < 0 || !isFinite(ms) ? 0 : ms;
 		let totalSeconds = ms / 1000;
 		let hh = Math.floor(totalSeconds / 3600);
 		let mm = Math.floor((totalSeconds % 3600) / 60);
 		let ss = (totalSeconds % 60).toFixed(2);
 
-		if(hh < 1000) hh = "00" + hh;
-		if(hh.length > 4) hh = hh.substr(hh.length - 4);
+		// Convert to string and pad to 4 digits
+		hh = hh.toString();
+		if(hh.length < 4){
+			hh = "0".repeat(4 - hh.length) + hh;
+		}
+		// Truncate to last 4 digits if over 9999
+		if(hh.length > 4) hh = hh.slice(-4);
+
 		if(mm < 10) mm = "0" + mm;
 		if(ss < 10) ss = "0" + ss;
 
@@ -203,11 +219,16 @@ let Scorm12Adapter = {
 	setScore: function(score, maxScore){
 		// SCORM 1.2 expects an int (percent), not a float
 		// Input: 0.85, 1.0 -> Output: 85
+		if(maxScore <= 0){
+			console.error(`${this.name} setScore: maxScore must be greater than 0`);
+			return false;
+		}
 		let raw = Math.round((score / maxScore) * 100);
-		this._set("cmi.core.score.raw", raw);
-		this._set("cmi.core.score.max", 100);
-		this._set("cmi.core.score.min", 0);
-		this._commit();
+		let success = this._set("cmi.core.score.raw", raw);
+		if(success) success = this._set("cmi.core.score.max", 100);
+		if(success) success = this._set("cmi.core.score.min", 0);
+		if(success) this._commit();
+		return success;
 	},
 
 	setStatus: function(status){
@@ -288,8 +309,12 @@ let LocalStorageAdapter = {
 	},
 
 	setScore: function(score, maxScore){
+		if(maxScore <= 0){
+			console.error(`${this.name} setScore: maxScore must be greater than 0`);
+			return false;
+		}
 		this._log(`Setting Score: ${score}/${maxScore}`);
-		this._set("score", score);
+		return this._set("score", score);
 	},
 
 	setStatus: function(status){
