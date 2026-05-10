@@ -10,30 +10,32 @@ class CourseComponent extends HTMLElement {
 	// --- LIFECYCLE HOOKS ---
 
 	connectedCallback() {
-		// Browser calls this when element is added to DOM
-		if (!this.rendered) {
-			this.render();
-			this.attachListeners();
+		try {
+			if (!this.rendered) {
+				this.render();
+				this.attachListeners();
 
-			// Listen for student data updates automatically
-			this._boundDataHandler = this.handleStudentData.bind(this);
-			window.addEventListener("student-data", this._boundDataHandler);
+				this._boundDataHandler = this.handleStudentData.bind(this);
+				window.addEventListener("student-data", this._boundDataHandler);
 
-			this.rendered = true;
+				this.rendered = true;
+			}
+		} catch (e) {
+			console.error(`[${this.tagName}] Error in connectedCallback:`, e);
 		}
 	}
 
 	disconnectedCallback() {
-		// Browser calls this when element is removed
-		// Good place to stop timers or remove global listeners
-		// Cleanup listener
-		if(this._boundDataHandler){
-			window.removeEventListener("student-data", this._boundDataHandler);
-		}
+		try {
+			if(this._boundDataHandler){
+				window.removeEventListener("student-data", this._boundDataHandler);
+			}
 
-		// Stop text to speech in components
-		if ("speechSynthesis" in window) {
-			window.speechSynthesis.cancel();
+			if ("speechSynthesis" in window) {
+				window.speechSynthesis.cancel();
+			}
+		} catch (e) {
+			console.error(`[${this.tagName}] Error in disconnectedCallback:`, e);
 		}
 	}
 
@@ -75,10 +77,8 @@ class CourseComponent extends HTMLElement {
 	}
 
 	handleStudentData(event) {
-		const data = event.detail; // { name: "...", grade: "..." }
-		// Default behavior: Do nothing.
-		// Child classes (like CourseQuiz) will override this.
-		console.log(`[${this.tagName}] Received data for ${data.name}`);
+		const data = event.detail;
+		if (!data) return;
 	}
 
 	// 1. UPDATE CourseComponent 'send' method
@@ -197,7 +197,6 @@ class CourseVideo extends CourseComponent {
 		// Cache references to elements so we don't querySelector every time
 		this.videoElem = this.querySelector("#vid-player");
 		this.playBtn = this.querySelector("#play-pause");
-		this.seekSlider = this.querySelector("#slider-seek");
 		this.timeDisplay = this.querySelector("#time-display");
 		this.rewindButton = this.querySelector("#rewind");
 		this.forwardButton = this.querySelector("#forward");
@@ -445,7 +444,9 @@ class CourseVideo extends CourseComponent {
 			}
 
 			const currentTime = this.videoElem.currentTime;
-			const duration = this.videoElem.duration || 0; // Handle NaN if loading
+			const duration = this.videoElem.duration || 0;
+
+			if (!duration || !isFinite(duration)) return;
 
 			const pct = (currentTime / duration);
 
@@ -463,10 +464,12 @@ class CourseVideo extends CourseComponent {
 			if (this.activePlayMs > 0) {
 				const avgSpeed = (this.weightedSpeedSum / this.activePlayMs).toFixed(2);
 				const visiblePct = Math.round((this.visiblePlayMs / this.activePlayMs) * 100);
-				this.send("VIDEO_STATS", {
-					avgSpeed: parseFloat(avgSpeed),
-					visiblePct: visiblePct,
-				});
+				if (window.child && typeof window.child.send === "function") {
+					this.send("VIDEO_STATS", {
+						avgSpeed: parseFloat(avgSpeed),
+						visiblePct: visiblePct,
+					});
+				}
 			}
 		};
 
@@ -503,6 +506,9 @@ class CourseArticle extends CourseComponent {
 		const getInfo = infoRaw.toLocaleLowerCase() === "true" ? true : false;
 
 		if(getInfo){
+			if (this._handleStudentData) {
+				window.removeEventListener("student-data", this._handleStudentData);
+			}
 			this._handleStudentData = this.handleStudentData.bind(this);
 			window.addEventListener("student-data", this._handleStudentData);
 			this.requestStudentData();
@@ -510,6 +516,7 @@ class CourseArticle extends CourseComponent {
 	}
 
 	handleStudentData(event) {
+		if (!event.detail) return;
 		// Override the handler to update the UI
 		const { name, grade } = event.detail;
 
@@ -536,18 +543,21 @@ class CourseArticle extends CourseComponent {
 		this.checkScroll();
 
 		// Set up text to speech if a button called read-article is present
-		this.querySelector("#read-article") ? this.querySelector("#read-article").addEventListener("click", () => {
-			// Grabs all the text inside the article tag and reads it
-			this.speak(this.textContent);
-		}) : NaN;
+		const readBtn = this.querySelector("#read-article");
+		if (readBtn) {
+			readBtn.addEventListener("click", () => {
+				this.speak(this.textContent);
+			});
+		}
 
 	}
 
 	checkScroll() {
 		// Standard "Am I at the bottom?" math
 		// We add a tiny buffer (10px) to handle browser zoom/rounding errors
-		if(document.body.scrollHeight === 0) return; //HACK
+		if(document.body.scrollHeight === 0) return; // Guard against unrendered content
 
+		// We use body instead of documentElement since this lives in an iframe
 		const distanceToBottom = document.body.scrollHeight - (window.scrollY + window.innerHeight);
 
 		if (distanceToBottom <= 10) {
@@ -561,8 +571,12 @@ class CourseArticle extends CourseComponent {
 
 	disconnectedCallback() {
 		// Safety: If the user leaves the page, kill the listener
-		window.removeEventListener("scroll", this._onScroll);
-		window.removeEventListener("student-data", this._handleStudentData);
+		if (this._onScroll) {
+			window.removeEventListener("scroll", this._onScroll);
+		}
+		if (this._handleStudentData) {
+			window.removeEventListener("student-data", this._handleStudentData);
+		}
 		super.disconnectedCallback();
 	}
 }
@@ -602,6 +616,8 @@ class CourseQuiz extends CourseComponent {
 
 	// 2. UPDATE CourseQuiz handlers
 	handleQuizData(event) {
+		if (!event?.detail) return;
+
 		let data = event.detail;
 		let targetId = null;
 
@@ -614,6 +630,8 @@ class CourseQuiz extends CourseComponent {
 		// Filter: If message has a target ID, it MUST match mine
 		const myId = this.getAttribute("id");
 		if (targetId && targetId !== myId) return;
+
+		if (!data) return;
 
 		// Store Data
 		this.attemptsLeft = data.attemptsLeft;
@@ -635,6 +653,8 @@ class CourseQuiz extends CourseComponent {
 
 		const myId = this.getAttribute("id");
 		if (targetId && targetId !== myId) return;
+
+		if (!data) return;
 
 		const { score, maxAttempts } = data;
 
@@ -870,12 +890,9 @@ class CourseQuiz extends CourseComponent {
 
 		this.appendChild(form);
 		if (this.attemptsLeft <= 0) {
-			const btn = this.querySelector(".btn-submit");
-			if(btn) {
-				btn.disabled = true;
-				const score = this.maxScore ? Math.round((this.score/this.maxScore)*100) : "";
-				btn.textContent = `No Attempts Left - Score ${score}`;
-			}
+			btn.disabled = true;
+			const score = this.maxScore ? Math.round((this.score/this.maxScore)*100) : "";
+			btn.textContent = `No Attempts Left - Score ${score}`;
 			// Disable ALL inputs (text, radio, and checkboxes)
 			this.querySelectorAll("input").forEach(el => el.disabled = true);
 		}
