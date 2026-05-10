@@ -45,8 +45,8 @@ let state = {
 		// Set the student's ID
 		this.studentID = lms.getStudentID();
 
-		// Set up journaler
-		if(!journaler.initialized) await journaler.init();
+		// Set up journaler and give it access to the alert and lockdown features for critical events (like possible data corruption)
+		if(!journaler.initialized) await journaler.init(this.alert.bind(this), this.lockDown.bind(this));
 
 		// Set the date and time of us starting today. TODO consider not using the user for time
 		this.sessionStartTime = Date.now();

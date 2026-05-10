@@ -87,14 +87,20 @@ const journaler = {
 	initialized: false,
 	videoProgressInterval: 10, // <-- request that video progress be updated every 10%
 
+	// Inherit alerting the user and locking the program when something critical breaks to prevent data corruption
+	_alertFn: null,
+	_lockDownFn: null,
+
 	// Data structure: Version ^ UserID ^ SessionStart ^ [Delta_Data] ^ [Interaction_Log]
 
 
-	init: async function(){
+	init: async function(alertCallback, lockDownCallback){
 		/* Sets _startTime = Date.now(). Loads Analytics Config. */
 		this._startTime = Date.now();
 		this._eventBuffer = [];
 		this._supportsCompression = (typeof CompressionStream != "undefined");
+		this._alertFn = alertCallback || null;
+		this._lockDownFn = lockDownCallback || null;
 
 		// Try to load analytics settings
 		try {
@@ -347,10 +353,10 @@ const journaler = {
 
 		if(saveString.startsWith(this._compressionPrefix) && !this._supportsCompression){
 			//if the user started this course on a modern browser but loaded progress on an old one...
-			if (typeof state !== "undefined" && state.alert) {
-				const reset = state.alert("IMPORTANT: Your progress cannot be reloaded on this browser. Continuing will wipe your progress. Are you sure you want to RESTART THE COURSE?");
+			if (this._alertFn) {
+				const reset = this._alertFn("IMPORTANT: Your progress cannot be reloaded on this browser. Continuing will wipe your progress. Are you sure you want to RESTART THE COURSE?");
 				if(!reset){
-					if (state.lockDown) state.lockDown();
+					if (this._lockDownFn) this._lockDownFn();
 					return null;
 				}
 			} else {
