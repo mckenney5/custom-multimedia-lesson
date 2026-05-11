@@ -1,4 +1,4 @@
-const debugging = true;
+var debugging = new URLSearchParams(window.location.search).get("debug") === "true";
 let state = {
 	// --- Properties (Data) ---
 	data: {
@@ -47,6 +47,9 @@ let state = {
 
 		// Set up journaler and give it access to the alert and lockdown features for critical events (like possible data corruption)
 		if(!journaler.initialized) await journaler.init(this.alert.bind(this), this.lockDown.bind(this));
+
+		// Set up certificate module
+		certificate.init(this);
 
 		// Set the date and time of us starting today. TODO consider not using the user for time
 		this.sessionStartTime = Date.now();
@@ -348,7 +351,7 @@ let state = {
 		}
 
 		// Show final screen
-		this.showEndScreen(hasPassed, gradeString, Math.round(minimumGrade * 100));
+		certificate.showEndScreen(hasPassed, gradeString, Math.round(minimumGrade * 100));
 		return true;
 	},
 
@@ -448,7 +451,7 @@ let state = {
 		// Try to save with the LMS
 		if(compressed){
 			lms.saveData(compressed);
-			const progress = Math.round((this.data.delta.progress/(this.data.pages.length-1))*100);
+			const progress = Math.round((this.data.delta.progress/Math.max(1, this.data.pages.length-1))*100);
 			journaler.transmit("PROGRESS", `${progress}%\n${compressed}`, false); // <-- send progress log, low priority
 		} else {
 			console.error(`state.save: unable to save to save the data '${saveData}'. Compressed returned '${compressed}'`);
@@ -471,7 +474,7 @@ let state = {
 			try {
 				this.deserialize(data.delta);
 			} catch(e) {
-				console.error(`state.loadSave: Unable to parse saved data of \n${stateAsString}\n --> ${e}`);
+				console.error(`state.loadSave: Unable to parse saved data: ${e}`);
 			}
 		} else {
 			journaler.log("STARTED_NEW_COURSE", "");
@@ -486,7 +489,7 @@ let state = {
 			console.log("Resetting progress");
 			//localStorage.removeItem("courseProgress");
 			lms.reset(); // <-- set the saved data to nothing
-			this.lessonFrame.src = this.data.pages[0].name + "?_cb=" + Date.now();
+			this.lessonFrame.src = this.data.pages[0].path + "?_cb=" + Date.now();
 			// TODO check if we are debugging, if so, delete the saved log too
 			window.onbeforeunload = null;
 			window.location.reload();
@@ -510,13 +513,13 @@ let state = {
 		window.document.body.innerHTML = "<h2>Course disabled</h2>";
 
 		// remove event listeners
-		window.onbeforeunload = () => console.log("Stopping prompt");
+		window.onbeforeunload = () => "Course disabled. Saving is blocked to prevent data corruption.";
 		window.onunload = () => console.log("Stopping quit");
 
 		// nuke the state and its modules
-		state = "";
-		journaler = "";
-		lms = "";
+		window.state = null;
+		window.journaler = null;
+		window.lms = null;
 
 		// now the user cannot destroy their saved file, unless they refresh!
 
@@ -566,6 +569,9 @@ let state = {
 		// Calculate score dynamically
 		const earnedScore = this.data.delta.pagesState.reduce((acc, p) => acc + p.score, 0); // <-- what the user earned
 		const maxScore = this.data.pages.reduce((acc, p) => acc + p.maxScore, 0);
+		if(maxScore === 0){
+			return {ratio: 0, earnedScore: 0, maxScore: 0};
+		}
 		return ({ratio: earnedScore / maxScore, earnedScore: earnedScore, maxScore: maxScore});
 	},
 
@@ -574,7 +580,7 @@ let state = {
 		const isScoreMet = this.data.courseRules.minimumGrade <= this.calculateOverallGrade().ratio;
 		const studentsCanFail = this.data.courseRules.studentsCanFail;
 
-		if(isTimeRequirementMet && (isScoreMet || studentsCanFail)){
+		if(isTimeRequirementMet && (isScoreMet || studentsCanFail) && this.data.pages.length > 0){
 			this.data.delta.pagesState[this.data.pages.length-1].completed = true;
 			// set the good bye page to completed since the important course information is done
 			// this also allows us to check all the other ones
@@ -586,7 +592,7 @@ let state = {
 
 	sendMessage: function(subject, message){
 		this.lessonFrame.contentWindow.postMessage({ type: subject,
-			message: message}, "*");
+			message: message}, window.location.origin);
 	},
 
 	handleMessage: function(event){
@@ -600,6 +606,17 @@ let state = {
 		if(event.origin != window.location.origin){
 			console.error(`${name}: Unknown message sender! --> ${event}`);
 			return;
+		}
+
+		if(event.data.type !== "ORIGIN"){
+			if(!this.pageAPISecret){
+				console.error(`${name}: Message received before handshake complete`);
+				return;
+			}
+			if(event.data.code !== this.pageAPISecret){
+				console.error(`${name}: Invalid code --> ${event.data.code}`);
+				return;
+			}
 		}
 
 		// 1. UNWRAP the message
@@ -617,7 +634,7 @@ let state = {
 		switch(event.data.type){
 			case "ORIGIN":
 				// tell the iframe who we are. Trust on First Use (TOFU)
-				this.lessonFrame.contentWindow.postMessage({ type: "ORIGIN", message: window.location.origin, code: this.pageAPISecret }, "*");
+				this.lessonFrame.contentWindow.postMessage({ type: "ORIGIN", message: window.location.origin, code: this.pageAPISecret }, window.location.origin);
 				console.log("Auth Attempt");
 				break;
 
@@ -652,12 +669,12 @@ let state = {
 							value: {
 								questions: compConfig.questions, // (Optional if component caches it)
 								userAnswers: compState.userAnswers,
-								attemptsLeft: page.completionRules.attempts - compState.attempts, // <--- The updated count
+								attemptsLeft: (page.completionRules.attempts || Infinity) - compState.attempts, // <--- The updated count
 								options: compConfig.options || [], // Add options to the specific quiz, like "show-wrong"
 								hasAttempted: compState.attempts > 0, // Flag to check attempts
 							},
 						},
-					}, "*");
+					}, window.location.origin);
 
 					this.finalizePage();
 				}
@@ -674,7 +691,7 @@ let state = {
 						const quizPayload = {
 							questions: compConfig.questions,
 							userAnswers: compState.userAnswers || {},
-							attemptsLeft: page.completionRules.attempts - (compState.attempts || 0),
+							attemptsLeft: (page.completionRules.attempts || Infinity) - (compState.attempts || 0),
 							options: compConfig.options || [],
 							hasAttempted: (compState.attempts || 0) > 0,
 						};
@@ -685,7 +702,7 @@ let state = {
 								id: componentID,        // <--- Match component expectation
 								value: quizPayload,     // <--- Match component expectation
 							},
-						}, "*");
+						}, window.location.origin);
 					}
 				}
 				journaler.log("QUESTIONS_RENDERED", index);
@@ -774,7 +791,7 @@ let state = {
 			case "GET_STUDENT_DATA":
 				const grade = String(Math.floor((this.calculateOverallGrade().ratio * 100)));
 				this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA", message: {
-					name: this.studentName, grade: grade } }, "*");
+					name: this.studentName, grade: grade } }, window.location.origin);
 				journaler.log("GENERAL", "student info requested, page " + String(index));
 				break;
 
@@ -815,7 +832,7 @@ let state = {
 
 		this.infoBanner.innerHTML = `
 			${icon}
-			<span role="${role}">${message}</span>
+			<span role="${role}">${utils.escapeHTML(message)}</span>
 		`;
 
 		// Displays using Flexbox so the icon and text aligns perfectly
@@ -899,8 +916,16 @@ let state = {
 
 				// 2. Initialize Components (if present)
 				if (page.components && Array.isArray(page.components)) {
-					page.components.forEach(comp => {
-						if(!comp.id) console.error(`Component on page '${page.name}' missing ID`);
+					page.components.forEach((comp, index) => {
+						if(!comp.id) {
+							comp.id = `auto-${Date.now()}-${Math.random().toString(36).substr(2,9)}`;
+							console.error(`Component on page '${page.name}' missing ID - generated fallback: ${comp.id}`);
+						}
+
+						if(!comp.type) {
+							console.error(`Component with id '${comp.id}' on page '${page.name}' missing type - skipping`);
+							return;
+						}
 
 						// Initialize specific state for this component
 						const compState = {
@@ -910,6 +935,10 @@ let state = {
 
 						// Add type-specific defaults
 						if (comp.type === "quiz") {
+							if (!comp.questions || !Array.isArray(comp.questions)) {
+								console.error(`Quiz component '${comp.id}' missing questions array - skipping`);
+								return;
+							}
 							const qMax = comp.questions.reduce((acc, q) => acc + q.pointValue, 0.0);
 							calculatedMaxScore += qMax;
 							compState.score = 0;
@@ -1079,143 +1108,6 @@ let state = {
 			this.lastActiveElement.focus();
 			this.lastActiveElement = null;
 		}
-	},
-
-	showEndScreen: function(hasPassed, scoreString, requiredScoreString) {
-		// End of course pop up
-
-		this.isPaused = true;
-		this.lessonFrame.style.display = "none";
-		this.helpOverlay.style.display = "flex";
-
-		// Lock navigation
-		document.getElementById("prev").disabled = true;
-		document.getElementById("next").disabled = true;
-		this.lastActiveElement = document.activeElement;
-
-		const certConfig = this.data.courseRules.certificate || {};
-		const showCertButton = hasPassed && certConfig.enabled;
-
-		// Build the messaging based on pass/fail
-		let title = hasPassed ? "🎉 Course Completed!" : "⚠️ Course Incomplete";
-		let message = hasPassed
-			? `Congratulations! You have successfully finished the course with a score of <strong>${scoreString}%</strong>.`
-			: `You reached the end, but you scored <strong>${scoreString}%</strong>. A score of <strong>${requiredScoreString}%</strong> is required to pass.`;
-
-		let certButtonHTML = showCertButton
-			? `<button class="help-action-btn" onclick="state.printCertificate()" style="background-color: var(--brand); color: var(--brand-text);">🖨️ Print Certificate</button>`
-			: "";
-
-		this.helpContent.innerHTML = `
-		<div class="help-wrapper centered" style="text-align: center;">
-			<h1 id="modal-title" class="help-title no-border">${title}</h1>
-			<p class="help-subtitle" style="margin-bottom: 30px; font-size: 1.2rem;">${message}</p>
-
-			<div class="help-btn-group-col" style="align-items: center;">
-				${certButtonHTML}
-				<button class="help-action-btn auto-width" onclick="state.closeHelp()">🔙 Review Course Materials</button>
-				<button class="help-action-btn danger auto-width" onclick="state.quit()">🚪 Exit Course</button>
-				</div>
-		</div>
-		`;
-
-		setTimeout(() => {
-			const closeBtn = document.getElementById("close-help");
-			if (closeBtn) closeBtn.focus();
-		}, 50);
-	},
-
-	printCertificate: function() {
-		// Generates and prints the end of course cert
-		const certConfig = this.data.courseRules.certificate || {};
-		const printArea = document.getElementById("certificate-print-area");
-
-		if (!printArea) {
-			console.error("Unable to find print area for the cert!");
-			return;
-		}
-
-		// Gather our template variables
-		const student = this.studentName || "Student";
-		const scoreString = String(Math.round(this.calculateOverallGrade().ratio * 100));
-		const dateString = new Date().toLocaleDateString();
-
-		// Time tracking
-		const totalSeconds = this.data.delta.totalCourseSeconds || 0;
-		const totalMinutes = String(Math.floor(totalSeconds / 60));
-		// Uses parseFloat to cleanly drop trailing zeros (e.g., 1.50 becomes 1.5)
-		const totalHours = String(parseFloat((totalSeconds / 3600).toFixed(2)));
-		const minimumLength = String(this.data.courseRules.minimumMinutes || 0);
-
-		// Text Replacer Engine
-		const titleText = certConfig.title || "Certificate of Completion";
-		let bodyText = certConfig.body || "This certifies that {{studentName}} completed the course on {{date}} with a score of {{score}}%.";
-
-		bodyText = bodyText.replace(/{{studentName}}/g, student);
-		bodyText = bodyText.replace(/{{score}}/g, scoreString);
-		bodyText = bodyText.replace(/{{date}}/g, dateString);
-		bodyText = bodyText.replace(/{{totalMinutes}}/g, totalMinutes);
-		bodyText = bodyText.replace(/{{totalHours}}/g, totalHours);
-		bodyText = bodyText.replace(/{{minimumLength}}/g, minimumLength);
-		bodyText = bodyText.replace(/\n/g, "<br>");
-
-		// Optional Image Engine (Checks if the variables exist in JSON)
-		const logoHTML = certConfig.logoUrl
-			? `<img src="${certConfig.logoUrl}" style="max-height: 80px; margin-bottom: 20px;" alt="" />`
-			: "";
-
-		const signatureHTML = certConfig.signatureUrl
-			? `
-			<div style="width: 250px; font-size: 1.2rem;">
-				<div style="border-bottom: 2px solid #333; height: 50px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 5px;">
-					<img src="${certConfig.signatureUrl}" style="max-height: 45px; margin-bottom: -2px;" alt="Signature" />
-				</div>
-				Instructor Signature
-			</div>
-			`
-			: "";
-
-		const watermarkHTML = certConfig.watermarkUrl
-			? `<img src="${certConfig.watermarkUrl}" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 75%; max-height: 75%; opacity: 0.12; z-index: 0; pointer-events: none;" alt="" />`
-			: "";
-
-		// Inject the HTML (Using Flexbox to align the bottom columns perfectly)
-		printArea.innerHTML = `
-		${watermarkHTML}
-
-		<h1 style="position: absolute; top: 30px; left: 50%; transform: translateX(-50%); width: 100%; max-width: 900px; text-align: center; z-index: 10; padding-bottom: 15px; margin: 0; font-size: 3.5rem; text-transform: uppercase; letter-spacing: 2px;">
-		${titleText}
-		</h1>
-
-		<div style="position: relative; z-index: 1; margin: 130px auto; width: 100%; max-width: 900px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-		${logoHTML}
-		<p style="font-size: 1.8rem; line-height: 1.6; margin: 0;">
-		${bodyText}
-		</p>
-		</div>
-
-		<div style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; justify-content: space-around; align-items: flex-end; width: 100%; max-width: 900px; z-index: 10; padding-top: 15px;">
-
-		<div style="width: 250px; font-size: 1.2rem;">
-		<div style="border-bottom: 2px solid #333; height: 50px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; margin-bottom: 5px;">
-		${dateString}
-		</div>
-		Date
-		</div>
-
-		<div style="width: 250px; font-size: 1.2rem;">
-		<div style="border-bottom: 2px solid #333; height: 50px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; margin-bottom: 5px;">
-		${scoreString}%
-		</div>
-		Score
-		</div>
-
-		${signatureHTML}
-		</div>
-			`;
-
-		// Trigger the browser's native print dialog
-		window.print();
 	},
 
 	toggleSettings: function(){
