@@ -678,8 +678,8 @@ class CourseQuiz extends CourseComponent {
 
 		// Check if anti-cheat is currently active on this specific quiz
 		const AntiCheatActive = !this.options.includes("disable-anticheat");
-		console.log("Options: ");
-		console.log(this.options);
+		console.debug("Options: ");
+		console.debug(this.options);
 
 		// Disables and checks for copy+paste / right click / text selection
 		if (AntiCheatActive) {

@@ -108,7 +108,7 @@ const journaler = {
 			const response = await fetch("lessons/analytics.json?_t=" + Date.now());
 			if(response.ok){
 				this._analyticsConfig = await response.json();
-				console.log("Journaler: Analytics config loaded.");
+				console.debug("Journaler: Analytics config loaded.");
 			} else {
 				console.warn("Journaler: Analytics config not found (404). ", response);
 			}
@@ -207,12 +207,12 @@ const journaler = {
 			console.warn(`Journaler: Payload is greater than 90% of max size (${payloadSize}/${maxSize})`);
 		}
 
-		console.log(`Journaler: Transmitting data to Google Forms --> size: ${payloadSize}\n`, payload);
+		console.debug(`Journaler: Transmitting data to Google Forms --> size: ${payloadSize}\n`, payload);
 
 		// navigator.sendBeacon survives the page close and is natively 'no-cors' compliant.
 		// Does not work on Google due to 302 redirect to the 'Thank you for submitting' page...
 		//const success = navigator.sendBeacon(this._analyticsConfig.formURL, payload);
-		//console.log("Journaler: Beacon queued: " + success);
+		//console.debug("Journaler: Beacon queued: " + success);
 
 		// Fire and Forget (Blind POST)
 		fetch(this._analyticsConfig.formURL, {
@@ -223,7 +223,7 @@ const journaler = {
 		}).then(() => {
 			// Because of no-cors, we can't see the response body,
 			// but a resolved promise usually means the request left the browser.
-			console.log("Journaler: Transmission sent.");
+			console.debug("Journaler: Transmission sent.");
 		}).catch(e => {
 			console.error("Journaler: Transmission failed --> ", e);
 		});
@@ -242,7 +242,7 @@ const journaler = {
 			`${timeStamp},${this._encoding["DIAGNOSTIC"]}, Unknown action '${action}' ${v}`;
 
 		this._eventBuffer.push(message);
-		console.log(`encoder.log --> '${message}'`);
+		console.debug(`encoder.log --> '${message}'`);
 	},
 
 	report: function(userIDNum, fullLog, sessionStart){
@@ -375,7 +375,7 @@ const journaler = {
 			}
 		} catch (e) {
 			if(saveString.startsWith(this._version + this._delimiter)){
-				console.log("User can do compression but saved without it");
+				console.debug("User can do compression but saved without it");
 				raw = saveString;
 			} else {
 				console.error(`journaler.unpack: Decompression failed. Data might be corrupt! saveString: '${saveString}'\n`, e);
@@ -388,7 +388,7 @@ const journaler = {
 
 		// Safety Check: Ensure we have enough parts
 		if(parts.length < 4 || parts[0] !== this._version){
-			console.log(`[DEBUG] journaler.unpack --> Saved data invalid: '${raw}'`);
+			console.debug(`[DEBUG] journaler.unpack --> Saved data invalid: '${raw}'`);
 			return null;
 		}
 
@@ -428,7 +428,7 @@ const journaler = {
 			delta: deltaArray,
 			log: logArray,
 		};
-		console.log("[DEBUG] journaler.unpack --> ", cleanObject);
+		console.debug("[DEBUG] journaler.unpack --> ", cleanObject);
 		this._currentLog = cleanObject.log;
 		this._userID = cleanObject.meta.userID;
 		return cleanObject;

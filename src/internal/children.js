@@ -46,7 +46,7 @@ const child = {
 			const dataEvent = new CustomEvent(subject, {
 				detail: data,
 			});
-			console.log(`Firing event '${subject} --> '`, data);
+			console.debug(`Firing event '${subject} --> '`, data);
 			window.dispatchEvent(dataEvent);
 		},
 	},
@@ -135,7 +135,7 @@ const child = {
 		const subject = event.data.type;
 		const message = event.data.message;
 		const id = event.data.id; // <-- Capture the ID from Parent
-		console.log(`Child: recieved '${subject}'\n `, event);
+		console.debug(`Child: recieved '${subject}'\n `, event);
 
 		if(event.origin !== this.parentOrigin){
 			console.error("Blocked message --> ", event);
@@ -149,7 +149,7 @@ const child = {
 
 		switch(subject){
 			case "PING":
-				console.log("PONG");
+				console.debug("PONG");
 				this.send("PONG", message);
 				break;
 			case "SEND_META":

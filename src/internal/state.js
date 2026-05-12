@@ -455,7 +455,7 @@ let state = {
 
 	save: async function(){
 	// saves the state to the local browser storage
-		if(this.pauseSave){ console.log("Ignoring Save"); return;}
+		if(this.pauseSave){ console.debug("Ignoring Save"); return;}
 
 		const saveData = this.serialize();
 
@@ -499,7 +499,7 @@ let state = {
 		const confirmed = window.confirm("Are you sure you want to reset all of your progress? This action cannot be undone.");
 		if(confirmed){
 			this.pauseSave = true;
-			console.log("Resetting progress");
+			console.debug("Resetting progress");
 			//localStorage.removeItem("courseProgress");
 			lms.reset(); // <-- set the saved data to nothing
 			this.lessonFrame.src = this.data.pages[0].path + "?_cb=" + Date.now();
@@ -527,7 +527,7 @@ let state = {
 
 		// remove event listeners
 		window.onbeforeunload = () => "Course disabled. Saving is blocked to prevent data corruption.";
-		window.onunload = () => console.log("Stopping quit");
+		window.onunload = () => console.debug("Stopping quit");
 
 		// nuke the state and its modules
 		window.state = null;
@@ -609,7 +609,7 @@ let state = {
 	},
 
 	handleMessage: function(event){
-		//console.log(event);
+		//console.debug(event);
 		const index = this.data.delta.currentPageIndex;
 		const page = this.data.pages[index];
 		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
@@ -663,7 +663,7 @@ let state = {
 			case "ORIGIN":
 				// tell the iframe who we are. Trust on First Use (TOFU)
 				this.lessonFrame.contentWindow.postMessage({ type: "ORIGIN", message: window.location.origin, code: this.pageAPISecret }, window.location.origin);
-				console.log("Auth Attempt");
+				console.debug("Auth Attempt");
 				break;
 
 			case "QUIZ_RESULT":
@@ -711,7 +711,7 @@ let state = {
 			case "GET_QUIZ_DATA":
 				// Composite Logic ---
 				if(componentID && page.components){
-					console.log(`comp -->\n${page.components}`);
+					console.debug(`comp -->\n${page.components}`);
 					const compConfig = page.components.find(c => c.id === componentID);
 					const compState = pageDelta.components[componentID];
 
@@ -824,7 +824,7 @@ let state = {
 				break;
 
 			case "SEND_RENDER":
-				console.log(`${name}: SEND_RENDER not implemented yet`);
+				console.debug(`${name}: SEND_RENDER not implemented yet`);
 				break;
 
 			case "SEND_META":
@@ -921,14 +921,14 @@ let state = {
 		try {
 			let response = null;
 			if(debugging){
-				console.log("Skipping cache for JSON");
+				console.debug("Skipping cache for JSON");
 				response = await fetch("lessons/course_data.json", {
 					cache: "no-store",
 				});
 			} else {
 				response = await fetch("lessons/course_data.json");
 			}
-			console.log("Loaded course_data.json");
+			console.debug("Loaded course_data.json");
 			const rawData = await response.json();
 
 			this.data.courseRules = rawData.courseRules || {};
@@ -1239,7 +1239,7 @@ window.onload = async () => {
 
 window.onbeforeunload = () => {
 	if(!state.data.pages || state.data.pages.length === 0){
-		console.log("pages not loaded");
+		console.debug("pages not loaded");
 		state.save();
 		return;
 	}
