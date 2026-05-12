@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-var
 var debugging = new URLSearchParams(window.location.search).get("debug") === "true";
 let state = {
 	// --- Properties (Data) ---
@@ -71,6 +72,18 @@ let state = {
 
 		// Set up API Secret for the pages (auth)
 		this.pageAPISecret = this.generatePasscode();
+
+		// Set up nonce replay protection
+		if(this._noncePruneTimer){
+			clearInterval(this._noncePruneTimer);
+		}
+		this._seenNonces = new Map();
+		this._noncePruneTimer = setInterval(() => {
+			const cutoff = Date.now() - 300000;
+			for(const [nonce, ts] of this._seenNonces){
+				if(ts < cutoff) this._seenNonces.delete(nonce);
+			}
+		}, 60000);
 
 		// Load last webpage we were on
 		this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
@@ -619,7 +632,22 @@ let state = {
 			}
 		}
 
-		// 1. UNWRAP the message
+		// 2. NONCE VALIDATION (skip for ORIGIN which is handshake-only)
+		if(event.data.type !== "ORIGIN"){
+			const nonce = event.data.nonce;
+			const now = Date.now();
+			if(typeof nonce !== "number" || now - nonce > 300000 || now - nonce < 0){
+				this._rejectNonce(nonce);
+				return;
+			}
+			if(this._seenNonces.has(nonce)){
+				this._rejectNonce(nonce);
+				return;
+			}
+			this._seenNonces.set(nonce, now);
+		}
+
+		// 3. UNWRAP the message
 		let msgData = event.data.message;
 		let componentID = null;
 
@@ -812,6 +840,16 @@ let state = {
 				break;
 		}
 		this.finalizePage();
+	},
+
+	_rejectNonce: function(nonce){
+		console.error("Invalid or expired nonce -->", nonce);
+		if(this.lessonFrame && this.lessonFrame.contentWindow){
+			this.lessonFrame.contentWindow.postMessage({
+				type: "NONCE_REJECTED",
+				nonce: nonce,
+			}, window.location.origin);
+		}
 	},
 
 	bannerMessage: function(message, isError=true){

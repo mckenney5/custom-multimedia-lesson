@@ -33,7 +33,8 @@ test.describe("state.handleMessage: code validation", () => {
 							answers: {}
 						}
 					},
-					code: "VALID_SECRET_12345"
+					code: "VALID_SECRET_12345",
+					nonce: Date.now()
 				},
 				origin: window.location.origin
 			};

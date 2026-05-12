@@ -53,6 +53,9 @@ const child = {
 
 	init: function() {
 		window.child = this;
+		if(this.messagePoller){
+			clearInterval(this.messagePoller);
+		}
 		this.messagePoller = setInterval(() => {
 			if(!this.pageAPICode || this.pageAPICode === "*") return;
 			if(this.messageQueue.length > 0){
@@ -103,24 +106,28 @@ const child = {
 	},
 
 
-	send: function(subject, body, id = null){
+	send: function(subject, body, id = null, backoff = 0){
 		if(!this.pageAPICode || this.pageAPICode === "*"){
-			// FIXED: Push ID to queue
 			this.messageQueue.push([subject, body, id]);
+			this._lastSent = { subject, body, id, nonce: Date.now(), retries: 0 };
 			return;
 		}
-		// FIXED: Include 'id' in the postMessage payload
+
+		const nonce = Date.now() + backoff;
 		const message = {
 			type: subject,
 			message: body,
-			code: this.pageAPICode
+			code: this.pageAPICode,
+			nonce: nonce,
 		};
-		
+
 		// Only include id if it's not null or undefined
 		if(id !== null && id !== undefined){
 			message.id = id;
 		}
-		
+
+		this._lastSent = { subject, body, id, nonce, retries: 0 };
+
 		window.parent.postMessage(message, this.parentOrigin);
 	},
 
@@ -166,6 +173,25 @@ const child = {
 				break;
 			case "SET_THEME":
 				document.documentElement.setAttribute("data-theme", message);
+				break;
+			case "NONCE_REJECTED":
+				if(!this._lastSent) break;
+				if(this._lastSent.nonce !== event.data.nonce) break;
+
+				const retryCount = (this._lastSent.retries || 0) + 1;
+				if(retryCount > 3){
+					console.error("Nonce retry exhausted, dropping message");
+					this._lastSent = null;
+					break;
+				}
+
+				const backoff = retryCount * 10;
+				const oldSubject = this._lastSent.subject;
+				const oldBody = this._lastSent.body;
+				const oldId = this._lastSent.id;
+
+				this.send(oldSubject, oldBody, oldId, backoff);
+				this._lastSent.retries = retryCount;
 				break;
 			default:
 				console.error("Child: Unknown message from parent --> ", event);
