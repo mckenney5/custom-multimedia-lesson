@@ -7,7 +7,7 @@
 		"certificate": {
 			"enabled": true,
 			"title": "Certificate of Completion",
-			"body": "This certifies that\n\n<b>{{studentName}}</b>\n\nhas successfully completed the mandated {{minimumLength}} minutes of training. Total Course Time: {{totalHours}} Hours ({{totalMinutes}} Minutes)\nFinal Score: {{score}}%",
+			"body": "This certifies that\n\n{{studentName}}\n\nhas successfully completed the mandated {{minimumLength}} minutes of training. Total Course Time: {{totalHours}} Hours ({{totalMinutes}} Minutes)\nFinal Score: {{score}}%",
 			"logoUrl": "media/brand_logo.png",
 			"signatureUrl": "media/instructor_sig.png",
 			"watermarkUrl": "media/seal_watermark.png"

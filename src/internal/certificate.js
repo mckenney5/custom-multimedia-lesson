@@ -80,7 +80,7 @@ const certificate = {
 		let bodyText = certConfig.body || "This certifies that {{studentName}} completed the course on {{date}} with a score of {{score}}%.";
 
 		bodyText = utils.escapeHTML(bodyText);
-		bodyText = bodyText.replace(/{{studentName}}/g, utils.escapeHTML(student));
+		bodyText = bodyText.replace(/{{studentName}}/g, "<b>" + utils.escapeHTML(student) + "</b>");
 		bodyText = bodyText.replace(/{{score}}/g, utils.escapeHTML(scoreString));
 		bodyText = bodyText.replace(/{{date}}/g, utils.escapeHTML(dateString));
 		bodyText = bodyText.replace(/{{totalMinutes}}/g, utils.escapeHTML(totalMinutes));
