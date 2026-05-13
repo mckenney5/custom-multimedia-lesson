@@ -113,7 +113,8 @@ const child = {
 			return;
 		}
 
-		const nonce = Date.now() + backoff;
+		this._nonceCounter = ((this._nonceCounter || 0) + 1) % 10000;
+		const nonce = Date.now() - (this._nonceCounter / 1000);
 		const message = {
 			type: subject,
 			message: body,

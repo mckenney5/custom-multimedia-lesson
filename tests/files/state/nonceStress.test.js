@@ -180,4 +180,53 @@ test.describe("state.handleMessage: nonce stress tests", () => {
     expect(result.inBounds).toBe(true);
     expect(result.finalSize).toBe(1000);
   });
+
+  test("burst of identical-nonce messages should accept only the first", async () => {
+    const result = await page.evaluate(() => {
+      if (typeof state === "undefined") return { error: "state not defined" };
+
+      state.pageAPISecret = "DUP_SECRET";
+      state._seenNonces.clear();
+
+      const rejectedNonces = [];
+      const originalPostMessage =
+        state.lessonFrame.contentWindow.postMessage;
+      state.lessonFrame.contentWindow.postMessage = (...args) => {
+        if (args[0] && args[0].type === "NONCE_REJECTED") {
+          rejectedNonces.push(args[0].nonce);
+        }
+      };
+
+      // Three messages with the same nonce — simulates same-ms component burst
+      const sameNonce = Date.now() - 1;
+      for (let i = 0; i < 3; i++) {
+        const message = {
+          data: {
+            type: "QUIZ_RESULT",
+            message: {
+              id: "test-quiz",
+              value: { score: 10, answers: {} }
+            },
+            code: "DUP_SECRET",
+            nonce: sameNonce
+          },
+          origin: window.location.origin
+        };
+        state.handleMessage(message);
+      }
+
+      state.lessonFrame.contentWindow.postMessage = originalPostMessage;
+
+      return {
+        seenSize: state._seenNonces.size,
+        rejectedCount: rejectedNonces.length,
+        firstAccepted: state._seenNonces.has(sameNonce),
+      };
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.seenSize).toBe(1);
+    expect(result.rejectedCount).toBe(2);
+    expect(result.firstAccepted).toBe(true);
+  });
 });

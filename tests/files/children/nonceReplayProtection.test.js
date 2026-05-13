@@ -140,7 +140,7 @@ test.describe("children.js nonce replay protection", () => {
     expect(result.noncesAreDifferent).toBe(true);
   });
 
-  test("retry nonces should be strictly increasing with each attempt", async () => {
+  test("retry nonces should be unique on each attempt", async () => {
     const result = await page.evaluate(() => {
       child.pageAPICode = "TEST_API_CODE";
       child.parentOrigin = "http://parent.origin";
@@ -156,7 +156,6 @@ test.describe("children.js nonce replay protection", () => {
 
       try {
         child.send("TEST_SUBJECT", "TEST_BODY", "TEST_ID");
-        const firstNonce = child._lastSent.nonce;
 
         for(let i = 0; i < 2; i++){
           const rejectEvent = {
@@ -169,10 +168,7 @@ test.describe("children.js nonce replay protection", () => {
         return {
           sentCount: sentNonces.length,
           nonces: sentNonces,
-          strictlyIncreasing:
-            sentNonces.length >= 3 &&
-            sentNonces[0] < sentNonces[1] &&
-            sentNonces[1] < sentNonces[2]
+          allUnique: new Set(sentNonces).size === sentNonces.length,
         };
       } finally {
         window.parent.postMessage = originalPostMessage;
@@ -181,7 +177,7 @@ test.describe("children.js nonce replay protection", () => {
 
     expect(result.error).toBeUndefined();
     expect(result.sentCount).toBe(3);
-    expect(result.strictlyIncreasing).toBe(true);
+    expect(result.allUnique).toBe(true);
   });
 
   test("NONCE_REJECTED with mismatched nonce should not trigger retry", async () => {
@@ -261,5 +257,40 @@ test.describe("children.js nonce replay protection", () => {
     // 1 original send + 3 retries = 4 total
     expect(result.totalSends).toBe(4);
     expect(result.retries).toBe(3);
+  });
+
+  test("rapid burst of sends in same tick should produce unique nonces", async () => {
+    const result = await page.evaluate(() => {
+      child.pageAPICode = "TEST_API_CODE";
+      child.parentOrigin = "http://parent.origin";
+      child.messageQueue = [];
+
+      const nonces = [];
+      const originalPostMessage = window.parent.postMessage;
+      window.parent.postMessage = (...args) => {
+        if (args[0] && args[0].type !== "ORIGIN") {
+          nonces.push(args[0].nonce);
+        }
+      };
+
+      try {
+        // Simulate multi-component init burst: three synchronous sends
+        child.send("GET_QUIZ_DATA", { id: "quiz1", value: "" }, "quiz1");
+        child.send("GET_QUIZ_DATA", { id: "video1", value: "" }, "video1");
+        child.send("GET_QUIZ_DATA", { id: "quiz2", value: "" }, "quiz2");
+
+        return {
+          nonces,
+          uniqueCount: new Set(nonces).size,
+          sendCount: nonces.length,
+        };
+      } finally {
+        window.parent.postMessage = originalPostMessage;
+      }
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.sendCount).toBe(3);
+    expect(result.uniqueCount).toBe(3);
   });
 });

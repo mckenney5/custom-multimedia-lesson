@@ -88,7 +88,7 @@ Every message from the child carries these top-level fields:
     type: "QUIZ_RESULT",       // string message type
     message: { ... },          // payload (string or object)
     code: "aB3xK9...",         // pageAPISecret (set after handshake)
-    nonce: 1776000000000,      // Date.now() — replay protection
+    nonce: 1776000000000.001,  // Date.now() - (counter/1000) — replay protection
     id: "quiz-component-1"     // optional, targeted component ID
 }
 ```
@@ -181,7 +181,8 @@ send: function(subject, body, id = null, backoff = 0) {
         return;
     }
 
-    const nonce = Date.now() + backoff;
+    this._nonceCounter = ((this._nonceCounter || 0) + 1) % 10000;
+    const nonce = Date.now() - (this._nonceCounter / 1000);
     const message = {
         type: subject,
         message: body,
@@ -200,10 +201,11 @@ send: function(subject, body, id = null, backoff = 0) {
 }
 ```
 
-- `nonce` is `Date.now() + backoff` — millisecond precision, monotonic. The backoff (added on retries) guarantees a unique value even if `Date.now()` hasn't ticked.
-- Same-origin messages within the same millisecond are possible but extremely unlikely for user-driven events. If a collision occurs, the parent rejects the duplicate and the child retries.
+- `nonce` is `Date.now() - (counter / 1000)` — millisecond precision, monotonically decreasing within a tick. A per-instance `_nonceCounter` increments on every `send()` call, guaranteeing unique nonces even when multiple components fire messages within the **same millisecond** (e.g. quiz+video+quiz on a multi-component page). The subtraction keeps the nonce slightly in the past so the parent's freshness check (`now - nonce >= 0`) always passes.
+- The counter wraps at 10000, keeping the nonce at most ~10ms behind `Date.now()`, well within the 5-minute acceptance window.
 - When queuing (pre-handshake), `_lastSent` is still populated so `NONCE_REJECTED` retry works even if the rejection arrives before the poller flushes the queue.
 - `retries: 0` is always the initial value; the retry counter is stamped onto the object after `send()` returns (see "Retry on Rejection").
+- The `backoff` parameter is accepted but no longer added to the nonce — the counter alone guarantees retry uniqueness. The previous approach (`Date.now() + backoff`) pushed retry nonces into the future, causing them to be rejected by the `now - nonce < 0` check for same-origin messages that arrive within 10ms.
 
 ### Parent: Nonce Validation (`state.js:handleMessage`)
 
@@ -318,12 +320,13 @@ Child                              Parent
   │                                  │
   ├── check _lastSent.nonce === T1  │
   ├── retries=1, backoff=10ms       │
-  ├── QUIZ_RESULT (nonce=T1+10) ───►│
-  │                                  ├── T1+10 accepted
+  ├── QUIZ_RESULT (counter++,       │
+  │     nonce=T2-0.002) ───────────►│
+  │                                  ├── T2-0.002 accepted
   │                                  │
 ```
 
-The 3-retry cap prevents infinite loops. In practice, retries should rarely fire — they exist as defense-in-depth against clock anomalies or race conditions.
+The 3-retry cap prevents infinite loops. In practice, retries should rarely fire — they exist as defense-in-depth against clock anomalies or race conditions. The `backoff` parameter is still passed to `send()` for compatibility but no longer added to the nonce — the incremented `_nonceCounter` alone guarantees each retry has a unique nonce.
 
 ---
 
