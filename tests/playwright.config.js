@@ -11,7 +11,7 @@ module.exports = defineConfig({
   /* Test retries */
   retries: 0,
   /* Number of workers */
-  workers: 1,
+  workers: 4,
   /* Reporter to use */
   reporter: 'list',
   /* Shared settings for all the projects */
