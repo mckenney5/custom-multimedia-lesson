@@ -167,7 +167,7 @@ const ui = {
 	showGeneralHelp: function() {
 		this.helpContent.innerHTML = `
 			<div class="help-wrapper">
-			<iframe src="help.html" class="help-iframe"></iframe>
+			<iframe src="lessons/help.html" class="help-iframe"></iframe>
 			<div class="help-btn-group-row" style="margin-top: 15px;">
 				<button class="help-action-btn auto-width" onclick="ui.showHelpMenu()">&larr; Back to Menu</button>
 			</div>
