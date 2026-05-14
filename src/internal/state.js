@@ -322,11 +322,11 @@ let state = {
 	},
 
 	handleLastPage: function(){
-		// Checks if we are done with the course
-		if(!this.checkCourseCompletion()) return false;
+		completion.finalizeCourse(this.data.courseRules, this.data.delta.totalCourseSeconds, this.data.pages, this.data.delta.pagesState);
+		if(!completion.checkCourseCompletion(this.data.courseRules, this.data.delta.totalCourseSeconds, this.data.pages, this.data.delta.pagesState)) return false;
 
 		// Calculate score and log
-		const grade = this.calculateOverallGrade();
+		const grade = completion.calculateOverallGrade(this.data.pages, this.data.delta.pagesState);
 		const gradeString = String(Math.round(grade.ratio * 100));
 		journaler.log("COURSE_COMPLETE", gradeString);
 		journaler.transmit("FINAL", journaler.report().join("\n"), true);
@@ -359,7 +359,7 @@ let state = {
 			onPrint: () => ui.printCertificate(),
 			printData: {
 				studentName: this.studentName,
-				overallGrade: this.calculateOverallGrade(),
+				overallGrade: completion.calculateOverallGrade(this.data.pages, this.data.delta.pagesState),
 				totalSeconds: this.data.delta.totalCourseSeconds,
 				certConfig: this.data.courseRules.certificate || {},
 				minimumMinutes: this.data.courseRules.minimumMinutes,
@@ -369,8 +369,9 @@ let state = {
 	},
 
 	finalizePage: function(){
+		const page = this.data.pages[this.data.delta.currentPageIndex];
 		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
-		if(this.checkIfComplete() && this.data.delta.currentPageIndex === this.data.delta.progress && pageDelta.completed === false){
+		if(completion.checkIfComplete(page, pageDelta) && this.data.delta.currentPageIndex === this.data.delta.progress && pageDelta.completed === false){
 			pageDelta.completed = true;
 			this.data.delta.progress += 1;
 			this.log(`Page ${this.data.delta.currentPageIndex} completed`);
@@ -390,7 +391,8 @@ let state = {
 
 		if(currentPage === lastPage){
 			// If we are on the final page, try to finish the course
-			if(this.checkCourseCompletion()){
+			completion.finalizeCourse(this.data.courseRules, this.data.delta.totalCourseSeconds, this.data.pages, this.data.delta.pagesState);
+			if(completion.checkCourseCompletion(this.data.courseRules, this.data.delta.totalCourseSeconds, this.data.pages, this.data.delta.pagesState)){
 				this.handleLastPage();
 			} else {
 				ui.bannerMessage("You have not finished all course requirements. Review your work and try again.");
@@ -409,9 +411,10 @@ let state = {
 		}
 		ui.hideBanner(); //reset banner
 
+		const page = this.data.pages[this.data.delta.currentPageIndex];
 		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
 
-		if(this.checkIfComplete() && !pageDelta.completed){
+		if(completion.checkIfComplete(page, pageDelta) && !pageDelta.completed){
 			// if we just completed the page
 			pageDelta.completed = true;
 			this.log(`Page ${this.data.delta.currentPageIndex} completed`);
@@ -562,61 +565,6 @@ let state = {
 		lms.setSessionTime(sessionDuration);
 
 		lms.quit();
-	},
-
-	checkIfComplete: function() {
-		const page = this.data.pages[this.data.delta.currentPageIndex];
-		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
-
-		// Calculate score ratio or set to zero (stops / by 0)
-		const score = page.maxScore > 0 ? pageDelta.score / page.maxScore : 0;
-
-		let quizzesSatisfied = true;
-
-		if (page.completionRules.requireSubmission) {
-			// Get IDs of all quiz components on this page from static config
-			const quizComponents = (page.components || []).filter(c => c.type === "quiz");
-
-			// Check if every quiz has been marked 'completed' in the dynamic state
-			// Note: compState.completed is set to true in handleMessage > QUIZ_RESULT
-			quizzesSatisfied = quizComponents.every(q => {
-				const compState = pageDelta.components[q.id];
-				return compState && compState.completed === true;
-			});
-		}
-
-		return (
-			pageDelta.watchTime >= page.completionRules.watchTime &&
-			score >= page.completionRules.score &&
-			(!page.completionRules.scrolled || pageDelta.scrolled) &&
-			pageDelta.videoProgress >= page.completionRules.videoProgress &&
-			quizzesSatisfied
-		);
-	},
-
-	calculateOverallGrade: function (){
-		// Calculate score dynamically
-		const earnedScore = this.data.delta.pagesState.reduce((acc, p) => acc + p.score, 0); // <-- what the user earned
-		const maxScore = this.data.pages.reduce((acc, p) => acc + p.maxScore, 0);
-		if(maxScore === 0){
-			return {ratio: 0, earnedScore: 0, maxScore: 0};
-		}
-		return ({ratio: earnedScore / maxScore, earnedScore: earnedScore, maxScore: maxScore});
-	},
-
-	checkCourseCompletion: function(){
-		const isTimeRequirementMet = (this.data.courseRules.minimumMinutes * 60) <= this.data.delta.totalCourseSeconds;
-		const isScoreMet = this.data.courseRules.minimumGrade <= this.calculateOverallGrade().ratio;
-		const studentsCanFail = this.data.courseRules.studentsCanFail;
-
-		if(isTimeRequirementMet && (isScoreMet || studentsCanFail) && this.data.pages.length > 0){
-			this.data.delta.pagesState[this.data.pages.length-1].completed = true;
-			// set the good bye page to completed since the important course information is done
-			// this also allows us to check all the other ones
-		}
-		const isEveryPageComplete = this.data.delta.pagesState.every(p => p.completed);
-		//return (isLastPage && isTimeRequirementMet && isScoreMet && isEveryPageComplete);
-		return (isTimeRequirementMet && (isScoreMet || studentsCanFail) && isEveryPageComplete);
 	},
 
 	sendMessage: function(subject, message){
@@ -833,7 +781,7 @@ let state = {
 				break;
 
 			case "GET_STUDENT_DATA":
-				const grade = String(Math.floor((this.calculateOverallGrade().ratio * 100)));
+				const grade = String(Math.floor((completion.calculateOverallGrade(this.data.pages, this.data.delta.pagesState).ratio * 100)));
 				this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA", message: {
 					name: this.studentName, grade: grade } }, window.location.origin);
 				journaler.log("GENERAL", "student info requested, page " + String(index));
