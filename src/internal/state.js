@@ -41,7 +41,7 @@ let state = {
 		this.studentID = lms.getStudentID();
 
 		// Set up journaler and give it access to the alert and lockdown features for critical events (like possible data corruption)
-		if(!journaler.initialized) await journaler.init(this.alert.bind(this), this.lockDown.bind(this));
+		if(!journaler.initialized) await journaler.init((msg) => confirm(msg), this.lockDown.bind(this));
 
 		// Set up UI module
 		ui.init();
@@ -72,7 +72,7 @@ let state = {
 		await this.loadSave();
 
 		// Set up API Secret for the pages (auth)
-		this.pageAPISecret = this.generatePasscode();
+		this.pageAPISecret = utils.generatePasscode();
 
 		// Set up nonce replay protection
 		if(this._noncePruneTimer){
@@ -105,29 +105,6 @@ let state = {
 
 		// Mark done
 		this.initialized = true;
-	},
-
-	generatePasscode: function () {
-		// Creates random passcodes
-		if(typeof crypto !== "undefined" && crypto.randomUUID){
-			return crypto.randomUUID();
-		}
-
-		// if the browser does not support it, try secure random
-		const length = 32;
-		const cryptoObj = window.crypto || window.msCrypto;
-		if(cryptoObj){
-			const items = new Uint8Array(length);
-			cryptoObj.getRandomValues(items);
-			return items.join("");
-		}
-
-		// if it does not support any of that, its Math.random time with 32 floats
-		const result = [];
-		for(let i = 0; i < length; i++){
-			result.push(Math.random() * (Math.random()*1000).toFixed(0));
-		}
-		return result.join("");
 	},
 
 	startEventListeners: function(){
@@ -374,7 +351,7 @@ let state = {
 		if(completion.checkIfComplete(page, pageDelta) && this.data.delta.currentPageIndex === this.data.delta.progress && pageDelta.completed === false){
 			pageDelta.completed = true;
 			this.data.delta.progress += 1;
-			this.log(`Page ${this.data.delta.currentPageIndex} completed`);
+			journaler.log("GENERAL", `Page ${this.data.delta.currentPageIndex} completed`);
 			journaler.log("PAGE_COMPLETE", this.data.delta.currentPageIndex);
 			ui.bannerMessage("This page is completed. You may continue", false);
 			this.save();
@@ -417,7 +394,7 @@ let state = {
 		if(completion.checkIfComplete(page, pageDelta) && !pageDelta.completed){
 			// if we just completed the page
 			pageDelta.completed = true;
-			this.log(`Page ${this.data.delta.currentPageIndex} completed`);
+			journaler.log("GENERAL", `Page ${this.data.delta.currentPageIndex} completed`);
 			this.advancePage();
 		} else if(pageDelta.completed) {
 			//if we are on a completed page
@@ -814,42 +791,6 @@ let state = {
 				nonce: nonce,
 			}, window.location.origin);
 		}
-	},
-
-	log: function(message){
-		journaler.log("GENERAL", message);
-	},
-
-	alert: function(message){
-		//handles critical alerts to the user. useful if the calling object does not need a DOM
-		return confirm(message);
-	},
-
-	gradeQuizQuestions: function(questions, responses){
-		//compares answers to response, marks them correct or incorrect, adds up points of the correct ones, adds up total points, returns the score
-		// questions is an object, responses are a 2D array of strings
-		this.test = responses;
-		questions.forEach(q => q.choices = responses[q.id] || []); // <-- add responses to the question to save for later TODO check if choices[i] is needed
-		//TODO consider merging both lists and seeing if the neighbor element is the same?
-		const sortAndLower = arr => // <-- takes in an array (arr), returns either the sorted lowercase array (arr) or empty []. slice makes a new copy, map makes all time change
-			(arr || []).slice().map(s => String(s).toLowerCase()).sort();
-
-		questions.forEach(q => { // <-- goes through each question, sets the isCorrect flag if the converted & sorted answer is the same as the response
-			const a = sortAndLower(q.correctAnswers);
-			const r = sortAndLower(q.choices);
-			q.isCorrect = (a.length === r.length &&
-				a.every((e, i) => e === r[i])
-			);
-		});
-
-		const score = questions.reduce((acc, q) => acc + (q.isCorrect ? q.pointValue : 0), 0); // <-- check and add every correct answer. Add 0 if not correct
-		const maxScore = questions.reduce((acc, q) => acc + q.pointValue, 0); // <-- tally all the possible points
-
-		if(maxScore <= 0){
-			console.error("state.gradeQuizQuestions: Max score set too low --> ", maxScore);
-			return -1;
-		}
-		return ({score: score, maxScore: maxScore});
 	},
 
 	loadCourseData: async function(){

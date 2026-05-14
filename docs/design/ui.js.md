@@ -86,7 +86,7 @@ initialized, pauseSave, test, debugging, _seenNonces, _noncePruneTimer
 init, startEventListeners, serialize, deserialize, save, loadSave, reset,
 loadCourseData, generatePasscode, handleMessage, sendMessage, _rejectNonce,
 next, prev, advancePage, handleLastPage, finalizePage,
-checkIfComplete, checkCourseCompletion, calculateOverallGrade, gradeQuizQuestions,
+checkIfComplete, checkCourseCompletion, calculateOverallGrade,
 setTheme, lockDown, quit, log, alert
 ```
 
