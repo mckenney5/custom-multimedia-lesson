@@ -1,4 +1,5 @@
-const debugging = true;
+// eslint-disable-next-line no-var
+var debugging = new URLSearchParams(window.location.search).get("debug") === "true";
 let state = {
 	// --- Properties (Data) ---
 	data: {
@@ -18,11 +19,6 @@ let state = {
 	// --
 
 	lessonFrame: null,	 // Will hold the iframe element
-	infoBanner: null, // Will hold the banner element
-	infoBar: null, // Will hold progress for the user and other info
-	helpOverlay: null, // The overlay of the help window
-	helpContent: null, // Content of the help window
-	isPaused: false, // Flag to pause timers when the user is looking at the help window
 	pauseSave: false, // Flag to pause the save on a reset
 	test: null, // Used for debugging
 	studentName: "",
@@ -32,10 +28,9 @@ let state = {
 	focusTimer: null, // handles timing between focus checks
 	pageAPISecret: null,
 	currentTheme: "light",
-	lastActiveElement: null, // Holds last tabbed element for keyboard use
 	initialized: false,
 
-	init: async function(frameId, bannerId, infoBar) {
+	init: async function(frameId) {
 		// Set up LMS connection
 		if(!lms.initialized) lms.init();
 
@@ -46,19 +41,29 @@ let state = {
 		this.studentID = lms.getStudentID();
 
 		// Set up journaler and give it access to the alert and lockdown features for critical events (like possible data corruption)
-		if(!journaler.initialized) await journaler.init(this.alert.bind(this), this.lockDown.bind(this));
+		if(!journaler.initialized) await journaler.init((msg) => confirm(msg), this.lockDown.bind(this));
+
+		// Set up UI module
+		ui.init();
+
+		// Wire UI callbacks
+		ui._currentTheme = "light";
+		ui._onRefresh = () => {
+			try { this.save(); } catch(e) { console.error("Refresh save error", e); }
+			window.location.reload();
+		};
+		ui._onReset = () => this.reset();
+		ui._onThemeChange = (value) => {
+			this.setTheme(value);
+			ui._currentTheme = value;
+		};
+		ui._onPrint = () => ui.printCertificate();
 
 		// Set the date and time of us starting today. TODO consider not using the user for time
 		this.sessionStartTime = Date.now();
 
-		// Finds the required iframe and banner
+		// Finds the required iframe
 		this.lessonFrame = document.getElementById(frameId);
-		this.infoBanner = document.getElementById(bannerId);
-		this.infoBar = document.getElementById(infoBar);
-
-		// Set up help window
-		this.helpOverlay = document.getElementById("help-overlay");
-		this.helpContent = document.getElementById("help-content");
 
 		// Attempt to load the course (static data)
 		await this.loadCourseData();
@@ -67,7 +72,19 @@ let state = {
 		await this.loadSave();
 
 		// Set up API Secret for the pages (auth)
-		this.pageAPISecret = this.generatePasscode();
+		this.pageAPISecret = utils.generatePasscode();
+
+		// Set up nonce replay protection
+		if(this._noncePruneTimer){
+			clearInterval(this._noncePruneTimer);
+		}
+		this._seenNonces = new Map();
+		this._noncePruneTimer = setInterval(() => {
+			const cutoff = Date.now() - 300000;
+			for(const [nonce, ts] of this._seenNonces){
+				if(ts < cutoff) this._seenNonces.delete(nonce);
+			}
+		}, 60000);
 
 		// Load last webpage we were on
 		this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
@@ -76,51 +93,33 @@ let state = {
 		this.startEventListeners();
 
 		// Update the UI bar
-		this.updateInfo();
+		ui.updateInfo({
+			currentPageIndex: this.data.delta.currentPageIndex,
+			pageCount: this.data.pages.length,
+			progress: this.data.delta.progress,
+		});
+
+		// Cache page data for help modal
+		ui._lastPage = this.data.pages[this.data.delta.currentPageIndex];
+		ui._lastPageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
 
 		// Mark done
 		this.initialized = true;
 	},
 
-	generatePasscode: function () {
-		// Creates random passcodes
-		if(typeof crypto !== "undefined" && crypto.randomUUID){
-			return crypto.randomUUID();
-		}
-
-		// if the browser does not support it, try secure random
-		const length = 32;
-		const cryptoObj = window.crypto || window.msCrypto;
-		if(cryptoObj){
-			const items = new Uint8Array(length);
-			cryptoObj.getRandomValues(items);
-			return items.join("");
-		}
-
-		// if it does not support any of that, its Math.random time with 32 floats
-		const result = [];
-		for(let i = 0; i < length; i++){
-			result.push(Math.random() * (Math.random()*1000).toFixed(0));
-		}
-		return result.join("");
-	},
-
 	startEventListeners: function(){
-
-		// make infoBanner close on click
-		this.infoBanner.addEventListener("click", () => {this.infoBanner.style.display = "none";});
 
 		// Add the Esc key as a shortcut to closing the info banner
 		const handleShortcuts = (e) => {
 			if (e.key === "Escape" || e.code === "Escape") {
 				// Check if Help Modal is open
-				if (this.helpOverlay && this.helpOverlay.style.display === "flex") {
+				if (ui.helpOverlay && ui.helpOverlay.style.display === "flex") {
 					e.preventDefault();
-					this.closeHelp();
-				} else if (this.infoBanner.style.display === "flex") {
+					ui.closeHelp(this.lessonFrame);
+				} else if (ui.isBannerVisible()) {
 					// Check if banner visible
 					e.preventDefault();
-					this.infoBanner.style.display = "none";
+					ui.hideBanner();
 				}
 				// If not visible and not in help, do nothing
 			}
@@ -166,7 +165,7 @@ let state = {
 		};
 
 		const onBlur = () => {
-			if (this.isPaused) return; // Disabled when looking at help menu
+			if (ui.isPaused) return; // Disabled when looking at help menu
 			this.focusTimer = setTimeout(() => {
 				if(!this.isIdle){
 					this.isIdle = true;
@@ -203,7 +202,7 @@ let state = {
 
 		// track the time in the course and the current page
 		setInterval(() => {
-			if (this.isPaused) return; // Disabled when looking at help menu
+			if (ui.isPaused) return; // Disabled when looking at help menu
 			if(++this.data.delta.totalCourseSeconds % 60 == 0){
 				if(!debugging) this.save();
 			}
@@ -299,28 +298,12 @@ let state = {
 		});
 	},
 
-	updateInfo: function (){
-		// Updates the info bar on the bottom of the UI
-		const currentPage = this.data.delta.currentPageIndex+1;
-		const pageCount = this.data.pages.length;
-
-		// Prevent divide-by-zero if there is only 1 page in the whole course
-		const totalSteps = Math.max(1, pageCount - 1);
-		const progress = Math.round((this.data.delta.progress / totalSteps) * 100);
-
-		// Inject the background fill div and the text span
-		this.infoBar.innerHTML = `
-			<div id="info-bar-fill" style="width: ${progress}%;"></div>
-			<span id="info-bar-text">Page ${currentPage} of ${pageCount} &nbsp;&nbsp;&bull;&nbsp;&nbsp; ${progress}% Complete</span>
-		`;
-	},
-
 	handleLastPage: function(){
-		// Checks if we are done with the course
-		if(!this.checkCourseCompletion()) return false;
+		completion.finalizeCourse(this.data.courseRules, this.data.delta.totalCourseSeconds, this.data.pages, this.data.delta.pagesState);
+		if(!completion.checkCourseCompletion(this.data.courseRules, this.data.delta.totalCourseSeconds, this.data.pages, this.data.delta.pagesState)) return false;
 
 		// Calculate score and log
-		const grade = this.calculateOverallGrade();
+		const grade = completion.calculateOverallGrade(this.data.pages, this.data.delta.pagesState);
 		const gradeString = String(Math.round(grade.ratio * 100));
 		journaler.log("COURSE_COMPLETE", gradeString);
 		journaler.transmit("FINAL", journaler.report().join("\n"), true);
@@ -348,18 +331,29 @@ let state = {
 		}
 
 		// Show final screen
-		this.showEndScreen(hasPassed, gradeString, Math.round(minimumGrade * 100));
+		ui.showEndScreen(hasPassed, gradeString, Math.round(minimumGrade * 100), {
+			onQuit: () => this.quit(),
+			onPrint: () => ui.printCertificate(),
+			printData: {
+				studentName: this.studentName,
+				overallGrade: completion.calculateOverallGrade(this.data.pages, this.data.delta.pagesState),
+				totalSeconds: this.data.delta.totalCourseSeconds,
+				certConfig: this.data.courseRules.certificate || {},
+				minimumMinutes: this.data.courseRules.minimumMinutes,
+			},
+		});
 		return true;
 	},
 
 	finalizePage: function(){
+		const page = this.data.pages[this.data.delta.currentPageIndex];
 		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
-		if(this.checkIfComplete() && this.data.delta.currentPageIndex === this.data.delta.progress && pageDelta.completed === false){
+		if(completion.checkIfComplete(page, pageDelta) && this.data.delta.currentPageIndex === this.data.delta.progress && pageDelta.completed === false){
 			pageDelta.completed = true;
 			this.data.delta.progress += 1;
-			this.log(`Page ${this.data.delta.currentPageIndex} completed`);
+			journaler.log("GENERAL", `Page ${this.data.delta.currentPageIndex} completed`);
 			journaler.log("PAGE_COMPLETE", this.data.delta.currentPageIndex);
-			this.bannerMessage("This page is completed. You may continue", false);
+			ui.bannerMessage("This page is completed. You may continue", false);
 			this.save();
 		} else {
 			return false;
@@ -374,10 +368,11 @@ let state = {
 
 		if(currentPage === lastPage){
 			// If we are on the final page, try to finish the course
-			if(this.checkCourseCompletion()){
+			completion.finalizeCourse(this.data.courseRules, this.data.delta.totalCourseSeconds, this.data.pages, this.data.delta.pagesState);
+			if(completion.checkCourseCompletion(this.data.courseRules, this.data.delta.totalCourseSeconds, this.data.pages, this.data.delta.pagesState)){
 				this.handleLastPage();
 			} else {
-				this.bannerMessage("You have not finished all course requirements. Review your work and try again.");
+				ui.bannerMessage("You have not finished all course requirements. Review your work and try again.");
 			}
 		} else {
 			// Just go to the next page
@@ -391,14 +386,15 @@ let state = {
 			console.error("Cannot go to next page until the state is initialized. Run state.init() first");
 			return false;
 		}
-		this.infoBanner.style.display = "none"; //reset banner
+		ui.hideBanner(); //reset banner
 
+		const page = this.data.pages[this.data.delta.currentPageIndex];
 		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
 
-		if(this.checkIfComplete() && !pageDelta.completed){
+		if(completion.checkIfComplete(page, pageDelta) && !pageDelta.completed){
 			// if we just completed the page
 			pageDelta.completed = true;
-			this.log(`Page ${this.data.delta.currentPageIndex} completed`);
+			journaler.log("GENERAL", `Page ${this.data.delta.currentPageIndex} completed`);
 			this.advancePage();
 		} else if(pageDelta.completed) {
 			//if we are on a completed page
@@ -406,40 +402,56 @@ let state = {
 			this.advancePage();
 		} else {
 			// if we did not complete the page
-			this.bannerMessage("You must complete the current page to continue");
+			ui.bannerMessage("You must complete the current page to continue");
 			journaler.log("ADVANCE_DENIED", this.data.delta.currentPageIndex);
 		}
-		this.updateInfo();
+		ui.updateInfo({
+			currentPageIndex: this.data.delta.currentPageIndex,
+			pageCount: this.data.pages.length,
+			progress: this.data.delta.progress,
+		});
+
+		const idx = this.data.delta.currentPageIndex;
+		ui._lastPage = this.data.pages[idx];
+		ui._lastPageDelta = this.data.delta.pagesState[idx];
 	},
 
 	prev: function() {
 	// Tries to go back a page
-		if (!this.lessonFrame || !this.infoBanner) {
+		if (!this.lessonFrame || !ui.infoBanner) {
 			console.error("State not initialized. Call state.init() first.");
 			return;
 		}
 
 		// Hide any old errors
-		this.infoBanner.style.display = "none";
+		ui.hideBanner();
 
 		// Deccrement index
 		this.data.delta.currentPageIndex--;
 
 		// Check if we are at the end
 		if (this.data.delta.currentPageIndex < 0) {
-			this.bannerMessage("Cannot go back. You are on the first page");
+			ui.bannerMessage("Cannot go back. You are on the first page");
 			this.data.delta.currentPageIndex = 0;
 			return;
 		}
 
 		// Set the iframe source
 		this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
-		this.updateInfo();
+		ui.updateInfo({
+			currentPageIndex: this.data.delta.currentPageIndex,
+			pageCount: this.data.pages.length,
+			progress: this.data.delta.progress,
+		});
+
+		const idx = this.data.delta.currentPageIndex;
+		ui._lastPage = this.data.pages[idx];
+		ui._lastPageDelta = this.data.delta.pagesState[idx];
 	},
 
 	save: async function(){
 	// saves the state to the local browser storage
-		if(this.pauseSave){ console.log("Ignoring Save"); return;}
+		if(this.pauseSave){ console.debug("Ignoring Save"); return;}
 
 		const saveData = this.serialize();
 
@@ -448,7 +460,7 @@ let state = {
 		// Try to save with the LMS
 		if(compressed){
 			lms.saveData(compressed);
-			const progress = Math.round((this.data.delta.progress/(this.data.pages.length-1))*100);
+			const progress = Math.round((this.data.delta.progress/Math.max(1, this.data.pages.length-1))*100);
 			journaler.transmit("PROGRESS", `${progress}%\n${compressed}`, false); // <-- send progress log, low priority
 		} else {
 			console.error(`state.save: unable to save to save the data '${saveData}'. Compressed returned '${compressed}'`);
@@ -471,7 +483,7 @@ let state = {
 			try {
 				this.deserialize(data.delta);
 			} catch(e) {
-				console.error(`state.loadSave: Unable to parse saved data of \n${stateAsString}\n --> ${e}`);
+				console.error(`state.loadSave: Unable to parse saved data: ${e}`);
 			}
 		} else {
 			journaler.log("STARTED_NEW_COURSE", "");
@@ -483,10 +495,10 @@ let state = {
 		const confirmed = window.confirm("Are you sure you want to reset all of your progress? This action cannot be undone.");
 		if(confirmed){
 			this.pauseSave = true;
-			console.log("Resetting progress");
+			console.debug("Resetting progress");
 			//localStorage.removeItem("courseProgress");
 			lms.reset(); // <-- set the saved data to nothing
-			this.lessonFrame.src = this.data.pages[0].name + "?_cb=" + Date.now();
+			this.lessonFrame.src = this.data.pages[0].path + "?_cb=" + Date.now();
 			// TODO check if we are debugging, if so, delete the saved log too
 			window.onbeforeunload = null;
 			window.location.reload();
@@ -510,13 +522,13 @@ let state = {
 		window.document.body.innerHTML = "<h2>Course disabled</h2>";
 
 		// remove event listeners
-		window.onbeforeunload = () => console.log("Stopping prompt");
-		window.onunload = () => console.log("Stopping quit");
+		window.onbeforeunload = () => "Course disabled. Saving is blocked to prevent data corruption.";
+		window.onunload = () => console.debug("Stopping quit");
 
 		// nuke the state and its modules
-		state = "";
-		journaler = "";
-		lms = "";
+		window.state = null;
+		window.journaler = null;
+		window.lms = null;
 
 		// now the user cannot destroy their saved file, unless they refresh!
 
@@ -532,65 +544,13 @@ let state = {
 		lms.quit();
 	},
 
-	checkIfComplete: function() {
-		const page = this.data.pages[this.data.delta.currentPageIndex];
-		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
-
-		// Calculate score ratio or set to zero (stops / by 0)
-		const score = page.maxScore > 0 ? pageDelta.score / page.maxScore : 0;
-
-		let quizzesSatisfied = true;
-
-		if (page.completionRules.requireSubmission) {
-			// Get IDs of all quiz components on this page from static config
-			const quizComponents = (page.components || []).filter(c => c.type === "quiz");
-
-			// Check if every quiz has been marked 'completed' in the dynamic state
-			// Note: compState.completed is set to true in handleMessage > QUIZ_RESULT
-			quizzesSatisfied = quizComponents.every(q => {
-				const compState = pageDelta.components[q.id];
-				return compState && compState.completed === true;
-			});
-		}
-
-		return (
-			pageDelta.watchTime >= page.completionRules.watchTime &&
-			score >= page.completionRules.score &&
-			(!page.completionRules.scrolled || pageDelta.scrolled) &&
-			pageDelta.videoProgress >= page.completionRules.videoProgress &&
-			quizzesSatisfied
-		);
-	},
-
-	calculateOverallGrade: function (){
-		// Calculate score dynamically
-		const earnedScore = this.data.delta.pagesState.reduce((acc, p) => acc + p.score, 0); // <-- what the user earned
-		const maxScore = this.data.pages.reduce((acc, p) => acc + p.maxScore, 0);
-		return ({ratio: earnedScore / maxScore, earnedScore: earnedScore, maxScore: maxScore});
-	},
-
-	checkCourseCompletion: function(){
-		const isTimeRequirementMet = (this.data.courseRules.minimumMinutes * 60) <= this.data.delta.totalCourseSeconds;
-		const isScoreMet = this.data.courseRules.minimumGrade <= this.calculateOverallGrade().ratio;
-		const studentsCanFail = this.data.courseRules.studentsCanFail;
-
-		if(isTimeRequirementMet && (isScoreMet || studentsCanFail)){
-			this.data.delta.pagesState[this.data.pages.length-1].completed = true;
-			// set the good bye page to completed since the important course information is done
-			// this also allows us to check all the other ones
-		}
-		const isEveryPageComplete = this.data.delta.pagesState.every(p => p.completed);
-		//return (isLastPage && isTimeRequirementMet && isScoreMet && isEveryPageComplete);
-		return (isTimeRequirementMet && (isScoreMet || studentsCanFail) && isEveryPageComplete);
-	},
-
 	sendMessage: function(subject, message){
 		this.lessonFrame.contentWindow.postMessage({ type: subject,
-			message: message}, "*");
+			message: message}, window.location.origin);
 	},
 
 	handleMessage: function(event){
-		//console.log(event);
+		//console.debug(event);
 		const index = this.data.delta.currentPageIndex;
 		const page = this.data.pages[index];
 		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
@@ -602,7 +562,33 @@ let state = {
 			return;
 		}
 
-		// 1. UNWRAP the message
+		if(event.data.type !== "ORIGIN"){
+			if(!this.pageAPISecret){
+				console.error(`${name}: Message received before handshake complete`);
+				return;
+			}
+			if(event.data.code !== this.pageAPISecret){
+				console.error(`${name}: Invalid code --> ${event.data.code}`);
+				return;
+			}
+		}
+
+		// 2. NONCE VALIDATION (skip for ORIGIN which is handshake-only)
+		if(event.data.type !== "ORIGIN"){
+			const nonce = event.data.nonce;
+			const now = Date.now();
+			if(typeof nonce !== "number" || now - nonce > 300000 || now - nonce < 0){
+				this._rejectNonce(nonce);
+				return;
+			}
+			if(this._seenNonces.has(nonce)){
+				this._rejectNonce(nonce);
+				return;
+			}
+			this._seenNonces.set(nonce, now);
+		}
+
+		// 3. UNWRAP the message
 		let msgData = event.data.message;
 		let componentID = null;
 
@@ -617,8 +603,8 @@ let state = {
 		switch(event.data.type){
 			case "ORIGIN":
 				// tell the iframe who we are. Trust on First Use (TOFU)
-				this.lessonFrame.contentWindow.postMessage({ type: "ORIGIN", message: window.location.origin, code: this.pageAPISecret }, "*");
-				console.log("Auth Attempt");
+				this.lessonFrame.contentWindow.postMessage({ type: "ORIGIN", message: window.location.origin, code: this.pageAPISecret }, window.location.origin);
+				console.debug("Auth Attempt");
 				break;
 
 			case "QUIZ_RESULT":
@@ -652,12 +638,12 @@ let state = {
 							value: {
 								questions: compConfig.questions, // (Optional if component caches it)
 								userAnswers: compState.userAnswers,
-								attemptsLeft: page.completionRules.attempts - compState.attempts, // <--- The updated count
+								attemptsLeft: (page.completionRules.attempts || Infinity) - compState.attempts, // <--- The updated count
 								options: compConfig.options || [], // Add options to the specific quiz, like "show-wrong"
 								hasAttempted: compState.attempts > 0, // Flag to check attempts
 							},
 						},
-					}, "*");
+					}, window.location.origin);
 
 					this.finalizePage();
 				}
@@ -666,7 +652,7 @@ let state = {
 			case "GET_QUIZ_DATA":
 				// Composite Logic ---
 				if(componentID && page.components){
-					console.log(`comp -->\n${page.components}`);
+					console.debug(`comp -->\n${page.components}`);
 					const compConfig = page.components.find(c => c.id === componentID);
 					const compState = pageDelta.components[componentID];
 
@@ -674,7 +660,7 @@ let state = {
 						const quizPayload = {
 							questions: compConfig.questions,
 							userAnswers: compState.userAnswers || {},
-							attemptsLeft: page.completionRules.attempts - (compState.attempts || 0),
+							attemptsLeft: (page.completionRules.attempts || Infinity) - (compState.attempts || 0),
 							options: compConfig.options || [],
 							hasAttempted: (compState.attempts || 0) > 0,
 						};
@@ -685,7 +671,7 @@ let state = {
 								id: componentID,        // <--- Match component expectation
 								value: quizPayload,     // <--- Match component expectation
 							},
-						}, "*");
+						}, window.location.origin);
 					}
 				}
 				journaler.log("QUESTIONS_RENDERED", index);
@@ -772,14 +758,14 @@ let state = {
 				break;
 
 			case "GET_STUDENT_DATA":
-				const grade = String(Math.floor((this.calculateOverallGrade().ratio * 100)));
+				const grade = String(Math.floor((completion.calculateOverallGrade(this.data.pages, this.data.delta.pagesState).ratio * 100)));
 				this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA", message: {
-					name: this.studentName, grade: grade } }, "*");
+					name: this.studentName, grade: grade } }, window.location.origin);
 				journaler.log("GENERAL", "student info requested, page " + String(index));
 				break;
 
 			case "SEND_RENDER":
-				console.log(`${name}: SEND_RENDER not implemented yet`);
+				console.debug(`${name}: SEND_RENDER not implemented yet`);
 				break;
 
 			case "SEND_META":
@@ -797,65 +783,14 @@ let state = {
 		this.finalizePage();
 	},
 
-	bannerMessage: function(message, isError=true){
-		// Shows a message in a banner at the top center
-
-		let role = "";
-		let icon = "";
-
-		if(isError){
-			this.infoBanner.className = "error";
-			icon = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
-			role = "alert";
-		} else {
-			this.infoBanner.className = "warning";
-			icon = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>';
-			role = "status";
+	_rejectNonce: function(nonce){
+		console.error("Invalid or expired nonce -->", nonce);
+		if(this.lessonFrame && this.lessonFrame.contentWindow){
+			this.lessonFrame.contentWindow.postMessage({
+				type: "NONCE_REJECTED",
+				nonce: nonce,
+			}, window.location.origin);
 		}
-
-		this.infoBanner.innerHTML = `
-			${icon}
-			<span role="${role}">${message}</span>
-		`;
-
-		// Displays using Flexbox so the icon and text aligns perfectly
-		this.infoBanner.style.display = "flex";
-	},
-
-	log: function(message){
-		journaler.log("GENERAL", message);
-	},
-
-	alert: function(message){
-		//handles critical alerts to the user. useful if the calling object does not need a DOM
-		return confirm(message);
-	},
-
-	gradeQuizQuestions: function(questions, responses){
-		//compares answers to response, marks them correct or incorrect, adds up points of the correct ones, adds up total points, returns the score
-		// questions is an object, responses are a 2D array of strings
-		this.test = responses;
-		questions.forEach(q => q.choices = responses[q.id] || []); // <-- add responses to the question to save for later TODO check if choices[i] is needed
-		//TODO consider merging both lists and seeing if the neighbor element is the same?
-		const sortAndLower = arr => // <-- takes in an array (arr), returns either the sorted lowercase array (arr) or empty []. slice makes a new copy, map makes all time change
-			(arr || []).slice().map(s => String(s).toLowerCase()).sort();
-
-		questions.forEach(q => { // <-- goes through each question, sets the isCorrect flag if the converted & sorted answer is the same as the response
-			const a = sortAndLower(q.correctAnswers);
-			const r = sortAndLower(q.choices);
-			q.isCorrect = (a.length === r.length &&
-				a.every((e, i) => e === r[i])
-			);
-		});
-
-		const score = questions.reduce((acc, q) => acc + (q.isCorrect ? q.pointValue : 0), 0); // <-- check and add every correct answer. Add 0 if not correct
-		const maxScore = questions.reduce((acc, q) => acc + q.pointValue, 0); // <-- tally all the possible points
-
-		if(maxScore <= 0){
-			console.error("state.gradeQuizQuestions: Max score set too low --> ", maxScore);
-			return -1;
-		}
-		return ({score: score, maxScore: maxScore});
 	},
 
 	loadCourseData: async function(){
@@ -866,14 +801,14 @@ let state = {
 		try {
 			let response = null;
 			if(debugging){
-				console.log("Skipping cache for JSON");
+				console.debug("Skipping cache for JSON");
 				response = await fetch("lessons/course_data.json", {
 					cache: "no-store",
 				});
 			} else {
 				response = await fetch("lessons/course_data.json");
 			}
-			console.log("Loaded course_data.json");
+			console.debug("Loaded course_data.json");
 			const rawData = await response.json();
 
 			this.data.courseRules = rawData.courseRules || {};
@@ -899,8 +834,16 @@ let state = {
 
 				// 2. Initialize Components (if present)
 				if (page.components && Array.isArray(page.components)) {
-					page.components.forEach(comp => {
-						if(!comp.id) console.error(`Component on page '${page.name}' missing ID`);
+					page.components.forEach((comp, index) => {
+						if(!comp.id) {
+							comp.id = `auto-${Date.now()}-${Math.random().toString(36).substr(2,9)}`;
+							console.error(`Component on page '${page.name}' missing ID - generated fallback: ${comp.id}`);
+						}
+
+						if(!comp.type) {
+							console.error(`Component with id '${comp.id}' on page '${page.name}' missing type - skipping`);
+							return;
+						}
 
 						// Initialize specific state for this component
 						const compState = {
@@ -910,6 +853,10 @@ let state = {
 
 						// Add type-specific defaults
 						if (comp.type === "quiz") {
+							if (!comp.questions || !Array.isArray(comp.questions)) {
+								console.error(`Quiz component '${comp.id}' missing questions array - skipping`);
+								return;
+							}
 							const qMax = comp.questions.reduce((acc, q) => acc + q.pointValue, 0.0);
 							calculatedMaxScore += qMax;
 							compState.score = 0;
@@ -942,337 +889,7 @@ let state = {
 		}
 	},
 
-	toggleHelp: function(){
-		// Makes the ? nav button toggle from showing help menu or closing it
-		if (this.helpOverlay.style.display === "flex") {
-			this.closeHelp();
-		} else {
-			this.showHelpMenu();
-		}
-	},
 
-	showHelpMenu: function(){
-		// Displays the help menu from the ? nav button
-
-		this.lastActiveElement = document.activeElement; // Save last tabbed element
-		this.isPaused = true;
-		this.lessonFrame.style.display = "none";
-		this.helpOverlay.style.display = "flex";
-
-		// Disable the navigation while the help menu is up
-		document.getElementById("prev").disabled = true;
-		document.getElementById("next").disabled = true;
-
-		this.helpContent.innerHTML = `
-			<div class="help-wrapper centered">
-				<h1 id="modal-title" class="help-title no-border">Course Help</h1>
-				<p class="help-subtitle" style="margin-bottom: 40px;">Select an option below to continue.
-				<br><br> If you run into an issue during the course,
-				go through each menu, from top to bottom, until the issue is resolved</p>
-				<div class="help-btn-group-col">
-					<button class="help-action-btn" onclick="state.showPageHelp()">
-						📄 Help with Current Page
-					</button>
-
-					<button class="help-action-btn" onclick="state.showGeneralHelp()">
-						❓ General Course Help
-					</button>
-
-					<button class="help-action-btn" onclick="state.refreshBrowser()">
-					🔄 Refresh This Web Page
-					</button>
-
-					<button class="help-action-btn danger" onclick="state.reset()">
-						⚠️ Reset Course Progress
-					</button>
-				</div>
-			</div>
-		`;
-
-		// Move tab selection
-		setTimeout(() => {
-			const closeBtn = document.getElementById("close-help");
-			if (closeBtn) closeBtn.focus();
-		}, 50);
-	},
-
-	showPageHelp: function(){
-		// A menu to show page rules to the user to see whats left
-		const page = this.data.pages[this.data.delta.currentPageIndex];
-		const pageDelta = this.data.delta.pagesState[this.data.delta.currentPageIndex];
-		const rules = page.completionRules;
-		const scorePct = page.maxScore > 0 ? (pageDelta.score / page.maxScore) : 0;
-
-		let quizzesSatisfied = true;
-		if (rules.requireSubmission) {
-			const quizComponents = (page.components || []).filter(c => c.type === "quiz");
-			quizzesSatisfied = quizComponents.every(q => pageDelta.components[q.id] && pageDelta.components[q.id].completed);
-		}
-
-		const checks = {
-			watchTime: pageDelta.watchTime >= rules.watchTime,
-			score: scorePct >= rules.score,
-			scrolled: !rules.scrolled || pageDelta.scrolled,
-			videoProgress: pageDelta.videoProgress >= rules.videoProgress,
-			requireSubmission: quizzesSatisfied,
-		};
-
-		// Uses the new CSS classes for the checkmarks!
-		const formatIcon = (passed) => passed ? '<span aria-hidden="true" class="status-pass">✅</span>' : '<span aria-hidden="true" class="status-fail">❌</span>';
-
-		let html = `
-			<div class="help-wrapper">
-			<h1 class="help-title">Page Completion Requirements</h1>
-			<p class="help-subtitle">Review the requirements below. You must complete all items marked with an ❌ to unlock the next page.</p>
-
-			<table class="help-table">
-			<tr>
-			<th>Requirement</th>
-			<th>Target</th>
-			<th>Current Progress</th>
-			<th>Status</th>
-			</tr>
-		`;
-
-		if (rules.watchTime > 0) html += `<tr><td>Time on Page</td><td>${rules.watchTime} seconds</td><td>${pageDelta.watchTime} seconds</td><td>${formatIcon(checks.watchTime)}</td></tr>`;
-		if (rules.score > 0) html += `<tr><td>Minimum Score</td><td>${Math.round(rules.score * 100)}%</td><td>${Math.round(scorePct * 100)}%</td><td>${formatIcon(checks.score)}</td></tr>`;
-		if (rules.scrolled) html += `<tr><td>Read Entire Article</td><td>Scroll to Bottom</td><td>${pageDelta.scrolled ? "Scrolled" : "Not Scrolled"}</td><td>${formatIcon(checks.scrolled)}</td></tr>`;
-		if (rules.videoProgress > 0) html += `<tr><td>Watch Video</td><td>${Math.round(rules.videoProgress * 100)}%</td><td>${Math.round(pageDelta.videoProgress * 100)}%</td><td>${formatIcon(checks.videoProgress)}</td></tr>`;
-		if (rules.requireSubmission) html += `<tr><td>Submit Quizzes</td><td>Submit all</td><td>${quizzesSatisfied ? "Submitted" : "Pending"}</td><td>${formatIcon(checks.requireSubmission)}</td></tr>`;
-
-		html += `</table>
-			<div class="help-btn-group-row">
-				<button class="help-action-btn auto-width" onclick="state.showPageHelp()">🔄 Refresh Status</button>
-				<button class="help-action-btn auto-width" onclick="state.showHelpMenu()">&larr; Back to Menu</button>
-				</div>
-			</div>
-		`;
-
-		this.helpContent.innerHTML = html;
-	},
-
-	showGeneralHelp: function(){
-		// Opens the help page on how to navigate the course
-		this.helpContent.innerHTML = `
-			<div class="help-wrapper">
-			<iframe src="help.html" class="help-iframe"></iframe>
-			<div class="help-btn-group-row" style="margin-top: 15px;">
-				<button class="help-action-btn auto-width" onclick="state.showHelpMenu()">&larr; Back to Menu</button>
-			</div>
-			</div>
-		`;
-	},
-
-	closeHelp: function(){
-		// Closes the Help (aka ?) menu and Settings menu
-		this.helpOverlay.style.display = "none";
-		this.helpContent.innerHTML = "";
-		this.lessonFrame.style.display = "block";
-		this.isPaused = false; // Unfreeze analytics
-
-		// Reenable course navigation
-		document.getElementById("prev").disabled = false;
-		document.getElementById("next").disabled = false;
-
-		// Move tabbed element back
-		if (this.lastActiveElement) {
-			this.lastActiveElement.focus();
-			this.lastActiveElement = null;
-		}
-	},
-
-	showEndScreen: function(hasPassed, scoreString, requiredScoreString) {
-		// End of course pop up
-
-		this.isPaused = true;
-		this.lessonFrame.style.display = "none";
-		this.helpOverlay.style.display = "flex";
-
-		// Lock navigation
-		document.getElementById("prev").disabled = true;
-		document.getElementById("next").disabled = true;
-		this.lastActiveElement = document.activeElement;
-
-		const certConfig = this.data.courseRules.certificate || {};
-		const showCertButton = hasPassed && certConfig.enabled;
-
-		// Build the messaging based on pass/fail
-		let title = hasPassed ? "🎉 Course Completed!" : "⚠️ Course Incomplete";
-		let message = hasPassed
-			? `Congratulations! You have successfully finished the course with a score of <strong>${scoreString}%</strong>.`
-			: `You reached the end, but you scored <strong>${scoreString}%</strong>. A score of <strong>${requiredScoreString}%</strong> is required to pass.`;
-
-		let certButtonHTML = showCertButton
-			? `<button class="help-action-btn" onclick="state.printCertificate()" style="background-color: var(--brand); color: var(--brand-text);">🖨️ Print Certificate</button>`
-			: "";
-
-		this.helpContent.innerHTML = `
-		<div class="help-wrapper centered" style="text-align: center;">
-			<h1 id="modal-title" class="help-title no-border">${title}</h1>
-			<p class="help-subtitle" style="margin-bottom: 30px; font-size: 1.2rem;">${message}</p>
-
-			<div class="help-btn-group-col" style="align-items: center;">
-				${certButtonHTML}
-				<button class="help-action-btn auto-width" onclick="state.closeHelp()">🔙 Review Course Materials</button>
-				<button class="help-action-btn danger auto-width" onclick="state.quit()">🚪 Exit Course</button>
-				</div>
-		</div>
-		`;
-
-		setTimeout(() => {
-			const closeBtn = document.getElementById("close-help");
-			if (closeBtn) closeBtn.focus();
-		}, 50);
-	},
-
-	printCertificate: function() {
-		// Generates and prints the end of course cert
-		const certConfig = this.data.courseRules.certificate || {};
-		const printArea = document.getElementById("certificate-print-area");
-
-		if (!printArea) {
-			console.error("Unable to find print area for the cert!");
-			return;
-		}
-
-		// Gather our template variables
-		const student = this.studentName || "Student";
-		const scoreString = String(Math.round(this.calculateOverallGrade().ratio * 100));
-		const dateString = new Date().toLocaleDateString();
-
-		// Time tracking
-		const totalSeconds = this.data.delta.totalCourseSeconds || 0;
-		const totalMinutes = String(Math.floor(totalSeconds / 60));
-		// Uses parseFloat to cleanly drop trailing zeros (e.g., 1.50 becomes 1.5)
-		const totalHours = String(parseFloat((totalSeconds / 3600).toFixed(2)));
-		const minimumLength = String(this.data.courseRules.minimumMinutes || 0);
-
-		// Text Replacer Engine
-		const titleText = certConfig.title || "Certificate of Completion";
-		let bodyText = certConfig.body || "This certifies that {{studentName}} completed the course on {{date}} with a score of {{score}}%.";
-
-		bodyText = bodyText.replace(/{{studentName}}/g, student);
-		bodyText = bodyText.replace(/{{score}}/g, scoreString);
-		bodyText = bodyText.replace(/{{date}}/g, dateString);
-		bodyText = bodyText.replace(/{{totalMinutes}}/g, totalMinutes);
-		bodyText = bodyText.replace(/{{totalHours}}/g, totalHours);
-		bodyText = bodyText.replace(/{{minimumLength}}/g, minimumLength);
-		bodyText = bodyText.replace(/\n/g, "<br>");
-
-		// Optional Image Engine (Checks if the variables exist in JSON)
-		const logoHTML = certConfig.logoUrl
-			? `<img src="${certConfig.logoUrl}" style="max-height: 80px; margin-bottom: 20px;" alt="" />`
-			: "";
-
-		const signatureHTML = certConfig.signatureUrl
-			? `
-			<div style="width: 250px; font-size: 1.2rem;">
-				<div style="border-bottom: 2px solid #333; height: 50px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 5px;">
-					<img src="${certConfig.signatureUrl}" style="max-height: 45px; margin-bottom: -2px;" alt="Signature" />
-				</div>
-				Instructor Signature
-			</div>
-			`
-			: "";
-
-		const watermarkHTML = certConfig.watermarkUrl
-			? `<img src="${certConfig.watermarkUrl}" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 75%; max-height: 75%; opacity: 0.12; z-index: 0; pointer-events: none;" alt="" />`
-			: "";
-
-		// Inject the HTML (Using Flexbox to align the bottom columns perfectly)
-		printArea.innerHTML = `
-		${watermarkHTML}
-
-		<h1 style="position: absolute; top: 30px; left: 50%; transform: translateX(-50%); width: 100%; max-width: 900px; text-align: center; z-index: 10; padding-bottom: 15px; margin: 0; font-size: 3.5rem; text-transform: uppercase; letter-spacing: 2px;">
-		${titleText}
-		</h1>
-
-		<div style="position: relative; z-index: 1; margin: 130px auto; width: 100%; max-width: 900px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-		${logoHTML}
-		<p style="font-size: 1.8rem; line-height: 1.6; margin: 0;">
-		${bodyText}
-		</p>
-		</div>
-
-		<div style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; justify-content: space-around; align-items: flex-end; width: 100%; max-width: 900px; z-index: 10; padding-top: 15px;">
-
-		<div style="width: 250px; font-size: 1.2rem;">
-		<div style="border-bottom: 2px solid #333; height: 50px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; margin-bottom: 5px;">
-		${dateString}
-		</div>
-		Date
-		</div>
-
-		<div style="width: 250px; font-size: 1.2rem;">
-		<div style="border-bottom: 2px solid #333; height: 50px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; margin-bottom: 5px;">
-		${scoreString}%
-		</div>
-		Score
-		</div>
-
-		${signatureHTML}
-		</div>
-			`;
-
-		// Trigger the browser's native print dialog
-		window.print();
-	},
-
-	toggleSettings: function(){
-		if (this.helpOverlay.style.display === "flex") {
-			this.closeHelp(); // We reuse closeHelp since it just closes the modal
-		} else {
-			this.showSettingsMenu();
-		}
-	},
-
-	showSettingsMenu: function(){
-		// Very similar to the Help (?) button
-
-		this.lastActiveElement = document.activeElement; // Save tab selection
-		this.isPaused = true;
-		this.lessonFrame.style.display = "none";
-		this.helpOverlay.style.display = "flex";
-
-		document.getElementById("prev").disabled = true;
-		document.getElementById("next").disabled = true;
-
-		// Check the current theme so the dropdown shows the correct active choice
-		const lightSel = this.currentTheme === "light" ? "selected" : "";
-		const darkSel = this.currentTheme === "dark" ? "selected" : "";
-		const hcSel = this.currentTheme === "high-contrast" ? "selected" : "";
-
-		this.helpContent.innerHTML = `
-			<div class="help-wrapper centered">
-				<h1 id="modal-title" class="help-title no-border">Course Settings</h1>
-				<p class="help-subtitle" style="margin-bottom: 40px;">Adjust your course preferences below.</p>
-
-				<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; width: 100%; max-width: 350px;">
-					<label for="theme-select" style="font-size: 1.2rem; font-weight: bold; color: var(--text-main);">Color Theme</label>
-					<select id="theme-select" onchange="state.setTheme(this.value)" style="width: 100%; padding: 12px; font-size: 1.1rem; border-radius: 8px; border: 2px solid var(--border-color); background: var(--bg-main); color: var(--text-main); cursor: pointer;">
-					<option value="light" ${lightSel}>Light Mode (Default)</option>
-					<option value="dark" ${darkSel}>Dark Mode</option>
-					<option value="high-contrast" ${hcSel}>High Contrast</option>
-					</select>
-				</div>
-			</div>
-		`;
-
-		// Move tab selection
-		setTimeout(() => {
-			const closeBtn = document.getElementById("close-help");
-			if (closeBtn) closeBtn.focus();
-		}, 50);
-	},
-
-	refreshBrowser: function(){
-		// A simple button to refresh the web page for the user
-		// Force a save just in case
-		this.save();
-
-		// Reload the entire web app. The main page leaving event will prompt
-		window.location.reload();
-	},
 
 	setTheme: function(themeName){
 		this.currentTheme = themeName;
@@ -1303,13 +920,13 @@ window.onload = async () => {
 	doc.close();
 
 	// Start the web app
-	await state.init("lesson-frame", "info-banner", "info-bar");
+	await state.init("lesson-frame");
 	window.addEventListener("message", state.handleMessage.bind(state));
 };
 
 window.onbeforeunload = () => {
 	if(!state.data.pages || state.data.pages.length === 0){
-		console.log("pages not loaded");
+		console.debug("pages not loaded");
 		state.save();
 		return;
 	}
