@@ -331,7 +331,7 @@ let state = {
 		}
 
 		// Show final screen
-		ui.showEndScreen(hasPassed, gradeString, Math.round(minimumGrade * 100), {
+		ui.showEndScreen(hasPassed, gradeString, String(Math.round(minimumGrade * 100)), {
 			onQuit: () => this.quit(),
 			onPrint: () => ui.printCertificate(),
 			printData: {
