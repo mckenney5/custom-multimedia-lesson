@@ -1,6 +1,6 @@
 Custom Multimedia Lesson
 ========================
-CML (v A0.5.0) — _A small, lightweight, interactive lesson application_
+CML (v A0.5.1) — _A small, lightweight, interactive lesson application_
 
 ## Description
 This is a web application made from vanilla JavaScript, CSS, and HTML5. Its job is to facilitate a custom multi-page lesson.
