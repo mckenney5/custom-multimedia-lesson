@@ -895,6 +895,8 @@ class CourseQuiz extends CourseComponent {
 			btn.textContent = `No Attempts Left - Score ${score}`;
 			// Disable ALL inputs (text, radio, and checkboxes)
 			this.querySelectorAll("input").forEach(el => el.disabled = true);
+		} else if (this.hasAttempted) {
+			btn.textContent = "Resubmit";
 		}
 	}
 

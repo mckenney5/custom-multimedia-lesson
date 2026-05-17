@@ -438,6 +438,7 @@ const journaler = {
 		console.debug("[DEBUG] journaler.unpack --> ", cleanObject);
 		this._currentLog = cleanObject.log;
 		this._userID = cleanObject.meta.userID;
+		this._startTime = cleanObject.meta.startTime;
 		return cleanObject;
 	},
 

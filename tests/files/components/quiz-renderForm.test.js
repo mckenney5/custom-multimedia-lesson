@@ -116,19 +116,19 @@ test.describe('CourseQuiz renderForm()', () => {
     expect(result.disabled).toBe(true);
   });
 
-  test('should keep button enabled when hasAttempted but attempts remain', async () => {
-    const result = await page.evaluate(() => {
-      const quiz = document.createElement('course-quiz');
-      quiz.options = [];
-      quiz.hasAttempted = true;
-      quiz.attemptsLeft = 2;
-      quiz.renderForm([], {});
-      const btn = quiz.querySelector('.btn-submit');
-      return { text: btn ? btn.textContent : null, disabled: btn ? btn.disabled : null };
-    });
-    expect(result.text).toBe('Submit Answers');
-    expect(result.disabled).toBe(false);
-  });
+	test('should show Resubmit when hasAttempted and attempts remain', async () => {
+		const result = await page.evaluate(() => {
+			const quiz = document.createElement('course-quiz');
+			quiz.options = [];
+			quiz.hasAttempted = true;
+			quiz.attemptsLeft = 2;
+			quiz.renderForm([], {});
+			const btn = quiz.querySelector('.btn-submit');
+			return { text: btn ? btn.textContent : null, disabled: btn ? btn.disabled : null };
+		});
+		expect(result.text).toBe('Resubmit');
+		expect(result.disabled).toBe(false);
+	});
 
   test('should disable submit button and inputs when no attempts left', async () => {
     const result = await page.evaluate(() => {
@@ -152,7 +152,57 @@ test.describe('CourseQuiz renderForm()', () => {
     expect(result.inputsDisabled).toBe(true);
   });
 
-  test('should disable inputs for short answer when no attempts left', async () => {
+	test('handleQuizData → renderForm should show Resubmit when hasAttempted is true and attempts remain', async () => {
+		const result = await page.evaluate(() => {
+			const quiz = document.createElement('course-quiz');
+			quiz.setAttribute('id', 'quiz1');
+			quiz.options = [];
+			const event = {
+				detail: {
+					id: 'quiz1',
+					value: {
+						attemptsLeft: 2,
+						hasAttempted: true,
+						options: [],
+						questions: [{ id: 'q1', type: 'multiple-choice', text: 'Test', possibleAnswers: ['A', 'B'], correctAnswers: ['A'], pointValue: 1 }],
+						userAnswers: { q1: ['A'] },
+					},
+				},
+			};
+			quiz.handleQuizData(event);
+			const btn = quiz.querySelector('.btn-submit');
+			return { text: btn ? btn.textContent : null, disabled: btn ? btn.disabled : null };
+		});
+		expect(result.text).toBe('Resubmit');
+		expect(result.disabled).toBe(false);
+	});
+
+	test('handleQuizData → renderForm should keep Submit Answers when hasAttempted is false', async () => {
+		const result = await page.evaluate(() => {
+			const quiz = document.createElement('course-quiz');
+			quiz.setAttribute('id', 'quiz1');
+			quiz.options = [];
+			const event = {
+				detail: {
+					id: 'quiz1',
+					value: {
+						attemptsLeft: 3,
+						hasAttempted: false,
+						options: [],
+						questions: [{ id: 'q1', type: 'multiple-choice', text: 'Test', possibleAnswers: ['A', 'B'], correctAnswers: ['A'], pointValue: 1 }],
+						userAnswers: {},
+					},
+				},
+			};
+			quiz.handleQuizData(event);
+			const btn = quiz.querySelector('.btn-submit');
+			return { text: btn ? btn.textContent : null, disabled: btn ? btn.disabled : null };
+		});
+		expect(result.text).toBe('Submit Answers');
+		expect(result.disabled).toBe(false);
+	});
+
+	test('should disable inputs for short answer when no attempts left', async () => {
     const result = await page.evaluate(() => {
       const quiz = document.createElement('course-quiz');
       quiz.options = [];

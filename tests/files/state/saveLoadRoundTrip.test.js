@@ -48,4 +48,39 @@ test.describe("state save/load round-trip: currentPageIndex", () => {
 		expect(result.currentPageIndex).toBe(3);
 		expect(result.progress).toBe(3);
 	});
+
+	test("should preserve currentPageIndex after page reload (sync onbeforeunload save)", async () => {
+		const result = await page.evaluate(async () => {
+			state.data.pages = [
+				{ name: "page0", path: "lessons/page0.html" },
+				{ name: "page1", path: "lessons/page1.html" },
+				{ name: "page2", path: "lessons/page2.html" },
+				{ name: "finish", path: "lessons/finish.html" },
+			];
+			state.data.delta.pagesState = state.data.pages.map(() => ({
+				completed: false, scrolled: false, score: 0,
+				watchTime: 0, attempts: 0, videoProgress: 0,
+				userAnswers: {}, components: {},
+			}));
+
+			state.data.delta.currentPageIndex = 2;
+			state.data.delta.progress = 3;
+			state.data.delta.totalCourseSeconds = 600;
+			await state.save();
+
+			state.data.delta.currentPageIndex = 3;
+
+			return { saved: true };
+		});
+
+		expect(result.saved).toBe(true);
+
+		await page.reload();
+		await page.waitForFunction(() =>
+			typeof state !== "undefined" && state.initialized,
+		);
+
+		const pageIdx = await page.evaluate(() => state.data.delta.currentPageIndex);
+		expect(pageIdx).toBe(3);
+	});
 });

@@ -48,6 +48,32 @@ test.describe('unpack', () => {
     expect(result).toBe(true);
   });
 
+  test('should restore _startTime from unpacked meta', async () => {
+    const result = await page.evaluate(async () => {
+      // Set a known start time
+      const originalStartTime = Date.parse('2024-06-15T10:00:00Z');
+      journaler._startTime = originalStartTime;
+      journaler._userID = "testUser";
+      journaler._eventBuffer = [];
+
+      // Log an event so we have data
+      journaler.log('COURSE_LOADED', 'test');
+      const packed = await journaler.pack([1, 2, 3]);
+      if (!packed) return false;
+
+      // Simulate what init() does on reload — stomp _startTime
+      journaler._startTime = Date.now();
+
+      // Now unpack — this should restore the original start time
+      const unpacked = await journaler.unpack(packed);
+      if (!unpacked) return false;
+
+      // Verify _startTime was restored
+      return journaler._startTime === originalStartTime;
+    });
+    expect(result).toBe(true);
+  });
+
   test('should handle unpack with CGZ prefix but no compression support', async () => {
     const result = await page.evaluate(async () => {
       const originalSupport = journaler._supportsCompression;
