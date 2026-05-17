@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test Runner Script
 # Usage: ./test-runner.sh [--all|--test_name FILE]
 
