@@ -48,8 +48,8 @@ let state = {
 
 		// Wire UI callbacks
 		ui._currentTheme = "light";
-		ui._onRefresh = () => {
-			try { this.save(); } catch(e) { console.error("Refresh save error", e); }
+		ui._onRefresh = async () => {
+			try { await this.save(); } catch(e) { console.error("Refresh save error", e); }
 			window.location.reload();
 		};
 		ui._onReset = () => this.reset();
@@ -377,6 +377,7 @@ let state = {
 		} else {
 			// Just go to the next page
 			this.data.delta.currentPageIndex += 1;
+			journaler.log("PAGE_NEXT", this.data.delta.currentPageIndex);
 			this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
 		}
 	},
@@ -435,6 +436,9 @@ let state = {
 			this.data.delta.currentPageIndex = 0;
 			return;
 		}
+
+		// Log the navigation event
+		journaler.log("PAGE_PREV", this.data.delta.currentPageIndex);
 
 		// Set the iframe source
 		this.lessonFrame.src = this.data.pages[this.data.delta.currentPageIndex].path;
@@ -927,10 +931,28 @@ window.onload = async () => {
 window.onbeforeunload = () => {
 	if(!state.data.pages || state.data.pages.length === 0){
 		console.debug("pages not loaded");
-		state.save();
 		return;
 	}
-	state.save();
+	if(state.pauseSave){
+		console.debug("PauseSave active — skipping unload save");
+		return;
+	}
+	// Sync save (no compression — async won't complete before unload)
+	try {
+		const delta = state.serialize();
+		journaler._currentLog.push(...journaler._eventBuffer);
+		journaler._eventBuffer = [];
+		const raw = [
+			journaler._version,
+			journaler._userID,
+			journaler._toBase36(journaler._startTime),
+			...delta.map(d => typeof d === "number" ? journaler._toBase36(d) : d),
+			journaler._currentLog.join(journaler._logDelimiter),
+		].join(journaler._delimiter);
+		lms.saveData(raw);
+	} catch(e) {
+		console.error("beforeunload save error", e);
+	}
 	if(!state.data.delta.pagesState[state.data.delta.currentPageIndex].completed){
 		return "Your progress on the current page my be lost.";
 	}

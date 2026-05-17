@@ -247,6 +247,13 @@ const journaler = {
 
 	report: function(userIDNum, fullLog, sessionStart){
 		/* takes in a string, splits, decodes, and returns a list of events */
+
+		// Flush pending buffered events so report is complete
+		if (!fullLog) {
+			this._currentLog.push(...this._eventBuffer);
+			this._eventBuffer = [];
+		}
+
 		const heading = ["ID", "Time Stamp", "Event", "Page Index", "Details"];
 		const baseTime = sessionStart || this._startTime;
 		const userID = userIDNum || this._userID;

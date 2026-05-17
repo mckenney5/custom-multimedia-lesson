@@ -102,6 +102,34 @@ test.describe('CourseQuiz renderForm()', () => {
     expect(result).toBe(true);
   });
 
+  test('should show No Attempts Left text and disabled button when hasAttempted and no attempts left', async () => {
+    const result = await page.evaluate(() => {
+      const quiz = document.createElement('course-quiz');
+      quiz.options = [];
+      quiz.hasAttempted = true;
+      quiz.attemptsLeft = 0;
+      quiz.renderForm([], {});
+      const btn = quiz.querySelector('.btn-submit');
+      return { text: btn ? btn.textContent : null, disabled: btn ? btn.disabled : null };
+    });
+    expect(result.text).toContain('No Attempts Left');
+    expect(result.disabled).toBe(true);
+  });
+
+  test('should keep button enabled when hasAttempted but attempts remain', async () => {
+    const result = await page.evaluate(() => {
+      const quiz = document.createElement('course-quiz');
+      quiz.options = [];
+      quiz.hasAttempted = true;
+      quiz.attemptsLeft = 2;
+      quiz.renderForm([], {});
+      const btn = quiz.querySelector('.btn-submit');
+      return { text: btn ? btn.textContent : null, disabled: btn ? btn.disabled : null };
+    });
+    expect(result.text).toBe('Submit Answers');
+    expect(result.disabled).toBe(false);
+  });
+
   test('should disable submit button and inputs when no attempts left', async () => {
     const result = await page.evaluate(() => {
       const quiz = document.createElement('course-quiz');
