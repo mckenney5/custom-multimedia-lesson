@@ -71,7 +71,55 @@ test.describe("Complete course with passing grade", () => {
 			await page.locator("#next").click();
 		});
 
-		// === PAGE 3: finish.html ===
+		// === PAGE 3: programming_example.html ===
+		await test.step("programming page: complete both exercises correctly and advance", async () => {
+			await expect(iframe.locator("h1")).toHaveText("JavaScript Basics");
+
+			await iframe.locator("course-programming#prog_hello").evaluate(el => {
+				return new Promise(resolve => {
+					const wait = () => {
+						if (el._componentConfig) {
+							el.editor.setValue(
+								'function greet() { return "Hello, World!"; }\n\nconsole.log(greet());',
+							);
+							resolve();
+						} else {
+							setTimeout(wait, 50);
+						}
+					};
+					wait();
+				});
+			});
+			await iframe.locator("course-programming#prog_hello .prog-btn-run").click();
+			await expect(
+				iframe.locator("course-programming#prog_hello .prog-test-result.passed"),
+			).toBeVisible({ timeout: 10000 });
+
+			await iframe.locator("course-programming#prog_double").evaluate(el => {
+				return new Promise(resolve => {
+					const wait = () => {
+						if (el._componentConfig) {
+							el.editor.setValue(
+								'function double_value(n) { return n * n; }\n\nconsole.log(double_value(4));',
+							);
+							resolve();
+						} else {
+							setTimeout(wait, 50);
+						}
+					};
+					wait();
+				});
+			});
+			await iframe.locator("course-programming#prog_double .prog-btn-run").click();
+			await expect(
+				iframe.locator("course-programming#prog_double .prog-test-result.passed"),
+			).toBeVisible({ timeout: 10000 });
+
+			await page.locator("#info-banner.warning").waitFor({ timeout: 15000 });
+			await page.locator("#next").click();
+		});
+
+		// === PAGE 4: finish.html ===
 		await test.step("finish page: wait and trigger end screen", async () => {
 			await expect(iframe.locator("h1")).toHaveText("Congrats!");
 			await page.locator("#info-banner.warning").waitFor({ timeout: 15000 });

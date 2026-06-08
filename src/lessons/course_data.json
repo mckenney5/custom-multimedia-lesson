@@ -181,6 +181,36 @@
 		]
 	},
 	{
+		"type": "multi",
+		"name": "programming_example.html",
+		"completionRules": {
+			"watchTime": 0,
+			"score": 1.0,
+			"scrolled": false,
+			"attempts": 0,
+			"videoProgress": 0.0,
+			"requireSubmission": true
+		},
+		"components": [
+		{
+			"id": "prog_hello",
+			"type": "programming",
+			"language": "javascript",
+			"starterCode": "function greet() {\n  return \"\";\n}\n\nconsole.log(greet());",
+			"timeout": 5000,
+			"expectedOutput": "Hello, World!"
+		},
+		{
+			"id": "prog_double",
+			"type": "programming",
+			"language": "javascript",
+			"starterCode": "function double_value(number) {\n  return number;\n}\n\nconsole.log(double_value(4));",
+			"timeout": 5000,
+			"expectedOutput": "16"
+		}
+		]
+	},
+	{
 		"type": "article",
 		"name": "finish.html",
 		"completionRules": {

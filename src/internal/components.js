@@ -964,7 +964,301 @@ class CourseQuiz extends CourseComponent {
 	}
 }
 
+/* ==========================================================================
+ *  PROGRAMMING COMPONENT: <course-programming></course-programming>
+ *  ========================================================================== */
+class CourseProgramming extends CourseComponent {
+	static get observedAttributes() {
+		return ["language"];
+	}
+
+	attributeChangedCallback(name, oldValue, newValue) {
+		if (name === "language" && this.editor) {
+			this.editor.setOption("mode", this._modeForLanguage(newValue));
+		}
+	}
+
+	connectedCallback() {
+		super.connectedCallback();
+		this.send("GET_PROGRAMMING_DATA", "");
+	}
+
+	render() {
+		const lang = this.attr("language", "javascript");
+		const config = this._componentConfig || {};
+
+		this.innerHTML = `
+			<div class="prog-container">
+				<div class="prog-toolbar">
+					<span class="prog-lang-badge">${lang}</span>
+					<button class="prog-btn-run" id="prog-btn-run">▶ Run</button>
+					<button class="prog-btn-reset" id="prog-btn-reset">↺ Reset</button>
+				</div>
+				<div class="prog-editor" id="prog-editor"></div>
+				<div class="prog-output" id="prog-output">
+					<div class="prog-output-header">Output</div>
+					<pre class="prog-output-text" id="prog-output-text"></pre>
+				</div>
+				<div class="prog-results" id="prog-results" style="display:none">
+					<div class="prog-results-header">Test Results</div>
+					<div class="prog-results-list" id="prog-results-list"></div>
+				</div>
+			</div>
+		`;
+
+		const editorDiv = this.querySelector("#prog-editor");
+		const starterCode = config.starterCode || "// Write your code here\n";
+
+		this.editor = CodeMirror(editorDiv, {
+			value: this._savedCode || starterCode,
+			mode: this._modeForLanguage(lang),
+			theme: "default",
+			lineNumbers: true,
+			matchBrackets: true,
+			indentUnit: 2,
+			tabSize: 2,
+			lineWrapping: false,
+			viewportMargin: Infinity,
+			extraKeys: {
+				"Ctrl-Enter": () => this.execute(),
+				"Cmd-Enter": () => this.execute(),
+			},
+		});
+	}
+
+	attachListeners() {
+		this.querySelector("#prog-btn-run").addEventListener("click", () => this.execute());
+		this.querySelector("#prog-btn-reset").addEventListener("click", () => this._resetCode());
+
+		this.editor.on("change", () => {
+			this._savedCode = this.editor.getValue();
+		});
+
+		this._boundProgHandler = this._handleProgrammingData.bind(this);
+		window.addEventListener("programming-data", this._boundProgHandler);
+	}
+
+	disconnectedCallback() {
+		if (this._boundProgHandler) {
+			window.removeEventListener("programming-data", this._boundProgHandler);
+		}
+		super.disconnectedCallback();
+	}
+
+	_modeForLanguage(lang) {
+		const map = {
+			javascript: "javascript",
+			js: "javascript",
+			python: "python",
+			html: "htmlmixed",
+			css: "css",
+			java: "text/x-java",
+		};
+		return map[lang] || "javascript";
+	}
+
+	async execute() {
+		const code = this.editor.getValue();
+		const config = this._componentConfig || {};
+		const timeout = config.timeout || 5000;
+
+		const btn = this.querySelector("#prog-btn-run");
+		btn.disabled = true;
+		btn.textContent = "⏳ Running...";
+
+		const outputDiv = this.querySelector("#prog-output-text");
+		const resultsDiv = this.querySelector("#prog-results");
+		const resultsList = this.querySelector("#prog-results-list");
+
+		outputDiv.textContent = "";
+		resultsDiv.style.display = "none";
+
+		try {
+			const { stdout, returnValue, error } = await this._sandboxedEval(code, timeout);
+
+			const lines = [];
+			if (stdout.length > 0) lines.push(stdout.join("\n"));
+			if (returnValue !== undefined) lines.push(String(returnValue));
+			if (error) lines.push(`Error: ${error}`);
+			outputDiv.textContent = lines.join("\n") || "(no output)";
+
+			const grade = this._autograde(config, stdout, returnValue, error);
+			if (grade.total > 0) {
+				resultsDiv.style.display = "block";
+				resultsList.innerHTML = grade.results.map(r =>
+					`<div class="prog-test-result ${r.passed ? "passed" : "failed"}">
+						${r.passed ? "✓" : "✗"} ${r.label}
+					</div>`,
+				).join("");
+			}
+
+			this.send("CODE_EXECUTION", {
+				code,
+				stdout,
+				returnValue,
+				error,
+				testResults: grade.results,
+				score: grade.score,
+				maxScore: grade.total,
+				completed: grade.score === grade.total && grade.total > 0,
+			});
+		} finally {
+			btn.disabled = false;
+			btn.textContent = "▶ Run";
+		}
+	}
+
+	_sandboxedEval(code, timeout) {
+		return new Promise((resolve) => {
+			const timer = setTimeout(() => {
+				cleanup();
+				resolve({ stdout: [], returnValue: undefined, error: "Execution timed out" });
+			}, timeout);
+
+			const iframe = document.createElement("iframe");
+			iframe.style.display = "none";
+			iframe.setAttribute("sandbox", "allow-scripts");
+
+			const handler = (e) => {
+				if (e.source !== iframe.contentWindow) return;
+				if (e.data && e.data.type === "SANDBOX_READY") return;
+				cleanup();
+				clearTimeout(timer);
+				resolve(e.data);
+			};
+
+			const cleanup = () => {
+				window.removeEventListener("message", handler);
+				window.removeEventListener("message", readyHandler);
+				if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+			};
+
+			window.addEventListener("message", handler);
+
+			iframe.srcdoc = `
+				<!DOCTYPE html>
+				<html><body><script>
+					var stdout = [];
+					var consoleLog = console.log;
+					console.log = function() {
+						stdout.push(Array.from(arguments).map(String).join(" "));
+					};
+
+					window.addEventListener("message", function(e) {
+						try {
+							var __code__ = e.data;
+							var __result__ = eval(__code__);
+							parent.postMessage({
+								stdout: stdout,
+								returnValue: __result__,
+								error: null
+							}, "*");
+						} catch(err) {
+							parent.postMessage({
+								stdout: stdout,
+								returnValue: undefined,
+								error: err.message
+							}, "*");
+						}
+					});
+
+					parent.postMessage({ type: "SANDBOX_READY" }, "*");
+				<\/script><\/body><\/html>
+			`;
+
+			document.body.appendChild(iframe);
+
+			const readyHandler = (e) => {
+				if (e.source !== iframe.contentWindow) return;
+				if (e.data.type === "SANDBOX_READY") {
+					window.removeEventListener("message", readyHandler);
+					iframe.contentWindow.postMessage(code, "*");
+				}
+			};
+			window.addEventListener("message", readyHandler);
+		});
+	}
+
+	_autograde(config, stdout, returnValue, error) {
+		const results = [];
+		let score = 0;
+		let total = 0;
+
+		if (config.expectedOutput !== undefined && config.expectedOutput !== null) {
+			total++;
+			const actual = [...stdout, returnValue !== undefined ? String(returnValue) : ""]
+				.filter(Boolean).join("\n").trim();
+			const passed = actual === String(config.expectedOutput).trim() && !error;
+			if (passed) score++;
+			results.push({ label: "Output matches expected", passed });
+		}
+
+		if (config.testCases && Array.isArray(config.testCases)) {
+			config.testCases.forEach((tc, i) => {
+				total++;
+				const passed = false;
+				if (passed) score++;
+				results.push({ label: tc.label || `Test case ${i + 1}`, passed });
+			});
+		}
+
+		return { score, total, results };
+	}
+
+	_resetCode() {
+		const config = this._componentConfig || {};
+		const starterCode = config.starterCode || "// Write your code here\n";
+		this.editor.setValue(starterCode);
+		this._savedCode = starterCode;
+	}
+
+	_handleProgrammingData(event) {
+		const data = event.detail;
+		if (!data) return;
+		const myId = this.getAttribute("id");
+		if (data.id && data.id !== myId) return;
+
+		const value = data.value || data;
+
+		if (!this._staticConfig) {
+			this._staticConfig = {
+				starterCode: value.starterCode || "",
+				language: value.language || "javascript",
+				timeout: value.timeout || 5000,
+				expectedOutput: value.expectedOutput,
+				testCases: value.testCases || [],
+				options: value.options || [],
+			};
+			this._componentConfig = { ...this._staticConfig };
+		}
+
+		if (value.attemptsLeft !== undefined) this.attemptsLeft = value.attemptsLeft;
+		if (value.hasAttempted !== undefined) this.hasAttempted = value.hasAttempted;
+
+		if (value.savedCode !== undefined && value.savedCode !== null) {
+			this._savedCode = value.savedCode;
+			if (this.editor) {
+				this.editor.setValue(value.savedCode);
+			}
+		}
+
+		if (value.testResults && value.testResults.length > 0 && this.editor) {
+			const resultsDiv = this.querySelector("#prog-results");
+			const resultsList = this.querySelector("#prog-results-list");
+			if (resultsDiv && resultsList) {
+				resultsDiv.style.display = "block";
+				resultsList.innerHTML = value.testResults.map(r =>
+					`<div class="prog-test-result ${r.passed ? "passed" : "failed"}">
+						${r.passed ? "✓" : "✗"} ${r.label}
+					</div>`,
+				).join("");
+			}
+		}
+	}
+}
+
 // Register the custom tags
 customElements.define("course-video", CourseVideo);
 customElements.define("course-article", CourseArticle);
 customElements.define("course-quiz", CourseQuiz);
+customElements.define("course-programming", CourseProgramming);

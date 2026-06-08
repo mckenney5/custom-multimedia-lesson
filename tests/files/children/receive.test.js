@@ -338,6 +338,49 @@ test.describe('receive()', () => {
     expect(result.targetIdNotInjected).toBe(true);
   });
 
+  test('should handle PROGRAMMING_DATA by firing programming-data event', async () => {
+    const result = await page.evaluate(() => {
+      child.parentOrigin = 'http://correct.origin';
+
+      const fireCalls = [];
+      const originalFire = child.events.fire;
+      child.events.fire = (subject, data) => {
+        fireCalls.push({ subject, data });
+      };
+
+      try {
+        const progEvent = {
+          data: {
+            type: "PROGRAMMING_DATA",
+            message: {
+              id: "prog1",
+              value: { attemptsLeft: 3, hasAttempted: false, testResults: [] }
+            }
+          },
+          origin: "http://correct.origin"
+        };
+
+        child.receive(progEvent);
+
+        return {
+          fireCalled: fireCalls.length > 0,
+          subject: fireCalls[0] ? fireCalls[0].subject : null,
+          dataMatches: fireCalls[0] &&
+            fireCalls[0].subject === "programming-data" &&
+            fireCalls[0].data &&
+            fireCalls[0].data.id === "prog1" &&
+            fireCalls[0].data.value.attemptsLeft === 3
+        };
+      } finally {
+        child.events.fire = originalFire;
+      }
+    });
+
+    expect(result.fireCalled).toBe(true);
+    expect(result.subject).toBe("programming-data");
+    expect(result.dataMatches).toBe(true);
+  });
+
   test('should log error for unknown message types', async () => {
     const result = await page.evaluate(() => {
       child.parentOrigin = 'http://correct.origin';
@@ -370,5 +413,32 @@ test.describe('receive()', () => {
 
     expect(result.errorLogged).toBe(true);
     expect(result.errorLog[0]).toContain("Unknown message from parent");
+  });
+
+  test('should ignore messages from null origin without logging blocked message', async () => {
+    const result = await page.evaluate(() => {
+      child.parentOrigin = 'http://correct.origin';
+
+      const errorLog = [];
+      const originalError = console.error;
+      console.error = (...args) => {
+        errorLog.push(args.join(' '));
+      };
+
+      try {
+        const nullOriginEvent = {
+          data: { type: "PING", message: {} },
+          origin: "null"
+        };
+
+        child.receive(nullOriginEvent);
+
+        return { errorLogged: errorLog.length > 0, errorLog };
+      } finally {
+        console.error = originalError;
+      }
+    });
+
+    expect(result.errorLogged).toBe(false);
   });
 });

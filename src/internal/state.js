@@ -761,6 +761,69 @@ let state = {
 				journaler.log("VIDEO_STATS", `${index},${componentID},${msgData.avgSpeed},${msgData.visiblePct}`);
 				break;
 
+			case "CODE_EXECUTION":
+				journaler.log("CODE_EXEC", `${index},${componentID},score:${msgData.score}/${msgData.maxScore}`);
+
+				if (componentID && pageDelta.components && pageDelta.components[componentID]) {
+					const compState = pageDelta.components[componentID];
+					compState.codeContent = msgData.code;
+					compState.testResults = msgData.testResults;
+					compState.score = msgData.score;
+					compState.maxScore = msgData.maxScore;
+					compState.completed = msgData.completed;
+					compState.attempts = (compState.attempts || 0) + 1;
+
+					// Re-sum total page score
+					let totalScore = 0;
+					for (const key in pageDelta.components) {
+						const s = pageDelta.components[key].score;
+						if (typeof s === "number") totalScore += s;
+					}
+					pageDelta.score = totalScore;
+
+					// Send updated state back to component
+					this.lessonFrame.contentWindow.postMessage({
+						type: "PROGRAMMING_DATA",
+						message: {
+							id: componentID,
+							value: {
+								attemptsLeft: (page.completionRules.attempts || Infinity) - (compState.attempts || 0),
+								hasAttempted: (compState.attempts || 0) > 0,
+								testResults: msgData.testResults,
+							},
+						},
+					}, window.location.origin);
+				}
+				this.finalizePage();
+				break;
+
+			case "GET_PROGRAMMING_DATA":
+				if (componentID && page.components) {
+					const compConfig = page.components.find(c => c.id === componentID);
+					const compState = pageDelta.components[componentID];
+					if (compConfig && compState) {
+						this.lessonFrame.contentWindow.postMessage({
+							type: "PROGRAMMING_DATA",
+							message: {
+								id: componentID,
+								value: {
+									starterCode: compConfig.starterCode || "",
+									language: compConfig.language || "javascript",
+									timeout: compConfig.timeout || 5000,
+									expectedOutput: compConfig.expectedOutput,
+									testCases: compConfig.testCases || [],
+									options: compConfig.options || [],
+									savedCode: compState.codeContent,
+									testResults: compState.testResults,
+									attemptsLeft: (page.completionRules.attempts || Infinity) - (compState.attempts || 0),
+									hasAttempted: (compState.attempts || 0) > 0,
+								},
+							},
+						}, window.location.origin);
+					}
+				}
+				break;
+
 			case "GET_STUDENT_DATA":
 				const grade = String(Math.floor((completion.calculateOverallGrade(this.data.pages, this.data.delta.pagesState).ratio * 100)));
 				this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA", message: {
@@ -873,6 +936,17 @@ let state = {
 						}
 						else if (comp.type === "article") {
 							compState.scrolled = false;
+						}
+						else if (comp.type === "programming") {
+							compState.codeContent = comp.starterCode || "";
+							compState.testResults = [];
+							compState.score = 0;
+							const pMax = (comp.expectedOutput !== undefined && comp.expectedOutput !== null ? 1 : 0)
+								+ (comp.testCases && Array.isArray(comp.testCases) ? comp.testCases.length : 0);
+							compState.maxScore = pMax;
+							calculatedMaxScore += pMax;
+							compState.completed = false;
+							compState.attempts = 0;
 						}
 
 						// Add to the map

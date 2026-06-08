@@ -14,6 +14,7 @@
 	--brand-s: 20%;
 	--brand-l: 38%;
 	--brand: hsl(var(--brand-h) var(--brand-s) var(--brand-l));
+	--brand-800: hsl(var(--brand-h) var(--brand-s) calc(var(--brand-l) - 18%));
 	--brand-100: hsl(var(--brand-h) var(--brand-s) calc(var(--brand-l) + 32%));
 	--brand-text: #ffffff;
 }
@@ -29,6 +30,7 @@
 
 	--brand-s: 15%;
 	--brand-l-base: 45%;
+	--brand-800: hsl(var(--brand-h) var(--brand-s) calc(var(--brand-l) + 10%));
 }
 
 :root[data-theme="high-contrast"] {
@@ -260,4 +262,128 @@ body {
 .btn-submit:disabled {
 	background-color: #ccc;
 	cursor: not-allowed;
+}
+
+/* ==========================================================================
+ *  PROGRAMMING COMPONENT STYLES
+ * ========================================================================== */
+.prog-container {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin: 16px 0;
+}
+
+.prog-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.prog-lang-badge {
+	font-size: 0.85rem;
+	font-weight: bold;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	padding: 4px 10px;
+	border: 1px solid var(--border-color);
+	border-radius: 4px;
+}
+
+.prog-btn-run {
+	background-color: var(--brand);
+	color: var(--brand-text);
+	border: none;
+	border-radius: 4px;
+	padding: 8px 20px;
+	font-weight: bold;
+	cursor: pointer;
+	transition: background-color 0.2s;
+}
+
+.prog-btn-run:hover {
+	background-color: var(--brand-800);
+}
+
+.prog-btn-run:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.prog-btn-reset {
+	background-color: transparent;
+	color: var(--text-muted);
+	border: 1px solid var(--border-color);
+	border-radius: 4px;
+	padding: 8px 16px;
+	cursor: pointer;
+}
+
+.prog-editor {
+	border: 2px solid var(--border-color);
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.CodeMirror {
+	height: auto;
+	min-height: 200px;
+	font-family: "Consolas", "Monaco", "Courier New", monospace;
+	font-size: 14px;
+}
+
+.prog-output {
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.prog-output-header {
+	background-color: var(--bg-main);
+	padding: 8px 12px;
+	font-weight: bold;
+	font-size: 0.9rem;
+	border-bottom: 1px solid var(--border-color);
+}
+
+.prog-output-text {
+	margin: 0;
+	padding: 12px;
+	font-family: "Consolas", "Monaco", "Courier New", monospace;
+	font-size: 13px;
+	white-space: pre-wrap;
+	word-break: break-word;
+	min-height: 40px;
+}
+
+.prog-results {
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.prog-results-header {
+	background-color: var(--bg-main);
+	padding: 8px 12px;
+	font-weight: bold;
+	font-size: 0.9rem;
+	border-bottom: 1px solid var(--border-color);
+}
+
+.prog-results-list {
+	padding: 8px 12px;
+}
+
+.prog-test-result {
+	padding: 6px 8px;
+	font-family: monospace;
+	font-size: 13px;
+}
+
+.prog-test-result.passed {
+	color: #198754;
+}
+
+.prog-test-result.failed {
+	color: #dc3545;
 }
