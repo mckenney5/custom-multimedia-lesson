@@ -812,6 +812,7 @@ let state = {
 									timeout: compConfig.timeout || 5000,
 									expectedOutput: compConfig.expectedOutput,
 									testCases: compConfig.testCases || [],
+									bannedPatterns: compConfig.bannedPatterns || [],
 									options: compConfig.options || [],
 									savedCode: compState.codeContent,
 									testResults: compState.testResults,

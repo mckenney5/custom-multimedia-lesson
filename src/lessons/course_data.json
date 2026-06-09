@@ -198,7 +198,16 @@
 			"language": "javascript",
 			"starterCode": "function greet() {\n  return \"\";\n}\n\nconsole.log(greet());",
 			"timeout": 5000,
-			"expectedOutput": "Hello, World!"
+			"expectedOutput": "Hello, World!",
+			"bannedPatterns": ["console\\.log\\s*\\(\\s*['\"]Hello,\\s*World!['\"]\\s*\\)"],
+			"testCases": [
+				{
+					"label": "greet() returns Hello, World!",
+					"functionName": "greet",
+					"args": [],
+					"expected": "Hello, World!"
+				}
+			]
 		},
 		{
 			"id": "prog_double",
@@ -206,7 +215,22 @@
 			"language": "javascript",
 			"starterCode": "function double_value(number) {\n  return number;\n}\n\nconsole.log(double_value(4));",
 			"timeout": 5000,
-			"expectedOutput": "16"
+			"expectedOutput": "16",
+			"bannedPatterns": ["console\\.log\\s*\\(\\s*16\\s*\\)"],
+			"testCases": [
+				{
+					"label": "double_value(0) = 0",
+					"functionName": "double_value",
+					"args": [0],
+					"expected": 0
+				},
+				{
+					"label": "double_value(-3) = 9",
+					"functionName": "double_value",
+					"args": [-3],
+					"expected": 9
+				}
+			]
 		}
 		]
 	},

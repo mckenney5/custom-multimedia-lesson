@@ -77,4 +77,69 @@ test.describe('CourseProgramming _autograde()', () => {
     expect(result.score).toBe(0);
     expect(result.results[0].passed).toBe(false);
   });
+
+  test('testCases with sandboxTestResults reports correct scores', async () => {
+    const result = await page.evaluate(() => {
+      const prog = document.createElement('course-programming');
+      const config = {
+        testCases: [
+          { label: "Add 2+2", functionName: "add", args: [2, 2], expected: 4 },
+          { label: "Mul 3*3", functionName: "mul", args: [3, 3], expected: 9 },
+        ],
+      };
+      const sandboxResults = [
+        { label: "Add 2+2", passed: true, actual: 4, expected: 4, error: null },
+        { label: "Mul 3*3", passed: false, actual: 6, expected: 9, error: null },
+      ];
+      const grade = prog._autograde(config, [], undefined, null, sandboxResults);
+      return grade;
+    });
+
+    expect(result.score).toBe(1);
+    expect(result.total).toBe(2);
+    expect(result.results[0].passed).toBe(true);
+    expect(result.results[1].passed).toBe(false);
+  });
+
+  test('testCases with sandboxTestResults merges with expectedOutput', async () => {
+    const result = await page.evaluate(() => {
+      const prog = document.createElement('course-programming');
+      const config = {
+        expectedOutput: "Hello",
+        testCases: [
+          { label: "Greet", functionName: "greet", args: [], expected: "Hi" },
+        ],
+      };
+      const sandboxResults = [
+        { label: "Greet", passed: true, actual: "Hi", expected: "Hi", error: null },
+      ];
+      const grade = prog._autograde(config, ["Hello"], undefined, null, sandboxResults);
+      return grade;
+    });
+
+    expect(result.score).toBe(2);
+    expect(result.total).toBe(2);
+    expect(result.results[0].passed).toBe(true);
+    expect(result.results[0].label).toBe("Output matches expected");
+    expect(result.results[1].passed).toBe(true);
+  });
+
+  test('testCases without sandboxTestResults marks all as not passed', async () => {
+    const result = await page.evaluate(() => {
+      const prog = document.createElement('course-programming');
+      const config = {
+        testCases: [
+          { label: "TC1" },
+          { label: "TC2" },
+        ],
+      };
+      const grade = prog._autograde(config, [], undefined, null);
+      return grade;
+    });
+
+    expect(result.score).toBe(0);
+    expect(result.total).toBe(2);
+    expect(result.results[0].passed).toBe(false);
+    expect(result.results[1].passed).toBe(false);
+  });
 });

@@ -72,6 +72,84 @@ test.describe('CourseProgramming execute()', () => {
     expect(result.error).toBe('Execution timed out');
   });
 
+  test('should execute test cases and return testResults', async () => {
+    const result = await page.evaluate(async () => {
+      const prog = document.createElement('course-programming');
+      prog.connectedCallback();
+      const code = 'function greet() { return "Hello, World!"; }';
+      const testCases = [
+        { functionName: "greet", args: [], expected: "Hello, World!" },
+      ];
+      const out = await prog._sandboxedEval(code, 5000, testCases);
+      return JSON.parse(JSON.stringify(out));
+    });
+
+    expect(result.stdout).toEqual([]);
+    expect(result.error).toBeNull();
+    expect(result.testResults).toBeDefined();
+    expect(result.testResults.length).toBe(1);
+    expect(result.testResults[0].passed).toBe(true);
+    expect(result.testResults[0].actual).toBe("Hello, World!");
+  });
+
+  test('should mark test case failed on wrong output', async () => {
+    const result = await page.evaluate(async () => {
+      const prog = document.createElement('course-programming');
+      prog.connectedCallback();
+      const code = 'function greet() { return "Goodbye"; }';
+      const testCases = [
+        { functionName: "greet", args: [], expected: "Hello, World!" },
+      ];
+      const out = await prog._sandboxedEval(code, 5000, testCases);
+      return JSON.parse(JSON.stringify(out));
+    });
+
+    expect(result.testResults).toBeDefined();
+    expect(result.testResults[0].passed).toBe(false);
+    expect(result.testResults[0].actual).toBe("Goodbye");
+    expect(result.testResults[0].expected).toBe("Hello, World!");
+  });
+
+  test('should handle test case with function not defined', async () => {
+    const result = await page.evaluate(async () => {
+      const prog = document.createElement('course-programming');
+      prog.connectedCallback();
+      const code = 'var x = 42;';
+      const testCases = [
+        { functionName: "undefinedFn", args: [], expected: "anything" },
+      ];
+      const out = await prog._sandboxedEval(code, 5000, testCases);
+      return out;
+    });
+
+    expect(result.testResults).toBeDefined();
+    expect(result.testResults[0].passed).toBe(false);
+    expect(result.testResults[0].error).toBeDefined();
+  });
+
+  test('should handle multiple test cases', async () => {
+    const result = await page.evaluate(async () => {
+      const prog = document.createElement('course-programming');
+      prog.connectedCallback();
+      const code = `
+        function add(a, b) { return a + b; }
+        function mul(a, b) { return a * b; }
+      `;
+      const testCases = [
+        { functionName: "add", args: [2, 3], expected: 5 },
+        { functionName: "mul", args: [2, 3], expected: 6 },
+        { functionName: "add", args: [-1, 1], expected: 0 },
+      ];
+      const out = await prog._sandboxedEval(code, 5000, testCases);
+      return out;
+    });
+
+    expect(result.testResults.length).toBe(3);
+    expect(result.testResults[0].passed).toBe(true);
+    expect(result.testResults[1].passed).toBe(true);
+    expect(result.testResults[2].passed).toBe(true);
+  });
+
   test('should clean up all event listeners on timeout', async () => {
     const result = await page.evaluate(async () => {
       const prog = document.createElement('course-programming');

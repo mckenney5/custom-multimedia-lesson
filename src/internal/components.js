@@ -1073,8 +1073,45 @@ class CourseProgramming extends CourseComponent {
 		outputDiv.textContent = "";
 		resultsDiv.style.display = "none";
 
+		if (!this._componentConfig) {
+			outputDiv.textContent = "Error: Component configuration not loaded yet. Please wait.";
+			this.send("CODE_EXECUTION", {
+				code,
+				stdout: [],
+				returnValue: undefined,
+				error: "Component configuration not loaded",
+				testResults: [],
+				score: 0,
+				maxScore: 0,
+				completed: false,
+			});
+			btn.disabled = false;
+			btn.textContent = "▶ Run";
+			return;
+		}
+
+		const validation = this._validateCode(code, config);
+		if (!validation.valid) {
+			outputDiv.textContent = `Error: ${validation.error}`;
+			this.send("CODE_EXECUTION", {
+				code,
+				stdout: [],
+				returnValue: undefined,
+				error: validation.error,
+				testResults: [],
+				score: 0,
+				maxScore: 0,
+				completed: false,
+			});
+			btn.disabled = false;
+			btn.textContent = "▶ Run";
+			return;
+		}
+
 		try {
-			const { stdout, returnValue, error } = await this._sandboxedEval(code, timeout);
+			const testCases = config.testCases || [];
+			const { stdout, returnValue, error, testResults: sandboxTestResults } =
+				await this._sandboxedEval(code, timeout, testCases);
 
 			const lines = [];
 			if (stdout.length > 0) lines.push(stdout.join("\n"));
@@ -1082,7 +1119,7 @@ class CourseProgramming extends CourseComponent {
 			if (error) lines.push(`Error: ${error}`);
 			outputDiv.textContent = lines.join("\n") || "(no output)";
 
-			const grade = this._autograde(config, stdout, returnValue, error);
+			const grade = this._autograde(config, stdout, returnValue, error, sandboxTestResults);
 			if (grade.total > 0) {
 				resultsDiv.style.display = "block";
 				resultsList.innerHTML = grade.results.map(r =>
@@ -1108,7 +1145,8 @@ class CourseProgramming extends CourseComponent {
 		}
 	}
 
-	_sandboxedEval(code, timeout) {
+	_sandboxedEval(code, timeout, testCases) {
+		testCases = testCases || [];
 		return new Promise((resolve) => {
 			const timer = setTimeout(() => {
 				cleanup();
@@ -1144,20 +1182,55 @@ class CourseProgramming extends CourseComponent {
 						stdout.push(Array.from(arguments).map(String).join(" "));
 					};
 
+					function runTestCases(fnName, args, expected) {
+						try {
+							var fn = (0, eval)(fnName);
+							if (typeof fn !== "function") {
+								return { passed: false, error: "Function '" + fnName + "' is not defined" };
+							}
+							var result = fn.apply(null, args);
+							return {
+								passed: result === expected,
+								actual: result,
+								expected: expected,
+							};
+						} catch(err) {
+							return { passed: false, error: err.message };
+						}
+					}
+
 					window.addEventListener("message", function(e) {
 						try {
-							var __code__ = e.data;
-							var __result__ = eval(__code__);
+							var msg = e.data;
+							var __code__ = typeof msg === "string" ? msg : msg.code;
+							var __testCases__ = (typeof msg === "object" && msg.testCases) ? msg.testCases : [];
+							var __result__ = (0, eval)(__code__);
+							var __testResults__ = [];
+
+							for (var i = 0; i < __testCases__.length; i++) {
+								var tc = __testCases__[i];
+								var tcResult = runTestCases(tc.functionName, tc.args || [], tc.expected);
+								__testResults__.push({
+									label: tc.label || ("Test case " + (i + 1)),
+									passed: tcResult.passed,
+									actual: tcResult.actual,
+									expected: tcResult.expected,
+									error: tcResult.error || null,
+								});
+							}
+
 							parent.postMessage({
 								stdout: stdout,
 								returnValue: __result__,
-								error: null
+								error: null,
+								testResults: __testResults__.length > 0 ? __testResults__ : undefined,
 							}, "*");
 						} catch(err) {
 							parent.postMessage({
 								stdout: stdout,
 								returnValue: undefined,
-								error: err.message
+								error: err.message,
+								testResults: undefined,
 							}, "*");
 						}
 					});
@@ -1172,14 +1245,18 @@ class CourseProgramming extends CourseComponent {
 				if (e.source !== iframe.contentWindow) return;
 				if (e.data.type === "SANDBOX_READY") {
 					window.removeEventListener("message", readyHandler);
-					iframe.contentWindow.postMessage(code, "*");
+					if (testCases.length > 0) {
+						iframe.contentWindow.postMessage({ code: code, testCases: testCases }, "*");
+					} else {
+						iframe.contentWindow.postMessage(code, "*");
+					}
 				}
 			};
 			window.addEventListener("message", readyHandler);
 		});
 	}
 
-	_autograde(config, stdout, returnValue, error) {
+	_autograde(config, stdout, returnValue, error, sandboxTestResults) {
 		const results = [];
 		let score = 0;
 		let total = 0;
@@ -1194,12 +1271,21 @@ class CourseProgramming extends CourseComponent {
 		}
 
 		if (config.testCases && Array.isArray(config.testCases)) {
-			config.testCases.forEach((tc, i) => {
-				total++;
-				const passed = false;
-				if (passed) score++;
-				results.push({ label: tc.label || `Test case ${i + 1}`, passed });
-			});
+			if (sandboxTestResults && Array.isArray(sandboxTestResults)) {
+				sandboxTestResults.forEach((tcResult) => {
+					total++;
+					if (tcResult.passed) score++;
+					results.push({
+						label: tcResult.label,
+						passed: tcResult.passed,
+					});
+				});
+			} else {
+				config.testCases.forEach((tc, i) => {
+					total++;
+					results.push({ label: tc.label || `Test case ${i + 1}`, passed: false });
+				});
+			}
 		}
 
 		return { score, total, results };
@@ -1210,6 +1296,28 @@ class CourseProgramming extends CourseComponent {
 		const starterCode = config.starterCode || "// Write your code here\n";
 		this.editor.setValue(starterCode);
 		this._savedCode = starterCode;
+	}
+
+	_validateCode(code, config) {
+		const patterns = config.bannedPatterns;
+		if (!patterns || !Array.isArray(patterns) || patterns.length === 0) {
+			return { valid: true, error: null };
+		}
+		for (const pattern of patterns) {
+			let regex;
+			try {
+				regex = new RegExp(pattern);
+			} catch (e) {
+				if (code.includes(pattern)) {
+					return { valid: false, error: `Code contains banned pattern: "${pattern}"` };
+				}
+				continue;
+			}
+			if (regex.test(code)) {
+				return { valid: false, error: `Code contains banned pattern: "${pattern}"` };
+			}
+		}
+		return { valid: true, error: null };
 	}
 
 	_handleProgrammingData(event) {
@@ -1228,6 +1336,7 @@ class CourseProgramming extends CourseComponent {
 				expectedOutput: value.expectedOutput,
 				testCases: value.testCases || [],
 				options: value.options || [],
+				bannedPatterns: value.bannedPatterns || [],
 			};
 			this._componentConfig = { ...this._staticConfig };
 		}
