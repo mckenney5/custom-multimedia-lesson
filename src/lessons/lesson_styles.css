@@ -30,7 +30,7 @@
 
 	--brand-s: 15%;
 	--brand-l-base: 45%;
-	--brand-800: hsl(var(--brand-h) var(--brand-s) calc(var(--brand-l) + 10%));
+	--brand-800: hsl(var(--brand-h) var(--brand-s) calc(var(--brand-l-base) + 10%));
 }
 
 :root[data-theme="high-contrast"] {
