@@ -121,6 +121,158 @@ test.describe("state.handleMessage: GET_PROGRAMMING_DATA", () => {
 		expect(result.hasAttempted).toBe(true);
 	});
 
+	test("should send back PROGRAMMING_DATA with the stored score and maxScore", async () => {
+		const result = await page.evaluate(() => {
+			if (typeof state === "undefined") return { error: "state not defined" };
+
+			state.data.pages = [
+				{
+					name: "test.html",
+					components: [{ id: "prog1", type: "programming", starterCode: "// starter" }],
+					completionRules: { attempts: 1 },
+				},
+			];
+			state.data.delta.pagesState = [
+				{
+					completed: true,
+					score: 1,
+					components: {
+						prog1: {
+							type: "programming",
+							codeContent: "// code",
+							testResults: [],
+							score: 1,
+							maxScore: 1,
+							completed: true,
+							attempts: 1,
+						},
+					},
+				},
+			];
+			state.data.delta.currentPageIndex = 0;
+
+			const postMessages = [];
+			state.lessonFrame = {
+				contentWindow: {
+					postMessage: (...args) => { postMessages.push(args); },
+				},
+			};
+			state.finalizePage = () => {};
+			state.pageAPISecret = "TEST_SECRET";
+
+			state.handleMessage({
+				data: {
+					type: "GET_PROGRAMMING_DATA",
+					message: { id: "prog1", value: "" },
+					code: "TEST_SECRET",
+					nonce: Date.now(),
+				},
+				origin: window.location.origin,
+			});
+
+			const progMsg = postMessages.find(m => m[0] && m[0].type === "PROGRAMMING_DATA");
+			if (!progMsg) return { error: "No PROGRAMMING_DATA message sent" };
+
+			return {
+				score: progMsg[0].message.value.score,
+				maxScore: progMsg[0].message.value.maxScore,
+				attemptsLeft: progMsg[0].message.value.attemptsLeft,
+			};
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.attemptsLeft).toBe(0);
+		expect(result.score).toBe(1);
+		expect(result.maxScore).toBe(1);
+	});
+
+	test("every PROGRAMMING_DATA reply carries a numeric attemptsLeft", async () => {
+		const result = await page.evaluate(() => {
+			if (typeof state === "undefined") return { error: "state not defined" };
+
+			state.data.pages = [
+				{
+					name: "test.html",
+					components: [
+						{ id: "prog1", type: "programming", starterCode: "// starter" },
+					],
+					completionRules: { attempts: 5 },
+				},
+			];
+			state.data.delta.pagesState = [
+				{
+					completed: false,
+					score: 0,
+					components: {
+						prog1: {
+							type: "programming",
+							codeContent: "// starter",
+							testResults: [],
+							score: 0,
+							maxScore: 0,
+							completed: false,
+							attempts: 1,
+						},
+					},
+				},
+			];
+			state.data.delta.currentPageIndex = 0;
+
+			const postMessages = [];
+			state.lessonFrame = {
+				contentWindow: {
+					postMessage: (...args) => { postMessages.push(args); },
+				},
+			};
+			state.finalizePage = () => {};
+			state.pageAPISecret = "TEST_SECRET";
+
+			const baseNonce = Date.now() - 10;
+
+			state.handleMessage({
+				data: {
+					type: "GET_PROGRAMMING_DATA",
+					message: { id: "prog1", value: "" },
+					code: "TEST_SECRET",
+					nonce: baseNonce,
+				},
+				origin: window.location.origin,
+			});
+
+			state.handleMessage({
+				data: {
+					type: "CODE_EXECUTION",
+					message: {
+						id: "prog1",
+						value: {
+							code: "// code",
+							stdout: [],
+							error: null,
+							testResults: [],
+							score: 0,
+							maxScore: 0,
+							completed: false,
+						},
+					},
+					code: "TEST_SECRET",
+					nonce: baseNonce + 5,
+				},
+				origin: window.location.origin,
+			});
+
+			const attemptsLeftTypes = postMessages
+				.map((m) => m[0])
+				.filter((m) => m && m.type === "PROGRAMMING_DATA")
+				.map((m) => typeof m.message.value.attemptsLeft);
+
+			return { attemptsLeftTypes };
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.attemptsLeftTypes).toHaveLength(2);
+		expect(result.attemptsLeftTypes).toEqual(["number", "number"]);
+	});
+
 	test("should not send message when componentID is missing", async () => {
 		const result = await page.evaluate(() => {
 			if (typeof state === "undefined") return { error: "state not defined" };

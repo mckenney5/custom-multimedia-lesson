@@ -387,3 +387,10 @@ body {
 .prog-test-result.failed {
 	color: #dc3545;
 }
+
+.prog-test-detail {
+	margin-top: 4px;
+	font-size: 12px;
+	white-space: pre-wrap;
+	opacity: 0.85;
+}

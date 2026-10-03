@@ -768,10 +768,12 @@ let state = {
 					const compState = pageDelta.components[componentID];
 					compState.codeContent = msgData.code;
 					compState.testResults = msgData.testResults;
-					compState.score = msgData.score;
-					compState.maxScore = msgData.maxScore;
-					compState.completed = msgData.completed;
-					compState.attempts = (compState.attempts || 0) + 1;
+					compState.score = Math.max(compState.score || 0, Number.isFinite(msgData.score) ? msgData.score : 0);
+					compState.maxScore = Math.max(compState.maxScore || 0, Number.isFinite(msgData.maxScore) ? msgData.maxScore : 0);
+					compState.completed = compState.completed === true || msgData.completed;
+					if (msgData.consumesAttempt !== false) {
+						compState.attempts = (compState.attempts || 0) + 1;
+					}
 
 					// Re-sum total page score
 					let totalScore = 0;
@@ -789,6 +791,8 @@ let state = {
 							value: {
 								attemptsLeft: (page.completionRules.attempts || Infinity) - (compState.attempts || 0),
 								hasAttempted: (compState.attempts || 0) > 0,
+								score: compState.score,
+								maxScore: compState.maxScore,
 								testResults: msgData.testResults,
 							},
 						},
@@ -818,6 +822,8 @@ let state = {
 									testResults: compState.testResults,
 									attemptsLeft: (page.completionRules.attempts || Infinity) - (compState.attempts || 0),
 									hasAttempted: (compState.attempts || 0) > 0,
+									score: compState.score,
+									maxScore: compState.maxScore,
 								},
 							},
 						}, window.location.origin);

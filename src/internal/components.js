@@ -1058,6 +1058,12 @@ class CourseProgramming extends CourseComponent {
 	}
 
 	async execute() {
+		if (this._runInFlight) return;
+		if (this.attemptsLeft <= 0) {
+			this._markRunButtonExhausted();
+			return;
+		}
+
 		const code = this.editor.getValue();
 		const config = this._componentConfig || {};
 		const timeout = config.timeout || 5000;
@@ -1084,6 +1090,7 @@ class CourseProgramming extends CourseComponent {
 				score: 0,
 				maxScore: 0,
 				completed: false,
+				consumesAttempt: false,
 			});
 			btn.disabled = false;
 			btn.textContent = "▶ Run";
@@ -1102,11 +1109,15 @@ class CourseProgramming extends CourseComponent {
 				score: 0,
 				maxScore: 0,
 				completed: false,
+				consumesAttempt: false,
 			});
 			btn.disabled = false;
 			btn.textContent = "▶ Run";
 			return;
 		}
+
+		this._runInFlight = true;
+		if (Number.isFinite(this.attemptsLeft)) this.attemptsLeft--;
 
 		try {
 			const testCases = config.testCases || [];
@@ -1122,11 +1133,7 @@ class CourseProgramming extends CourseComponent {
 			const grade = this._autograde(config, stdout, returnValue, error, sandboxTestResults);
 			if (grade.total > 0) {
 				resultsDiv.style.display = "block";
-				resultsList.innerHTML = grade.results.map(r =>
-					`<div class="prog-test-result ${r.passed ? "passed" : "failed"}">
-						${r.passed ? "✓" : "✗"} ${r.label}
-					</div>`,
-				).join("");
+				resultsList.innerHTML = this._resultsHTML(grade.results);
 			}
 
 			this.send("CODE_EXECUTION", {
@@ -1137,12 +1144,29 @@ class CourseProgramming extends CourseComponent {
 				testResults: grade.results,
 				score: grade.score,
 				maxScore: grade.total,
-				completed: grade.score === grade.total && grade.total > 0,
+				completed: grade.total > 0 ? grade.score === grade.total : !error,
 			});
 		} finally {
-			btn.disabled = false;
-			btn.textContent = "▶ Run";
+			this._runInFlight = false;
+			if (this.attemptsLeft <= 0) {
+				this._markRunButtonExhausted();
+			} else {
+				btn.disabled = false;
+				btn.textContent = "▶ Run";
+			}
 		}
+	}
+
+	_markRunButtonExhausted() {
+		if (!(this.attemptsLeft <= 0)) return;
+		const btn = this.querySelector("#prog-btn-run");
+		if (!btn) return;
+		btn.disabled = true;
+		const hasPct =
+			Number.isFinite(this.score) && Number.isFinite(this.maxScore) && this.maxScore > 0;
+		btn.textContent = hasPct
+			? `No Attempts Left - Score ${Math.round((this.score / this.maxScore) * 100)}`
+			: "No Attempts Left";
 	}
 
 	_autograde(config, stdout, returnValue, error, sandboxTestResults) {
@@ -1152,11 +1176,13 @@ class CourseProgramming extends CourseComponent {
 
 		if (config.expectedOutput !== undefined && config.expectedOutput !== null) {
 			total++;
-			const actual = [...stdout, returnValue !== undefined ? String(returnValue) : ""]
-				.filter(Boolean).join("\n").trim();
-			const passed = actual === String(config.expectedOutput).trim() && !error;
+			const expected = this._normalizeOutput(config.expectedOutput);
+			const actual = this._normalizeOutput(
+				[...stdout, returnValue !== undefined ? String(returnValue) : ""].join("\n"),
+			);
+			const passed = actual === expected && !error;
 			if (passed) score++;
-			results.push({ label: "Output matches expected", passed });
+			results.push({ label: "Output matches expected", passed, expected, actual, error: error || null });
 		}
 
 		if (config.testCases && Array.isArray(config.testCases)) {
@@ -1167,17 +1193,60 @@ class CourseProgramming extends CourseComponent {
 					results.push({
 						label: tcResult.label,
 						passed: tcResult.passed,
+						actual: tcResult.actual,
+						expected: tcResult.expected,
+						error: tcResult.error || null,
 					});
 				});
 			} else {
 				config.testCases.forEach((tc, i) => {
 					total++;
-					results.push({ label: tc.label || `Test case ${i + 1}`, passed: false });
+					results.push({
+						label: tc.label || `Test case ${i + 1}`,
+						passed: false,
+						expected: tc.expected,
+						error: error || null,
+					});
 				});
 			}
 		}
 
 		return { score, total, results };
+	}
+
+	_normalizeOutput(str) {
+		return String(str)
+			.replace(/\r\n?/g, "\n")
+			.split("\n")
+			.map((line) => line.trim().replace(/\s+/g, " "))
+			.filter((line) => line.length > 0)
+			.join("\n");
+	}
+
+	_resultsHTML(results) {
+		return results.map((r) => {
+			const lines = [];
+			if (!r.passed) {
+				if (r.expected !== undefined) lines.push(`expected: ${r.expected}`);
+				if (r.actual !== undefined) lines.push(`got: ${r.actual}`);
+				if (r.error) lines.push(`error: ${r.error}`);
+			}
+			const detail = lines.length > 0
+				? `<div class="prog-test-detail">${this._escapeText(lines.join("\n"))}</div>`
+				: "";
+			return `<div class="prog-test-result ${r.passed ? "passed" : "failed"}">
+						${r.passed ? "✓" : "✗"} ${this._escapeText(r.label)}${detail}
+					</div>`;
+		}).join("");
+	}
+
+	_escapeText(value) {
+		return String(value ?? "")
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&#39;");
 	}
 
 	_resetCode() {
@@ -1217,7 +1286,12 @@ class CourseProgramming extends CourseComponent {
 
 		const value = data.value || data;
 
-		if (!this._staticConfig) {
+		const isConfigPayload =
+			typeof value === "object" &&
+			value !== null &&
+			("starterCode" in value || "language" in value || "testCases" in value);
+
+		if (!this._staticConfig && isConfigPayload) {
 			this._staticConfig = {
 				starterCode: value.starterCode || "",
 				language: value.language || "javascript",
@@ -1232,6 +1306,8 @@ class CourseProgramming extends CourseComponent {
 
 		if (value.attemptsLeft !== undefined) this.attemptsLeft = value.attemptsLeft;
 		if (value.hasAttempted !== undefined) this.hasAttempted = value.hasAttempted;
+		if (value.score !== undefined) this.score = value.score;
+		if (value.maxScore !== undefined) this.maxScore = value.maxScore;
 
 		if (value.savedCode !== undefined && value.savedCode !== null) {
 			this._savedCode = value.savedCode;
@@ -1245,13 +1321,11 @@ class CourseProgramming extends CourseComponent {
 			const resultsList = this.querySelector("#prog-results-list");
 			if (resultsDiv && resultsList) {
 				resultsDiv.style.display = "block";
-				resultsList.innerHTML = value.testResults.map(r =>
-					`<div class="prog-test-result ${r.passed ? "passed" : "failed"}">
-						${r.passed ? "✓" : "✗"} ${r.label}
-					</div>`,
-				).join("");
+				resultsList.innerHTML = this._resultsHTML(value.testResults);
 			}
 		}
+
+		this._markRunButtonExhausted();
 	}
 }
 

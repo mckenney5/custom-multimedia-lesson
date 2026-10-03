@@ -147,4 +147,32 @@ test.describe('CourseProgramming._handleProgrammingData', () => {
 
 		expect(result).toBe('function greet() { return "Hello"; }');
 	});
+
+	test('stored failed results render expected and got on refresh', async () => {
+		const rows = await page.evaluate(() => {
+			const prog = document.createElement('course-programming');
+			prog.setAttribute('id', 'prog-rerender');
+			prog.connectedCallback();
+
+			window.dispatchEvent(new CustomEvent('programming-data', {
+				detail: {
+					id: 'prog-rerender',
+					value: {
+						testResults: [
+							{ label: 'Output matches expected', passed: false, expected: 'Hello world', actual: 'Goodbye', error: null },
+							{ label: 'Greets', passed: true, expected: 'hi', actual: 'hi', error: null },
+						],
+					},
+				},
+			}));
+
+			return Array.from(prog.querySelectorAll('#prog-results-list .prog-test-result'))
+				.map((el) => el.textContent);
+		});
+
+		expect(rows).toHaveLength(2);
+		expect(rows[0]).toContain('expected: Hello world');
+		expect(rows[0]).toContain('got: Goodbye');
+		expect(rows[1]).not.toContain('expected:');
+	});
 });

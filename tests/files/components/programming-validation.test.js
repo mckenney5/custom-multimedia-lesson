@@ -121,5 +121,6 @@ test.describe('CourseProgramming._validateCode', () => {
     expect(result.sendCall.data.error).toContain('banned pattern');
     expect(result.sendCall.data.score).toBe(0);
     expect(result.sendCall.data.completed).toBe(false);
+    expect(result.sendCall.data.consumesAttempt).toBe(false);
   });
 });
