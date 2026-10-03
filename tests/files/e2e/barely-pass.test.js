@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { completeProgrammingExercises } = require("../../helpers/navigation.js");
+const { completeProgrammingExercises, clickAndWaitForReload } = require("../../helpers/navigation.js");
 
 test.describe("Complete course with barely-passing grade", () => {
 	test.setTimeout(120000);
@@ -157,10 +157,9 @@ test.describe("Complete course with barely-passing grade", () => {
 			await page.locator("button.help-action-btn", { hasText: "Help with Current Page" }).click();
 			await expect(page.locator("#help-content")).toContainText("Requirement");
 			await page.locator("button.help-action-btn", { hasText: "Back to Menu" }).click();
-			await page.locator("button.help-action-btn", { hasText: "Refresh This Web Page" }).click();
-
-			await page.waitForFunction(() =>
-				typeof state !== "undefined" && state.initialized,
+			await clickAndWaitForReload(
+				page,
+				page.locator("button.help-action-btn", { hasText: "Refresh This Web Page" }),
 			);
 
 			const pageIdx = await page.evaluate(() => state.data.delta.currentPageIndex);
@@ -276,16 +275,14 @@ test.describe("Complete course with barely-passing grade", () => {
 		// === RESET ===
 		await test.step("reset via help modal: dismiss end screen, reset, verify fresh state", async () => {
 			await page.locator("button.help-action-btn", { hasText: "Review Course Materials" }).click();
-			await page.waitForFunction(() =>
-				typeof state !== "undefined" && state.initialized,
-			);
+			await expect(page.locator("#help-overlay")).not.toBeVisible({ timeout: 5000 });
 
 			page.on("dialog", dialog => dialog.accept());
 
 			await page.locator("#help-btn").click();
-			await page.locator("button.help-action-btn", { hasText: "Reset Course Progress" }).click();
-			await page.waitForFunction(() =>
-				typeof state !== "undefined" && state.initialized,
+			await clickAndWaitForReload(
+				page,
+				page.locator("button.help-action-btn", { hasText: "Reset Course Progress" }),
 			);
 
 			await expect(iframe.locator("h1")).toHaveText("Lesson Directions", { timeout: 10000 });

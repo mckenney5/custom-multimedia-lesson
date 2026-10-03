@@ -44,9 +44,31 @@ async function completeProgrammingExercises(iframe) {
   await assertProgrammingResult(iframe, "prog_double", "passed");
 }
 
+// ui._onRefresh / state.reset defer window.location.reload() behind async work,
+// so state.initialized is still true on the document that is about to navigate.
+// Mark the current document and wait until that mark is gone (only a new
+// document can have lost it) and the replacement has finished initializing.
+//
+// Dialogs are the caller's job: the reset path raises window.confirm, so the
+// caller must register page.on("dialog", d => d.accept()) first — without it
+// Playwright auto-dismisses the dialog, no reload happens, and this wait times
+// out on a message that never mentions the confirm.
+async function clickAndWaitForReload(page, locator) {
+  await page.evaluate(() => {
+    window.__navGuard = true;
+  });
+  await locator.click();
+  await page.waitForFunction(() =>
+    !window.__navGuard &&
+    typeof state !== "undefined" &&
+    state.initialized,
+  );
+}
+
 module.exports = {
   setProgrammingCode,
   runProgrammingCode,
   assertProgrammingResult,
   completeProgrammingExercises,
+  clickAndWaitForReload,
 };
