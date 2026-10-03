@@ -2,13 +2,13 @@ let completion = {
 	checkIfComplete: function(page, pageDelta) {
 		const score = page.maxScore > 0 ? pageDelta.score / page.maxScore : 0;
 
-		let quizzesSatisfied = true;
+		let submissionsSatisfied = true;
 
 		if (page.completionRules.requireSubmission) {
-			const quizComponents = (page.components || []).filter(c => c.type === "quiz");
+			const submissions = (page.components || []).filter(c => c.type === "quiz" || c.type === "programming");
 
-			quizzesSatisfied = quizComponents.every(q => {
-				const compState = pageDelta.components[q.id];
+			submissionsSatisfied = submissions.every(sub => {
+				const compState = pageDelta.components[sub.id];
 				return compState && compState.completed === true;
 			});
 		}
@@ -18,7 +18,7 @@ let completion = {
 			score >= page.completionRules.score &&
 			(!page.completionRules.scrolled || pageDelta.scrolled) &&
 			pageDelta.videoProgress >= page.completionRules.videoProgress &&
-			quizzesSatisfied
+			submissionsSatisfied
 		);
 	},
 

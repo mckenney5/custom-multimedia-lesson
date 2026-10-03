@@ -181,6 +181,152 @@ test.describe("helpModal", () => {
 		expect(result.scoreDisplayed).toBe(true);
 	});
 
+	test("showPageHelp shows Pending and a fail icon for an incomplete programming component", async () => {
+		const result = await page.evaluate(() => {
+			if(!ui.infoBanner) ui.init();
+			const page = {
+				completionRules: {
+					watchTime: 0,
+					score: 0,
+					scrolled: false,
+					videoProgress: 0,
+					requireSubmission: true,
+				},
+				maxScore: 0,
+				components: [{ id: "prog1", type: "programming" }],
+			};
+			const pageDelta = {
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				components: { prog1: { type: "programming", completed: false } },
+			};
+
+			ui.showPageHelp(page, pageDelta);
+
+			const html = ui.helpContent.innerHTML;
+			const row = html.split("<tr>").find(r => r.includes("Submit all")) || "";
+			return { rowFound: row.length > 0, row, text: ui.helpContent.textContent };
+		});
+
+		expect(result.rowFound).toBe(true);
+		expect(result.text).toContain("Complete Code Assignments");
+		expect(result.row).toContain("Pending");
+		expect(result.row).toContain("status-fail");
+	});
+
+	test("showPageHelp shows Submitted and a pass icon for a completed programming component", async () => {
+		const result = await page.evaluate(() => {
+			if(!ui.infoBanner) ui.init();
+			const page = {
+				completionRules: {
+					watchTime: 0,
+					score: 0,
+					scrolled: false,
+					videoProgress: 0,
+					requireSubmission: true,
+				},
+				maxScore: 0,
+				components: [{ id: "prog1", type: "programming" }],
+			};
+			const pageDelta = {
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				components: { prog1: { type: "programming", completed: true } },
+			};
+
+			ui.showPageHelp(page, pageDelta);
+
+			const html = ui.helpContent.innerHTML;
+			const row = html.split("<tr>").find(r => r.includes("Submit all")) || "";
+			return { rowFound: row.length > 0, row, text: ui.helpContent.textContent };
+		});
+
+		expect(result.rowFound).toBe(true);
+		expect(result.text).toContain("Complete Code Assignments");
+		expect(result.row).toContain("Submitted");
+		expect(result.row).toContain("status-pass");
+	});
+
+	test("showPageHelp keeps the Submit Quizzes label for quiz-only pages", async () => {
+		const result = await page.evaluate(() => {
+			if(!ui.infoBanner) ui.init();
+			const page = {
+				completionRules: {
+					watchTime: 0,
+					score: 0,
+					scrolled: false,
+					videoProgress: 0,
+					requireSubmission: true,
+				},
+				maxScore: 0,
+				components: [{ id: "quiz1", type: "quiz" }],
+			};
+			const pageDelta = {
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				components: { quiz1: { type: "quiz", completed: true } },
+			};
+
+			ui.showPageHelp(page, pageDelta);
+
+			const html = ui.helpContent.innerHTML;
+			const row = html.split("<tr>").find(r => r.includes("Submit all")) || "";
+			return { row, text: ui.helpContent.textContent };
+		});
+
+		expect(result.row).toContain("<td>Submit Quizzes</td>");
+		expect(result.row).toContain("Submitted");
+		expect(result.row).toContain("status-pass");
+		expect(result.text).not.toContain("Complete Code Assignments");
+	});
+
+	test("showPageHelp mixes labels on a page with both a quiz and a programming component", async () => {
+		const result = await page.evaluate(() => {
+			if(!ui.infoBanner) ui.init();
+			const page = {
+				completionRules: {
+					watchTime: 0,
+					score: 0,
+					scrolled: false,
+					videoProgress: 0,
+					requireSubmission: true,
+				},
+				maxScore: 0,
+				components: [
+					{ id: "quiz1", type: "quiz" },
+					{ id: "prog1", type: "programming" },
+				],
+			};
+			const pageDelta = {
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				components: {
+					quiz1: { type: "quiz", completed: true },
+					prog1: { type: "programming", completed: false },
+				},
+			};
+
+			ui.showPageHelp(page, pageDelta);
+
+			const html = ui.helpContent.innerHTML;
+			const row = html.split("<tr>").find(r => r.includes("Submit all")) || "";
+			return { rowFound: row.length > 0, row, text: ui.helpContent.textContent };
+		});
+
+		expect(result.rowFound).toBe(true);
+		expect(result.text).toContain("Submit Quizzes & Assignments");
+		expect(result.row).toContain("Pending");
+		expect(result.row).toContain("status-fail");
+	});
+
 	test("showGeneralHelp should render help iframe", async () => {
 		const result = await page.evaluate(() => {
 			if(!ui.infoBanner) ui.init();

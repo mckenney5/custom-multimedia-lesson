@@ -220,6 +220,74 @@ test.describe("completion.checkIfComplete", () => {
 		expect(result.result).toBe(false);
 	});
 
+	test("requireSubmission blocks a page with an incomplete programming component", async () => {
+		const result = await page.evaluate(() => {
+			if (typeof completion === "undefined") return { error: "completion not defined" };
+
+			const page = {
+				maxScore: 0,
+				completionRules: {
+					watchTime: 0,
+					score: 0,
+					scrolled: false,
+					videoProgress: 0,
+					requireSubmission: true,
+				},
+				components: [
+					{ id: "prog1", type: "programming" },
+				],
+			};
+			const pageDelta = {
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				components: {
+					prog1: { completed: false },
+				},
+			};
+
+			return { result: completion.checkIfComplete(page, pageDelta) };
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.result).toBe(false);
+	});
+
+	test("requireSubmission is satisfied when the programming component is completed", async () => {
+		const result = await page.evaluate(() => {
+			if (typeof completion === "undefined") return { error: "completion not defined" };
+
+			const page = {
+				maxScore: 0,
+				completionRules: {
+					watchTime: 0,
+					score: 0,
+					scrolled: false,
+					videoProgress: 0,
+					requireSubmission: true,
+				},
+				components: [
+					{ id: "prog1", type: "programming" },
+				],
+			};
+			const pageDelta = {
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				components: {
+					prog1: { completed: true },
+				},
+			};
+
+			return { result: completion.checkIfComplete(page, pageDelta) };
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.result).toBe(true);
+	});
+
 	test("should handle maxScore of 0 gracefully without crashing", async () => {
 		const result = await page.evaluate(() => {
 			if (typeof completion === "undefined") return { error: "completion not defined" };
