@@ -341,7 +341,7 @@ The 3-retry cap prevents infinite loops. In practice, retries should rarely fire
 | `SEND_META` | Request page metadata | `""` |
 | `QUIZ_RESULT` | Quiz submission | `{ id, value: { score, maxScore, answers } }` |
 | `GET_QUIZ_DATA` | Request quiz state | `{ id, value: "" }` |
-| `CODE_EXECUTION` | Programming run results (code, stdout, grade). `consumesAttempt: false` marks a run that never reached the sandbox (config not loaded / banned pattern) so it does not count against `completionRules.attempts`; omit it for a real run | `{ id, value: { code, stdout, returnValue, error, testResults, score, maxScore, completed, consumesAttempt? } }` |
+| `CODE_EXECUTION` | Programming run results (code, stdout, grade). `consumesAttempt: false` marks a run that never reached the sandbox (config not loaded / banned pattern) so it does not count against `completionRules.attempts`; omit it for a real run. `code` is the editor contents and is persisted as `codeContent` — except on the config-not-loaded path, where it is `undefined` because the editor only holds the pre-reply placeholder and persisting it would overwrite saved code | `{ id, value: { code, stdout, returnValue, error, testResults, score, maxScore, completed, consumesAttempt? } }` |
 | `GET_PROGRAMMING_DATA` | Request programming component state | `{ id, value: "" }` |
 
 ### Parent → Child
@@ -356,7 +356,7 @@ The 3-retry cap prevents infinite loops. In practice, retries should rarely fire
 | `QUIZ_RESULTS` | Quiz results notification | result data |
 | `SET_THEME` | Theme switch | theme name string |
 | `NONCE_REJECTED` | Nonce validation failure | `{ nonce }` |
-| `PROGRAMMING_DATA` | Programming state response — after `GET_PROGRAMMING_DATA` it carries config + saved code; after `CODE_EXECUTION` only `attemptsLeft`, `hasAttempted`, `score`, `maxScore`, `testResults` | `{ id, value: { starterCode, language, timeout, expectedOutput, testCases, bannedPatterns, options, savedCode, testResults, attemptsLeft, hasAttempted, score, maxScore } }` |
+| `PROGRAMMING_DATA` | Programming state response — after `GET_PROGRAMMING_DATA` it carries config + saved code; after `CODE_EXECUTION` only `attemptsLeft`, `hasAttempted`, `score`, `maxScore`, `testResults`, `consumesAttempt`. `testResults` is always the persisted value, and `consumesAttempt: false` tells the component to keep it as state without repainting the results panel (the run produced nothing); the field is absent on `GET_PROGRAMMING_DATA` replies, which do render | `{ id, value: { starterCode, language, timeout, expectedOutput, testCases, bannedPatterns, options, savedCode, testResults, attemptsLeft, hasAttempted, score, maxScore, consumesAttempt? } }` |
 
 ---
 

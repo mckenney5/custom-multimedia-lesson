@@ -275,6 +275,205 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 		expect(result.completed).toBe(false);
 	});
 
+	test("a non-consuming run leaves persisted testResults untouched", async () => {
+		const result = await page.evaluate(() => {
+			if (typeof state === "undefined") return { error: "state not defined" };
+
+			const harness = window.__codeExec;
+			harness.setup({ attempts: 3 });
+			harness.run({
+				code: 'console.log("hello");',
+				stdout: ["hello"],
+				testResults: [{ label: "Output matches expected", passed: true }],
+				score: 1,
+				maxScore: 1,
+				completed: true,
+			});
+			harness.run({
+				code: "evil_code();",
+				error: 'Code contains banned pattern: "evil_code"',
+				consumesAttempt: false,
+				testResults: [],
+				score: 0,
+				maxScore: 0,
+				completed: false,
+			});
+
+			return {
+				testResults: harness.compState().testResults,
+				attempts: harness.compState().attempts,
+				score: harness.compState().score,
+				completed: harness.compState().completed,
+			};
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.testResults).toEqual([{ label: "Output matches expected", passed: true }]);
+		expect(result.attempts).toBe(1);
+		expect(result.score).toBe(1);
+		expect(result.completed).toBe(true);
+	});
+
+	test("the reply after a non-consuming run echoes the persisted testResults", async () => {
+		const result = await page.evaluate(() => {
+			if (typeof state === "undefined") return { error: "state not defined" };
+
+			const harness = window.__codeExec;
+			harness.setup({ attempts: 3 });
+			harness.run({
+				code: 'console.log("hello");',
+				stdout: ["hello"],
+				testResults: [{ label: "Output matches expected", passed: true }],
+				score: 1,
+				maxScore: 1,
+				completed: true,
+			});
+			harness.run({
+				code: "evil_code();",
+				error: 'Code contains banned pattern: "evil_code"',
+				consumesAttempt: false,
+				testResults: [],
+				score: 0,
+				maxScore: 0,
+				completed: false,
+			});
+
+			const progMsg = harness.postMessages.filter(m => m[0] && m[0].type === "PROGRAMMING_DATA").pop();
+
+			return {
+				replyTestResults: progMsg ? progMsg[0].message.value.testResults : null,
+				replyAttemptsLeft: progMsg ? progMsg[0].message.value.attemptsLeft : null,
+				replyScore: progMsg ? progMsg[0].message.value.score : null,
+			};
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.replyTestResults).toEqual([{ label: "Output matches expected", passed: true }]);
+		expect(result.replyAttemptsLeft).toBe(2);
+		expect(result.replyScore).toBe(1);
+	});
+
+	test("the reply reports whether the run consumed an attempt", async () => {
+		const result = await page.evaluate(() => {
+			if (typeof state === "undefined") return { error: "state not defined" };
+
+			const harness = window.__codeExec;
+			harness.setup({ attempts: 3 });
+			harness.run({
+				code: 'console.log("hello");',
+				stdout: ["hello"],
+				testResults: [{ label: "Output matches expected", passed: true }],
+				score: 1,
+				maxScore: 1,
+				completed: true,
+			});
+			const consuming = harness.postMessages.filter(m => m[0] && m[0].type === "PROGRAMMING_DATA").pop();
+
+			harness.run({
+				code: "evil_code();",
+				error: 'Code contains banned pattern: "evil_code"',
+				consumesAttempt: false,
+				testResults: [],
+				score: 0,
+				maxScore: 0,
+				completed: false,
+			});
+			const nonConsuming = harness.postMessages.filter(m => m[0] && m[0].type === "PROGRAMMING_DATA").pop();
+
+			return {
+				consumingFlag: consuming ? consuming[0].message.value.consumesAttempt : null,
+				nonConsumingFlag: nonConsuming ? nonConsuming[0].message.value.consumesAttempt : null,
+			};
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.consumingFlag).toBe(true);
+		expect(result.nonConsumingFlag).toBe(false);
+	});
+
+	test("a config-not-loaded run does not wipe results restored from save", async () => {
+		const result = await page.evaluate(() => {
+			if (typeof state === "undefined") return { error: "state not defined" };
+
+			const harness = window.__codeExec;
+			harness.setup({ attempts: 5 });
+			harness.compState().codeContent = "// saved draft from last session";
+			harness.compState().testResults = [{ label: "Restored from LMS", passed: true }];
+			harness.compState().score = 1;
+			harness.compState().maxScore = 1;
+			harness.compState().completed = true;
+
+			// The component publishes no draft on this path: the editor only ever
+			// holds the placeholder until the first reply arrives.
+			harness.run({
+				code: undefined,
+				error: "Component configuration not loaded",
+				consumesAttempt: false,
+				testResults: [],
+				score: 0,
+				maxScore: 0,
+				completed: false,
+			});
+
+			const progMsg = harness.postMessages.filter(m => m[0] && m[0].type === "PROGRAMMING_DATA").pop();
+
+			return {
+				codeContent: harness.compState().codeContent,
+				testResults: harness.compState().testResults,
+				score: harness.compState().score,
+				completed: harness.compState().completed,
+				attempts: harness.compState().attempts,
+				replyTestResults: progMsg ? progMsg[0].message.value.testResults : null,
+				replyAttemptsLeft: progMsg ? progMsg[0].message.value.attemptsLeft : null,
+				replyConsumesAttempt: progMsg ? progMsg[0].message.value.consumesAttempt : null,
+			};
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.codeContent).toBe("// saved draft from last session");
+		expect(result.testResults).toEqual([{ label: "Restored from LMS", passed: true }]);
+		expect(result.score).toBe(1);
+		expect(result.completed).toBe(true);
+		expect(result.attempts).toBeUndefined();
+		expect(result.replyTestResults).toEqual([{ label: "Restored from LMS", passed: true }]);
+		expect(result.replyAttemptsLeft).toBe(5);
+		expect(result.replyConsumesAttempt).toBe(false);
+	});
+
+	test("a non-consuming run still saves the edited code", async () => {
+		const result = await page.evaluate(() => {
+			if (typeof state === "undefined") return { error: "state not defined" };
+
+			const harness = window.__codeExec;
+			harness.setup({ attempts: 3 });
+			harness.run({
+				code: 'console.log("hello");',
+				testResults: [{ label: "Output matches expected", passed: true }],
+				score: 1,
+				maxScore: 1,
+				completed: true,
+			});
+			harness.run({
+				code: "evil_code();",
+				error: 'Code contains banned pattern: "evil_code"',
+				consumesAttempt: false,
+				testResults: [],
+				score: 0,
+				maxScore: 0,
+				completed: false,
+			});
+
+			return {
+				codeContent: harness.compState().codeContent,
+				testResults: harness.compState().testResults,
+			};
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.codeContent).toBe("evil_code();");
+		expect(result.testResults).toEqual([{ label: "Output matches expected", passed: true }]);
+	});
+
 	test("a maxScore: 0 sender cannot clobber the stored maxScore", async () => {
 		const result = await page.evaluate(() => {
 			if (typeof state === "undefined") return { error: "state not defined" };

@@ -175,4 +175,61 @@ test.describe('CourseProgramming._handleProgrammingData', () => {
 		expect(rows[0]).toContain('got: Goodbye');
 		expect(rows[1]).not.toContain('expected:');
 	});
+
+	test("a reply for a run that did not reach the sandbox does not re-show the results panel", async () => {
+		const state = await page.evaluate(() => {
+			const prog = document.createElement("course-programming");
+			prog.setAttribute("id", "prog-stale");
+			prog.connectedCallback();
+
+			const rows = [
+				{ label: "Output matches expected", passed: true, expected: "43", actual: "43", error: null },
+			];
+			const resultsDiv = prog.querySelector("#prog-results");
+			const resultsList = prog.querySelector("#prog-results-list");
+
+			window.dispatchEvent(new CustomEvent("programming-data", {
+				detail: { id: "prog-stale", value: { testResults: rows, attemptsLeft: 3, hasAttempted: true } },
+			}));
+			const afterFirstRun = {
+				display: resultsDiv.style.display,
+				rows: resultsList.querySelectorAll(".prog-test-result").length,
+			};
+
+			// execute() hides the panel before reporting the failed attempt
+			resultsDiv.style.display = "none";
+			resultsList.innerHTML = "";
+
+			// the reply for that run arrives: nothing ran, so nothing is repainted
+			window.dispatchEvent(new CustomEvent("programming-data", {
+				detail: {
+					id: "prog-stale",
+					value: { testResults: rows, attemptsLeft: 3, hasAttempted: true, consumesAttempt: false },
+				},
+			}));
+			const afterNonConsumingReply = {
+				display: resultsDiv.style.display,
+				rows: resultsList.querySelectorAll(".prog-test-result").length,
+			};
+
+			// a state reply with no consumesAttempt (GET_PROGRAMMING_DATA, page load)
+			// carries authoritative persisted results and does render them
+			window.dispatchEvent(new CustomEvent("programming-data", {
+				detail: { id: "prog-stale", value: { testResults: rows, attemptsLeft: 3, hasAttempted: true } },
+			}));
+			const afterStateReply = {
+				display: resultsDiv.style.display,
+				rows: resultsList.querySelectorAll(".prog-test-result").length,
+			};
+
+			return { afterFirstRun, afterNonConsumingReply, afterStateReply };
+		});
+
+		expect(state.afterFirstRun.display).toBe("block");
+		expect(state.afterFirstRun.rows).toBe(1);
+		expect(state.afterNonConsumingReply.display).toBe("none");
+		expect(state.afterNonConsumingReply.rows).toBe(0);
+		expect(state.afterStateReply.display).toBe("block");
+		expect(state.afterStateReply.rows).toBe(1);
+	});
 });

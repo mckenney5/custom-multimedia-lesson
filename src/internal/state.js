@@ -766,13 +766,15 @@ let state = {
 
 				if (componentID && pageDelta.components && pageDelta.components[componentID]) {
 					const compState = pageDelta.components[componentID];
-					compState.codeContent = msgData.code;
-					compState.testResults = msgData.testResults;
+					if (typeof msgData.code === "string") {
+						compState.codeContent = msgData.code;
+					}
 					compState.score = Math.max(compState.score || 0, Number.isFinite(msgData.score) ? msgData.score : 0);
 					compState.maxScore = Math.max(compState.maxScore || 0, Number.isFinite(msgData.maxScore) ? msgData.maxScore : 0);
 					compState.completed = compState.completed === true || msgData.completed;
 					if (msgData.consumesAttempt !== false) {
 						compState.attempts = (compState.attempts || 0) + 1;
+						compState.testResults = msgData.testResults;
 					}
 
 					// Re-sum total page score
@@ -793,7 +795,8 @@ let state = {
 								hasAttempted: (compState.attempts || 0) > 0,
 								score: compState.score,
 								maxScore: compState.maxScore,
-								testResults: msgData.testResults,
+								testResults: compState.testResults,
+								consumesAttempt: msgData.consumesAttempt !== false,
 							},
 						},
 					}, window.location.origin);

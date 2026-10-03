@@ -213,6 +213,7 @@ test.describe("CourseProgramming execute() wiring", () => {
 				sendCount: sends.length,
 				consumesAttempt: sends[0] ? sends[0].data.consumesAttempt : null,
 				error: sends[0] ? sends[0].data.error : null,
+				codeIsUndefined: sends[0] ? sends[0].data.code === undefined : null,
 				attemptsLeftType: typeof prog.attemptsLeft,
 				btnText: btn.textContent,
 				btnDisabled: btn.disabled,
@@ -223,6 +224,7 @@ test.describe("CourseProgramming execute() wiring", () => {
 		expect(result.sendCount).toBe(1);
 		expect(result.consumesAttempt).toBe(false);
 		expect(result.error).toBe("Component configuration not loaded");
+		expect(result.codeIsUndefined).toBe(true);
 		expect(result.attemptsLeftType).toBe("undefined");
 		expect(result.btnDisabled).toBe(false);
 		expect(result.btnText).toBe("▶ Run");

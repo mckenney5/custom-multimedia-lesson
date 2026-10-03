@@ -1082,7 +1082,10 @@ class CourseProgramming extends CourseComponent {
 		if (!this._componentConfig) {
 			outputDiv.textContent = "Error: Component configuration not loaded yet. Please wait.";
 			this.send("CODE_EXECUTION", {
-				code,
+				// No draft to publish: until the first reply the editor only holds
+				// the placeholder, never the saved code, so sending it would
+				// overwrite the persisted codeContent with a throwaway string.
+				code: undefined,
 				stdout: [],
 				returnValue: undefined,
 				error: "Component configuration not loaded",
@@ -1316,7 +1319,15 @@ class CourseProgramming extends CourseComponent {
 			}
 		}
 
-		if (value.testResults && value.testResults.length > 0 && this.editor) {
+		// A reply for a run that never reached the sandbox carries the persisted
+		// rows only as state: repainting them next to the run's error would read
+		// as a verdict on code that never executed.
+		if (
+			value.consumesAttempt !== false &&
+			value.testResults &&
+			value.testResults.length > 0 &&
+			this.editor
+		) {
 			const resultsDiv = this.querySelector("#prog-results");
 			const resultsList = this.querySelector("#prog-results-list");
 			if (resultsDiv && resultsList) {
