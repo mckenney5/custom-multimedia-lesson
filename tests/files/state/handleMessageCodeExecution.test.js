@@ -12,13 +12,23 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 				postMessages: [],
 				finalizeCalled: false,
 				nonce: Date.now(),
-				setup(completionRules) {
+				setup(completionRules, componentIds) {
+					const ids = componentIds || ["prog1"];
+					const componentState = {};
+					ids.forEach((id) => {
+						componentState[id] = {
+							type: "programming",
+							codeContent: "// starter",
+							testResults: [],
+							score: 0,
+							maxScore: 0,
+							completed: false,
+						};
+					});
 					state.data.pages = [
 						{
 							name: "test.html",
-							components: [
-								{ id: "prog1", type: "programming", starterCode: "// starter" },
-							],
+							components: ids.map((id) => ({ id, type: "programming", starterCode: "// starter" })),
 							completionRules: completionRules || {},
 						},
 					];
@@ -26,16 +36,7 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 						{
 							completed: false,
 							score: 0,
-							components: {
-								prog1: {
-									type: "programming",
-									codeContent: "// starter",
-									testResults: [],
-									score: 0,
-									maxScore: 0,
-									completed: false,
-								},
-							},
+							components: componentState,
 						},
 					];
 					state.data.delta.currentPageIndex = 0;
@@ -49,7 +50,7 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 					state.finalizePage = () => { window.__codeExec.finalizeCalled = true; };
 					state.pageAPISecret = "TEST_SECRET";
 				},
-				run(value) {
+				run(value, componentId) {
 					const runValue = Object.assign({
 						code: "// code",
 						stdout: [],
@@ -63,15 +64,15 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 					state.handleMessage({
 						data: {
 							type: "CODE_EXECUTION",
-							message: { id: "prog1", value: runValue },
+							message: { id: componentId || "prog1", value: runValue },
 							code: "TEST_SECRET",
 							nonce: window.__codeExec.nonce++,
 						},
 						origin: window.location.origin,
 					});
 				},
-				compState() {
-					return state.data.delta.pagesState[0].components.prog1;
+				compState(id) {
+					return state.data.delta.pagesState[0].components[id || "prog1"];
 				},
 				pageState() {
 					return state.data.delta.pagesState[0];
@@ -121,6 +122,7 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 		expect(result.score).toBe(1);
 		expect(result.maxScore).toBe(1);
 		expect(result.completed).toBe(true);
+		expect(result.pageScore).toBe(1);
 	});
 
 	test("should return updated attempts and testResults via PROGRAMMING_DATA postMessage", async () => {
@@ -164,6 +166,7 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 		expect(result.msgTestResults).toEqual([
 			{ label: "Output matches expected", passed: true }
 		]);
+		expect(result.pageScore).toBe(1);
 	});
 
 	test("PROGRAMMING_DATA reply carries the best score and maxScore", async () => {
@@ -246,6 +249,33 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 		expect(result.score).toBe(1);
 		expect(result.completed).toBe(true);
 		expect(result.pageScore).toBe(1);
+	});
+
+	test("page score is re-summed across components and keeps each component's best score", async () => {
+		const result = await page.evaluate(() => {
+			if (typeof state === "undefined") return { error: "state not defined" };
+
+			const harness = window.__codeExec;
+			harness.setup({}, ["prog1", "prog2"]);
+			harness.run({ score: 1, maxScore: 1, completed: true });
+			harness.run({ score: 2, maxScore: 2, completed: true }, "prog2");
+
+			const afterBoth = harness.pageState().score;
+			harness.run({ score: 0, maxScore: 1, completed: false });
+
+			return {
+				afterBoth,
+				afterLaterFailure: harness.pageState().score,
+				prog1Score: harness.compState().score,
+				prog2Score: harness.compState("prog2").score,
+			};
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.afterBoth).toBe(3);
+		expect(result.afterLaterFailure).toBe(3);
+		expect(result.prog1Score).toBe(1);
+		expect(result.prog2Score).toBe(2);
 	});
 
 	test("a run that did not reach the sandbox does not consume an attempt", async () => {

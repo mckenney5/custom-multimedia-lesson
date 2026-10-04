@@ -288,6 +288,106 @@ test.describe("completion.checkIfComplete", () => {
 		expect(result.result).toBe(true);
 	});
 
+	test("requireSubmission blocks a page whose programming component has no recorded state", async () => {
+		const result = await page.evaluate(() => {
+			if (typeof completion === "undefined") return { error: "completion not defined" };
+
+			const page = {
+				maxScore: 0,
+				completionRules: {
+					watchTime: 0,
+					score: 0,
+					scrolled: false,
+					videoProgress: 0,
+					requireSubmission: true,
+				},
+				components: [
+					{ id: "prog1", type: "programming" },
+				],
+			};
+			const pageDelta = {
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				components: {},
+			};
+
+			return { result: completion.checkIfComplete(page, pageDelta) };
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.result).toBe(false);
+	});
+
+	test("requireSubmission passes vacuously when the page has no components key", async () => {
+		// PINS CURRENT BEHAVIOR — open decision on ticket #62 (fail open vs fail closed).
+		// Guards the `|| []` at completion.js:8 (page.components === undefined).
+		// Flip the expected value only as part of that decision, never as a drive-by.
+		const result = await page.evaluate(() => {
+			if (typeof completion === "undefined") return { error: "completion not defined" };
+
+			const page = {
+				maxScore: 0,
+				completionRules: {
+					watchTime: 0,
+					score: 0,
+					scrolled: false,
+					videoProgress: 0,
+					requireSubmission: true,
+				},
+			};
+			const pageDelta = {
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				components: {},
+			};
+
+			return { result: completion.checkIfComplete(page, pageDelta) };
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.result).toBe(true);
+	});
+
+	test("requireSubmission passes vacuously when no declared component is a submission", async () => {
+		// PINS CURRENT BEHAVIOR — open decision on ticket #62 (fail open vs fail closed).
+		// The authoring-mistake case: components exist, but none is a quiz/programming,
+		// so `filter` returns [] and `every()` is vacuously true.
+		// Flip the expected value only as part of that decision, never as a drive-by.
+		const result = await page.evaluate(() => {
+			if (typeof completion === "undefined") return { error: "completion not defined" };
+
+			const page = {
+				maxScore: 0,
+				completionRules: {
+					watchTime: 0,
+					score: 0,
+					scrolled: false,
+					videoProgress: 0,
+					requireSubmission: true,
+				},
+				components: [
+					{ id: "art1", type: "article" },
+				],
+			};
+			const pageDelta = {
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				components: {},
+			};
+
+			return { result: completion.checkIfComplete(page, pageDelta) };
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.result).toBe(true);
+	});
+
 	test("should handle maxScore of 0 gracefully without crashing", async () => {
 		const result = await page.evaluate(() => {
 			if (typeof completion === "undefined") return { error: "completion not defined" };

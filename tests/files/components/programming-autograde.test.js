@@ -174,6 +174,22 @@ test.describe('CourseProgramming _autograde()', () => {
     expect(result.total).toBe(1);
   });
 
+  test('runs of spaces collapse on both sides of the match', async () => {
+    const result = await page.evaluate(() => {
+      const prog = document.createElement('course-programming');
+      const grade = prog._autograde(
+        { expectedOutput: "Hello,   World!" },
+        ["Hello,  World!"],
+        undefined,
+        null
+      );
+      return grade;
+    });
+
+    expect(result.score).toBe(1);
+    expect(result.total).toBe(1);
+  });
+
   test('an extra debug log line still fails the match', async () => {
     const result = await page.evaluate(() => {
       const prog = document.createElement('course-programming');
