@@ -991,6 +991,8 @@ class CourseProgramming extends CourseComponent {
 			<div class="prog-container">
 				<div class="prog-toolbar">
 					<span class="prog-lang-badge">${lang}</span>
+					<span class="prog-score" role="status" aria-live="polite">Best score: —</span>
+					<span class="prog-attempts" role="status" aria-live="polite">Attempts left: —</span>
 					<button class="prog-btn-run" id="prog-btn-run">▶ Run</button>
 					<button class="prog-btn-reset" id="prog-btn-reset">↺ Reset</button>
 				</div>
@@ -1157,6 +1159,10 @@ class CourseProgramming extends CourseComponent {
 				btn.disabled = false;
 				btn.textContent = "▶ Run";
 			}
+			// The attempt was consumed locally, so the readout must not claim one
+			// is still available while we wait for the parent's reply. Score and
+			// maxScore are deliberately left alone: only the reply may latch them.
+			this._updateToolbarReadout();
 		}
 	}
 
@@ -1165,11 +1171,17 @@ class CourseProgramming extends CourseComponent {
 		const btn = this.querySelector("#prog-btn-run");
 		if (!btn) return;
 		btn.disabled = true;
-		const hasPct =
-			Number.isFinite(this.score) && Number.isFinite(this.maxScore) && this.maxScore > 0;
-		btn.textContent = hasPct
-			? `No Attempts Left - Score ${Math.round((this.score / this.maxScore) * 100)}`
-			: "No Attempts Left";
+		// The best score lives in the toolbar readout now; the button stays a
+		// constant label so the two never disagree about what they report.
+		btn.textContent = "No Attempts Left";
+	}
+
+	// Percent scored so far, or null until a run with scoring criteria reports.
+	_scorePercent() {
+		if (!Number.isFinite(this.score) || !Number.isFinite(this.maxScore) || this.maxScore <= 0) {
+			return null;
+		}
+		return Math.round((this.score / this.maxScore) * 100);
 	}
 
 	_autograde(config, stdout, returnValue, error, sandboxTestResults) {
@@ -1337,6 +1349,26 @@ class CourseProgramming extends CourseComponent {
 		}
 
 		this._markRunButtonExhausted();
+		this._updateToolbarReadout();
+	}
+
+	// Repaints the toolbar readouts from the state the last reply reported.
+	_updateToolbarReadout() {
+		const scoreEl = this.querySelector(".prog-score");
+		if (scoreEl) scoreEl.textContent = `Best score: ${this._scorePercentText()}`;
+		const attemptsEl = this.querySelector(".prog-attempts");
+		if (attemptsEl) attemptsEl.textContent = `Attempts left: ${this._attemptsText()}`;
+	}
+
+	_scorePercentText() {
+		const pct = this._scorePercent();
+		return pct === null ? "—" : `${pct}%`;
+	}
+
+	_attemptsText() {
+		if (this.attemptsLeft === Infinity) return "Unlimited";
+		if (!Number.isFinite(this.attemptsLeft)) return "—";
+		return String(this.attemptsLeft);
 	}
 }
 

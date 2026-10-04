@@ -78,11 +78,33 @@ test.describe("E2E Programming Component Integration in Lesson Flow", () => {
 			await runProgrammingCode(iframe, "prog_hello");
 			await assertProgrammingResult(iframe, "prog_hello", "failed");
 
+			// toolbar readouts are shown after a run
+			const progHello = iframe.locator("course-programming#prog_hello");
+			await expect(progHello.locator(".prog-score")).toHaveText("Best score: 0%");
+			await expect(progHello.locator(".prog-attempts")).toHaveText("Attempts left: Unlimited");
+
 			await expect(page.locator("#info-banner.warning")).not.toBeVisible({ timeout: 5000 });
 
 			await setProgrammingCode(iframe, "prog_hello", 'function greet() { return "Hello, World!"; }\n\nconsole.log(greet());');
 			await runProgrammingCode(iframe, "prog_hello");
 			await assertProgrammingResult(iframe, "prog_hello", "passed");
+
+			// ...and both readouts track the next run
+			await expect(progHello.locator(".prog-score")).toHaveText("Best score: 100%");
+			await expect(progHello.locator(".prog-attempts")).toHaveText("Attempts left: Unlimited");
+
+			// a later worse run keeps the latched best score in the toolbar while the
+			// results panel underneath shows the latest run's failure
+			await setProgrammingCode(iframe, "prog_hello", 'function greet() { return "Goodbye!"; }\n\nconsole.log(greet());');
+			await runProgrammingCode(iframe, "prog_hello");
+			await assertProgrammingResult(iframe, "prog_hello", "failed");
+			await expect(progHello.locator(".prog-score")).toHaveText("Best score: 100%");
+
+			// put the passing answer back so the rest of the flow still completes
+			await setProgrammingCode(iframe, "prog_hello", 'function greet() { return "Hello, World!"; }\n\nconsole.log(greet());');
+			await runProgrammingCode(iframe, "prog_hello");
+			await assertProgrammingResult(iframe, "prog_hello", "passed");
+			await expect(progHello.locator(".prog-score")).toHaveText("Best score: 100%");
 
 			await setProgrammingCode(iframe, "prog_double", 'function double_value(n) { return n * n; }\n\nconsole.log(double_value(4));');
 			await runProgrammingCode(iframe, "prog_double");

@@ -336,7 +336,7 @@ test.describe("CourseProgramming execute() wiring", () => {
 		expect(result.attemptsLeft).toBe(3);
 	});
 
-	test("exhausted label omits the score when no score has been reported", async () => {
+	test("exhausted label with no score reported is the plain No Attempts Left", async () => {
 		const btn = await page.evaluate(() => {
 			const prog = window.__mkProg({ id: "prog-noscore" });
 
@@ -352,7 +352,7 @@ test.describe("CourseProgramming execute() wiring", () => {
 		expect(btn.text).toBe("No Attempts Left");
 	});
 
-	test("exhausted label omits the score when maxScore is 0", async () => {
+	test("exhausted label with maxScore 0 is the plain No Attempts Left", async () => {
 		const btn = await page.evaluate(() => {
 			const prog = window.__mkProg({ id: "prog-zero-max" });
 
@@ -381,7 +381,7 @@ test.describe("CourseProgramming execute() wiring", () => {
 		expect(sends).toEqual([]);
 	});
 
-	test("blocked run disables the Run button and labels it with the final score", async () => {
+	test("blocked run disables the Run button and labels it No Attempts Left", async () => {
 		const btn = await page.evaluate(async () => {
 			const prog = window.__mkProg({
 				id: "prog-exhausted",
@@ -401,7 +401,7 @@ test.describe("CourseProgramming execute() wiring", () => {
 		});
 
 		expect(btn.disabled).toBe(true);
-		expect(btn.text).toBe("No Attempts Left - Score 50");
+		expect(btn.text).toBe("No Attempts Left");
 	});
 
 	test("zero attempts left reported by state immediately disables the Run button", async () => {
@@ -421,7 +421,7 @@ test.describe("CourseProgramming execute() wiring", () => {
 		});
 
 		expect(btn.disabled).toBe(true);
-		expect(btn.text).toBe("No Attempts Left - Score 100");
+		expect(btn.text).toBe("No Attempts Left");
 	});
 
 	test("Ctrl-Enter runs code when attempts remain", async () => {
