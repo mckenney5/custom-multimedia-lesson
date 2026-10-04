@@ -1203,16 +1203,9 @@ class CourseProgramming extends CourseComponent {
 		if (config.testCases && Array.isArray(config.testCases)) {
 			if (sandboxTestResults && Array.isArray(sandboxTestResults)) {
 				sandboxTestResults.forEach((tcResult, i) => {
-					const passed = this._testCasePassed(tcResult);
-					// The sandbox reports no `expected` on the two paths that never
-					// produced a value to compare — the name is not a function, or it
-					// threw — so those rows would show a bare error with nothing to
-					// aim at. It builds one result per test case in order, so the
-					// config entry at the same index supplies it. A case that
-					// declares no expected keeps its row free of one.
 					const spec = config.testCases[i] || {};
-					const expected =
-						tcResult.expected !== undefined ? tcResult.expected : spec.expected;
+					const expected = this._expectedFor(tcResult, spec);
+					const passed = this._testCasePassed(tcResult, spec);
 					total++;
 					if (passed) score++;
 					results.push({
@@ -1241,25 +1234,154 @@ class CourseProgramming extends CourseComponent {
 
 	// The sandbox grades a test case with a strict === on the two values it was
 	// handed, so a return value carrying trailing spaces or CRLF fails a case
-	// whose expected text is visibly identical to what the expectedOutput path
+	// whose expected text was visibly identical to what the expectedOutput path
 	// accepts. Two strings are therefore compared normalized, the same way.
 	//
-	// Everything else keeps the sandbox's verdict, because _normalizeOutput is a
-	// text normalizer: running a non-string through it means stringifying, and
-	// String({a: 1}) === String({a: 2}), so a wrong object or array return would
-	// be scored as a pass. The guard is what stops the loosening from reaching
-	// them.
+	// Text is not the only type the sandbox gets wrong. `expected` reaches the
+	// iframe through postMessage, so it arrives as a structured clone and can
+	// never be === the learner's return value, which means an object or array
+	// case could never pass no matter how correct the answer was. Plain
+	// containers are therefore compared structurally here instead.
 	//
-	// Note the sandbox's own verdict is still wrong for object and array cases:
-	// `expected` reaches the iframe through postMessage, so it is a structured
-	// clone and can never be === the learner's return value — such a case can
-	// never pass. Left as-is here; ticket 67 owns the real fix.
-	_testCasePassed(tcResult) {
-		const { actual, expected } = tcResult;
+	// Everything else keeps the sandbox's verdict. _normalizeOutput is a text
+	// normalizer, so running a non-string through it would mean stringifying,
+	// and String({a: 1}) === String({a: 2}) would score a wrong object return as
+	// a pass; a Date or Map has no JSON spelling to be compared against at all.
+	// The guards are what stop the loosening from reaching those.
+	_testCasePassed(tcResult, spec) {
+		const { actual } = tcResult;
+		const expected = this._expectedFor(tcResult, spec);
+
 		if (typeof actual === "string" && typeof expected === "string") {
 			return this._normalizeOutput(actual) === this._normalizeOutput(expected);
 		}
+		if (this._isPlainContainer(actual) && this._isPlainContainer(expected)) {
+			return this._deepEqual(actual, expected);
+		}
 		return tcResult.passed;
+	}
+
+	// The sandbox reports no `expected` on the two paths that never produced a
+	// value to compare — the name is not a function, or it threw — so those rows
+	// would show a bare error with nothing to aim at. It builds one result per
+	// test case in order, so the config entry at the same index supplies it. A
+	// case that declares no expected keeps its row free of one.
+	//
+	// Resolved in one place because the verdict and the rendered row must never
+	// disagree about what the case was aiming at.
+	_expectedFor(tcResult, spec) {
+		return tcResult.expected !== undefined ? tcResult.expected : spec.expected;
+	}
+
+	// Only plain objects and arrays are comparable structurally. A Date, Map,
+	// Set or RegExp survives postMessage as itself rather than as data, so it
+	// reaches here as a non-plain object with no JSON spelling to match against;
+	// it keeps the sandbox's === and fails, which is the safe direction, since
+	// the lesson JSON cannot express one as `expected` either and such a case
+	// therefore has no correct answer to record.
+	//
+	// A class instance is NOT in that group: structured clone flattens it to a
+	// plain object on the way out of the iframe, so it lands here as a plain
+	// container and its own enumerable properties are compared structurally,
+	// which is what an author means by writing `expected: { a: 1 }`.
+	_isPlainContainer(value) {
+		if (Array.isArray(value)) return true;
+		if (value === null || typeof value !== "object") return false;
+		const proto = Object.getPrototypeOf(value);
+		return proto === Object.prototype || proto === null;
+	}
+
+	// Structural equality for plain containers. Key order is irrelevant, but the
+	// key sets must match, so an extra or missing property fails.
+	//
+	// Identity is answered before either limit is charged: a value that is the
+	// same reference on both sides is decided by === alone, so a comparison that
+	// would have short-circuited can never be failed by an exhausted budget.
+	// Short-circuiting only terminates, and anything that does not short-
+	// circuit can only descend, so moving the check cannot make a cycle spin.
+	//
+	// Both limits fail closed: exceeding either returns false, which reports the
+	// case as failed rather than passing it. The depth cap is what guarantees
+	// termination on a self-referential return value — a cycle can only be
+	// climbed by descending, so it reaches the cap. The node budget bounds how
+	// many containers one case may make us inspect: a container is charged even
+	// when its leaves agree for free, so a deep or branchy structure gives up
+	// after a bounded amount of inspection rather than being walked in full. A
+	// wide disagreement never gets that far, because the key sets are compared
+	// before any walk begins. Both limits are per comparison, so one
+	// pathological case cannot starve the cases after it.
+	_deepEqual(a, b, depth = 0, budget = { remaining: 10000 }) {
+		if (a === b) return true;
+		if (budget.remaining-- <= 0 || depth > 32) return false;
+		// Anything that is not a container on both sides compares by identity.
+		// Without this, a nested 1 and a nested 2 would both have zero keys and
+		// report as two equal empty objects.
+		if (!this._isPlainContainer(a) || !this._isPlainContainer(b)) return false;
+
+		const aIsArray = Array.isArray(a);
+		if (aIsArray !== Array.isArray(b)) return false;
+
+		if (aIsArray) {
+			if (a.length !== b.length) return false;
+			// An index loop, not every(): every() skips holes in a sparse array,
+			// which would let a hole match whatever sits at that index.
+			for (let i = 0; i < a.length; i++) {
+				if (!this._deepEqual(a[i], b[i], depth + 1, budget)) return false;
+			}
+			return true;
+		}
+
+		const aKeys = Object.keys(a);
+		const bKeys = Object.keys(b);
+		// Lengths before sorting: the common failing path is a wide learner
+		// object against a small authored `expected`, and sorting 60,001 keys
+		// only to discover the lengths differ is work nobody needs.
+		if (aKeys.length !== bKeys.length) return false;
+		aKeys.sort();
+		bKeys.sort();
+		if (!aKeys.every((key, i) => key === bKeys[i])) return false;
+		return aKeys.every((key) => this._deepEqual(a[key], b[key], depth + 1, budget));
+	}
+
+	// Renders a value for the detail block. Containers go through JSON so the
+	// learner sees the property that differs rather than "[object Object]".
+	//
+	// Two hazards the raw JSON call walks into: it throws outright on a circular
+	// structure, which would take the whole results panel down with it, and it
+	// renders a merely shared reference as if it were a loop, which would tell a
+	// learner their object is cyclic when it is only referenced twice. The
+	// replacer therefore tracks the ancestor path: inside a replacer `this` is
+	// the object the value was read off, so popping the stack back to `this` is
+	// the path to the root, and only an ancestor seen again is a cycle.
+	//
+	// The cap runs after the branch below, so a long plain string is bounded too
+	// — these rows are also repainted from persisted state, and an unbounded row
+	// is a panel one return value can flood. The cap is per line, so a row that
+	// shows both expected and got reaches 4,000 characters; what matters is that
+	// each value, and therefore each row, is bounded.
+	_displayValue(value) {
+		const text = this._displayText(value);
+		return text.length > 2000 ? `${text.slice(0, 2000)}… (truncated)` : text;
+	}
+
+	_displayText(value) {
+		try {
+			if (!this._isPlainContainer(value)) return String(value);
+			const ancestors = [];
+			const text = JSON.stringify(value, function (_key, val) {
+				while (ancestors.length > 0 && ancestors[ancestors.length - 1] !== this) {
+					ancestors.pop();
+				}
+				if (val !== null && typeof val === "object") {
+					if (ancestors.includes(val)) return "[circular]";
+					ancestors.push(val);
+				}
+				return val;
+			});
+			return typeof text === "string" ? text : "[unserializable]";
+		} catch {
+			return "[unserializable]";
+		}
 	}
 
 	_normalizeOutput(str) {
@@ -1275,9 +1397,9 @@ class CourseProgramming extends CourseComponent {
 		return results.map((r) => {
 			const lines = [];
 			if (!r.passed) {
-				if (r.expected !== undefined) lines.push(`expected: ${r.expected}`);
-				if (r.actual !== undefined) lines.push(`got: ${r.actual}`);
-				if (r.error) lines.push(`error: ${r.error}`);
+				if (r.expected !== undefined) lines.push(`expected: ${this._displayValue(r.expected)}`);
+				if (r.actual !== undefined) lines.push(`got: ${this._displayValue(r.actual)}`);
+				if (r.error) lines.push(`error: ${this._displayValue(r.error)}`);
 			}
 			const detail = lines.length > 0
 				? `<div class="prog-test-detail">${this._escapeText(lines.join("\n"))}</div>`

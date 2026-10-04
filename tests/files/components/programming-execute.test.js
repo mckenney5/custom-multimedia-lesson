@@ -650,4 +650,232 @@ test.describe("CourseProgramming execute() wiring", () => {
 		expect(html[0]).toContain("&lt;img src=x onerror=alert(1)&gt;");
 		expect(html[0]).not.toContain("<img src=");
 	});
+
+	// --- object and array test cases -------------------------------------
+	// `expected` reaches the sandbox by postMessage, so it arrives as a
+	// structured clone and can never be === the learner's return value. These
+	// pin that the parent deep-compares plain containers instead, and that it
+	// fails closed rather than hanging when a return value is pathological.
+
+	const gradeObjects = async (config, code) =>
+		page.evaluate(async ([cfg, src]) => {
+			const prog = window.__mkProg({ config: cfg, code: src });
+			await prog.execute();
+			const sent = prog.sends.find((s) => s.type === "CODE_EXECUTION");
+			return sent ? sent.data : null;
+		}, [config, code]);
+
+	const renderObjects = async (config, code) =>
+		page.evaluate(async ([cfg, src]) => {
+			const prog = window.__mkProg({ config: cfg, code: src });
+			await prog.execute();
+			return Array.from(prog.querySelectorAll("#prog-results-list .prog-test-result")).map(
+				(el) => el.textContent,
+			);
+		}, [config, code]);
+
+	test("a test case returning a matching object passes", async () => {
+		const result = await gradeObjects(
+			{ testCases: [{ label: "Obj", functionName: "make", args: [], expected: { a: 2 } }] },
+			"function make() { return { a: 2 }; }",
+		);
+
+		expect(result.score).toBe(1);
+		expect(result.maxScore).toBe(1);
+		expect(result.completed).toBe(true);
+	});
+
+	test("a test case returning a matching array passes", async () => {
+		const result = await gradeObjects(
+			{ testCases: [{ label: "Arr", functionName: "make", args: [], expected: [1, 2, 3] }] },
+			"function make() { return [1, 2, 3]; }",
+		);
+
+		expect(result.score).toBe(1);
+		expect(result.maxScore).toBe(1);
+	});
+
+	test("key order does not decide an object test case", async () => {
+		const result = await gradeObjects(
+			{ testCases: [{ label: "Obj", functionName: "make", args: [], expected: { a: 1, b: 2 } }] },
+			"function make() { return { b: 2, a: 1 }; }",
+		);
+
+		expect(result.score).toBe(1);
+	});
+
+	test("an object test case with a wrong nested value fails", async () => {
+		const result = await gradeObjects(
+			{ testCases: [{ label: "Obj", functionName: "make", args: [], expected: { a: { b: 2 } } }] },
+			"function make() { return { a: { b: 1 } }; }",
+		);
+
+		expect(result.score).toBe(0);
+		expect(result.maxScore).toBe(1);
+		expect(result.completed).toBe(false);
+	});
+
+	test("an array test case of the wrong length fails", async () => {
+		const result = await gradeObjects(
+			{ testCases: [{ label: "Arr", functionName: "make", args: [], expected: [1, 2, 3] }] },
+			"function make() { return [1, 2]; }",
+		);
+
+		expect(result.score).toBe(0);
+	});
+
+	test("an object test case with an extra key fails", async () => {
+		const result = await gradeObjects(
+			{ testCases: [{ label: "Obj", functionName: "make", args: [], expected: { a: 1 } }] },
+			"function make() { return { a: 1, b: 2 }; }",
+		);
+
+		expect(result.score).toBe(0);
+	});
+
+	test("a self-referential return value fails instead of hanging", async () => {
+		const result = await gradeObjects(
+			{ testCases: [{ label: "Cyc", functionName: "make", args: [], expected: { a: 1 } }] },
+			"function make() { var o = { a: 1 }; o.self = o; return o; }",
+		);
+
+		expect(result.score).toBe(0);
+		expect(result.maxScore).toBe(1);
+	});
+
+	test("a wide return value with an unexpected key set fails without hanging", async () => {
+		const result = await gradeObjects(
+			{ testCases: [{ label: "Wide", functionName: "make", args: [], expected: { a: 1 } }] },
+			"function make() { var o = {}; for (var i = 0; i < 60000; i++) { o['k' + i] = i; } o.a = 1; return o; }",
+		);
+
+		expect(result.score).toBe(0);
+		expect(result.maxScore).toBe(1);
+	});
+
+	test("a very wide return value is truncated in the detail row", async () => {
+		const rows = await renderObjects(
+			{ testCases: [{ label: "Wide", functionName: "make", args: [], expected: { a: 1 } }] },
+			"function make() { var o = {}; for (var i = 0; i < 60000; i++) { o['k' + i] = i; } o.a = 999; return o; }",
+		);
+
+		expect(rows[0]).toContain("truncated");
+		expect(rows[0].length).toBeLessThan(4000);
+	});
+
+	test("a non-plain object return value keeps the sandbox verdict and fails", async () => {
+		const result = await gradeObjects(
+			{ testCases: [{ label: "Date", functionName: "make", args: [], expected: { a: 1 } }] },
+			"function make() { return new Date(0); }",
+		);
+
+		expect(result.score).toBe(0);
+		expect(result.maxScore).toBe(1);
+	});
+
+	test("an errored object test case still scores zero", async () => {
+		const result = await gradeObjects(
+			{ testCases: [{ label: "Obj", functionName: "nope", args: [], expected: { a: 2 } }] },
+			"1 + 1",
+		);
+
+		expect(result.score).toBe(0);
+		expect(result.maxScore).toBe(1);
+		expect(result.completed).toBe(false);
+	});
+
+	test("a failing object row shows JSON, not [object Object]", async () => {
+		const rows = await renderObjects(
+			{ testCases: [{ label: "Obj", functionName: "make", args: [], expected: { a: 2 } }] },
+			"function make() { return { a: 1 }; }",
+		);
+
+		expect(rows[0]).toContain('expected: {"a":2}');
+		expect(rows[0]).toContain('got: {"a":1}');
+		expect(rows[0]).not.toContain("[object Object]");
+	});
+
+	test("a self-referential return value renders without throwing", async () => {
+		const rows = await renderObjects(
+			{ testCases: [{ label: "Cyc", functionName: "make", args: [], expected: { a: 1 } }] },
+			"function make() { var o = { a: 9 }; o.self = o; return o; }",
+		);
+
+		expect(rows[0]).toContain("Cyc");
+		expect(rows[0]).toContain('"self":"[circular]"');
+		expect(rows[0]).not.toContain("[object Object]");
+	});
+
+	test("a value referenced twice renders in full instead of being called circular", async () => {
+		const rows = await renderObjects(
+			{ testCases: [{ label: "Shared", functionName: "make", args: [], expected: { a: 1 } }] },
+			"function make() { var s = { z: 9 }; return { a: s, q: s }; }",
+		);
+
+		expect(rows[0]).not.toContain("[circular]");
+		expect(rows[0]).toContain('got: {"a":{"z":9},"q":{"z":9}}');
+	});
+
+	test("a deeply nested matching object, including an array of objects, passes", async () => {
+		const result = await gradeObjects(
+			{
+				testCases: [
+					{
+						label: "Deep",
+						functionName: "make",
+						args: [],
+						expected: { a: { b: { c: 1, z: 0 } }, d: [{ e: 2 }, 3] },
+					},
+				],
+			},
+			"function make() { return { d: [{ e: 2 }, 3], a: { b: { z: 0, c: 1 } } }; }",
+		);
+
+		expect(result.score).toBe(1);
+		expect(result.maxScore).toBe(1);
+		expect(result.completed).toBe(true);
+	});
+
+	test("an array of objects keeps its element order", async () => {
+		const result = await gradeObjects(
+			{ testCases: [{ label: "Arr", functionName: "make", args: [], expected: [{ a: 1 }, { b: 2 }] }] },
+			"function make() { return [{ b: 2 }, { a: 1 }]; }",
+		);
+
+		expect(result.score).toBe(0);
+		expect(result.maxScore).toBe(1);
+		expect(result.completed).toBe(false);
+	});
+
+	test("a class instance return value passes against its plain-object expected", async () => {
+		const result = await gradeObjects(
+			{ testCases: [{ label: "Cls", functionName: "make", args: [], expected: { a: 1 } }] },
+			"function make() { function P() { this.a = 1; } return new P(); }",
+		);
+
+		expect(result.score).toBe(1);
+		expect(result.maxScore).toBe(1);
+		expect(result.completed).toBe(true);
+	});
+
+	test("a long string return value is truncated in the detail row", async () => {
+		const rows = await renderObjects(
+			{ testCases: [{ label: "Long", functionName: "make", args: [], expected: "short" }] },
+			"function make() { return new Array(6001).join('x'); }",
+		);
+
+		expect(rows[0]).toContain("truncated");
+		expect(rows[0].length).toBeLessThan(4000);
+	});
+
+	test("a very long error message is truncated in the detail row", async () => {
+		const rows = await renderObjects(
+			{ testCases: [{ label: "Err", functionName: "make", args: [] }] },
+			"function make() { throw new Error(new Array(6001).join('x')); }",
+		);
+
+		expect(rows[0]).toContain("error:");
+		expect(rows[0]).toContain("truncated");
+		expect(rows[0].length).toBeLessThan(4000);
+	});
 });
