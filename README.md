@@ -232,7 +232,7 @@ points of every page and adding the total earned points. Dividing earned / possi
 | `scrolled`          | The student must scroll to the bottom                                    |
 | `attempts`          | The ammount of time the student can submit quiz answers                  |
 | `videoProgress`     | The percentage of the video that must be watched. 1.0 is the whole video | 
-| `requireSubmission` | Something must be submitted by the student to move on (e.g. a quiz)      | 
+| `requireSubmission` | Something must be submitted by the student to move on (e.g. a quiz or a programming assignment). Fails closed: the page must declare at least one quiz or programming component, otherwise it can never be completed (a load-time error names the page). See `docs/adr/0006-require-submission-fail-closed.md` |
 
 
 ### Creating a page in HTML
