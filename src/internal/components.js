@@ -1202,14 +1202,24 @@ class CourseProgramming extends CourseComponent {
 
 		if (config.testCases && Array.isArray(config.testCases)) {
 			if (sandboxTestResults && Array.isArray(sandboxTestResults)) {
-				sandboxTestResults.forEach((tcResult) => {
+				sandboxTestResults.forEach((tcResult, i) => {
+					const passed = this._testCasePassed(tcResult);
+					// The sandbox reports no `expected` on the two paths that never
+					// produced a value to compare — the name is not a function, or it
+					// threw — so those rows would show a bare error with nothing to
+					// aim at. It builds one result per test case in order, so the
+					// config entry at the same index supplies it. A case that
+					// declares no expected keeps its row free of one.
+					const spec = config.testCases[i] || {};
+					const expected =
+						tcResult.expected !== undefined ? tcResult.expected : spec.expected;
 					total++;
-					if (tcResult.passed) score++;
+					if (passed) score++;
 					results.push({
 						label: tcResult.label,
-						passed: tcResult.passed,
+						passed,
 						actual: tcResult.actual,
-						expected: tcResult.expected,
+						expected,
 						error: tcResult.error || null,
 					});
 				});
@@ -1227,6 +1237,29 @@ class CourseProgramming extends CourseComponent {
 		}
 
 		return { score, total, results };
+	}
+
+	// The sandbox grades a test case with a strict === on the two values it was
+	// handed, so a return value carrying trailing spaces or CRLF fails a case
+	// whose expected text is visibly identical to what the expectedOutput path
+	// accepts. Two strings are therefore compared normalized, the same way.
+	//
+	// Everything else keeps the sandbox's verdict, because _normalizeOutput is a
+	// text normalizer: running a non-string through it means stringifying, and
+	// String({a: 1}) === String({a: 2}), so a wrong object or array return would
+	// be scored as a pass. The guard is what stops the loosening from reaching
+	// them.
+	//
+	// Note the sandbox's own verdict is still wrong for object and array cases:
+	// `expected` reaches the iframe through postMessage, so it is a structured
+	// clone and can never be === the learner's return value — such a case can
+	// never pass. Left as-is here; ticket 67 owns the real fix.
+	_testCasePassed(tcResult) {
+		const { actual, expected } = tcResult;
+		if (typeof actual === "string" && typeof expected === "string") {
+			return this._normalizeOutput(actual) === this._normalizeOutput(expected);
+		}
+		return tcResult.passed;
 	}
 
 	_normalizeOutput(str) {

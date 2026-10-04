@@ -149,6 +149,167 @@ test.describe("CourseProgramming execute() wiring", () => {
 		expect(rows[0]).not.toContain("got:");
 	});
 
+	test("a test case return value with trailing whitespace still passes", async () => {
+		const result = await page.evaluate(async () => {
+			const prog = window.__mkProg({
+				config: {
+					testCases: [{ label: "Greets", functionName: "greet", args: [], expected: "hi" }],
+				},
+				code: 'function greet() { return "hi  "; }',
+			});
+			await prog.execute();
+			const sent = prog.sends.find((s) => s.type === "CODE_EXECUTION");
+			return sent ? sent.data : null;
+		});
+
+		expect(result.score).toBe(1);
+		expect(result.maxScore).toBe(1);
+		expect(result.completed).toBe(true);
+	});
+
+	test("a test case whose text genuinely differs still fails", async () => {
+		const rows = await page.evaluate(async () => {
+			const prog = window.__mkProg({
+				config: {
+					testCases: [{ label: "Greets", functionName: "greet", args: [], expected: "hi" }],
+				},
+				code: 'function greet() { return "hi there"; }',
+			});
+			await prog.execute();
+			return Array.from(prog.querySelectorAll("#prog-results-list .prog-test-result")).map(
+				(el) => el.textContent,
+			);
+		});
+
+		expect(rows[0]).toContain("expected: hi");
+		expect(rows[0]).toContain("got: hi there");
+	});
+
+	test("a test case return value with CRLF and a trailing newline still passes", async () => {
+		const result = await page.evaluate(async () => {
+			const prog = window.__mkProg({
+				config: {
+					testCases: [{ label: "Two lines", functionName: "pair", args: [], expected: "hi\nthere" }],
+				},
+				code: 'function pair() { return "hi\\r\\nthere\\n"; }',
+			});
+			await prog.execute();
+			const sent = prog.sends.find((s) => s.type === "CODE_EXECUTION");
+			return sent ? sent.data : null;
+		});
+
+		expect(result.score).toBe(1);
+		expect(result.maxScore).toBe(1);
+	});
+
+	test("a passing test case row shows no expected/got detail", async () => {
+		const rows = await page.evaluate(async () => {
+			const prog = window.__mkProg({
+				config: {
+					testCases: [{ label: "Greets", functionName: "greet", args: [], expected: "hi" }],
+				},
+				code: 'function greet() { return "hi  "; }',
+			});
+			await prog.execute();
+			return Array.from(prog.querySelectorAll("#prog-results-list .prog-test-result")).map(
+				(el) => el.textContent,
+			);
+		});
+
+		expect(rows[0]).toContain("Greets");
+		expect(rows[0]).not.toContain("got:");
+		expect(rows[0]).not.toContain("expected:");
+	});
+
+	test("an object return value that does not match still fails", async () => {
+		const result = await page.evaluate(async () => {
+			const prog = window.__mkProg({
+				config: {
+					testCases: [{ label: "Object", functionName: "make", args: [], expected: { a: 2 } }],
+				},
+				code: "function make() { return { a: 1 }; }",
+			});
+			await prog.execute();
+			const sent = prog.sends.find((s) => s.type === "CODE_EXECUTION");
+			return sent ? sent.data : null;
+		});
+
+		expect(result.score).toBe(0);
+		expect(result.maxScore).toBe(1);
+	});
+
+	test("a numeric return value is not the same as its text spelling", async () => {
+		const result = await page.evaluate(async () => {
+			const prog = window.__mkProg({
+				config: {
+					testCases: [{ label: "Add", functionName: "add", args: [2, 2], expected: "4" }],
+				},
+				code: "function add(a, b) { return a + b; }",
+			});
+			await prog.execute();
+			const sent = prog.sends.find((s) => s.type === "CODE_EXECUTION");
+			return sent ? sent.data : null;
+		});
+
+		expect(result.score).toBe(0);
+		expect(result.maxScore).toBe(1);
+	});
+
+	test("a test case whose function does not exist still shows what was expected", async () => {
+		const rows = await page.evaluate(async () => {
+			const prog = window.__mkProg({
+				config: {
+					testCases: [{ label: "Greets", functionName: "nope", args: [], expected: "hi" }],
+				},
+				code: "1 + 1",
+			});
+			await prog.execute();
+			return Array.from(prog.querySelectorAll("#prog-results-list .prog-test-result")).map(
+				(el) => el.textContent,
+			);
+		});
+
+		expect(rows[0]).toContain("expected: hi");
+		expect(rows[0]).toContain("error:");
+		expect(rows[0]).toContain("not defined");
+	});
+
+	test("a test case that throws still shows what was expected", async () => {
+		const rows = await page.evaluate(async () => {
+			const prog = window.__mkProg({
+				config: {
+					testCases: [{ label: "Greets", functionName: "greet", args: [], expected: "hi" }],
+				},
+				code: 'function greet() { throw new Error("kaboom"); }',
+			});
+			await prog.execute();
+			return Array.from(prog.querySelectorAll("#prog-results-list .prog-test-result")).map(
+				(el) => el.textContent,
+			);
+		});
+
+		expect(rows[0]).toContain("expected: hi");
+		expect(rows[0]).toContain("error: kaboom");
+	});
+
+	test("a test case row shows no expected detail when the case declares none", async () => {
+		const rows = await page.evaluate(async () => {
+			const prog = window.__mkProg({
+				config: {
+					testCases: [{ label: "Runs", functionName: "nope", args: [] }],
+				},
+				code: "1 + 1",
+			});
+			await prog.execute();
+			return Array.from(prog.querySelectorAll("#prog-results-list .prog-test-result")).map(
+				(el) => el.textContent,
+			);
+		});
+
+		expect(rows[0]).not.toContain("expected:");
+		expect(rows[0]).toContain("error:");
+	});
+
 	test("a re-entrant execute() during a running run does not start a second run", async () => {
 		const result = await page.evaluate(async () => {
 			const prog = window.__mkProg({ attemptsLeft: 3, config: { expectedOutput: "43" } });
