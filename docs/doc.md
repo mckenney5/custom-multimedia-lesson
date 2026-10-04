@@ -95,8 +95,18 @@ The state.data.delta object is flattened into an array of integers and strings b
 | **6** | watchTime | Int | Seconds spent on Page 0\. |
 | **7** | attempts | Int | Number of times the quiz was submitted on Page 0\. |
 | **8** | videoProgress | Int | Furthest video percentage (0-100) on Page 0\. |
-| **9** | userAnswers | String | JSON string of user inputs {"Q1":\["A"\]}. Sanitized to remove delimiters. |
+| **9** | userAnswers | String | JSON string of user inputs {"Q1":\["A"\]}, or the page's component state (including programming `testResults`) on pages that have components. Sanitized to remove delimiters. See "Persisted value sentinels" below. |
 | **10** | completed | 0 / 1 | **\[Start of Page 1 Loop\]** ... and so on. |
+
+#### Persisted value sentinels
+
+Programming `testResults` carry `expected`/`actual` values produced by learner code, and JSON cannot represent every JavaScript value, so the save routine normalises three cases. Every marker in the table below is produced by the system — **never read it as learner-authored input**:
+
+| Marker in saved data | What the learner did | What is persisted |
+| :---- | :---- | :---- |
+| `"[circular]"` in place of a value | Returned a self-referential value (e.g. `o.self = o`). | Only the cycle edge that closes the loop is replaced by this string; the rest of the entry is intact. |
+| A decimal string where a number might be expected, e.g. `actual: "10"` | Returned a BigInt (e.g. `10n`). | BigInt has no JSON type, so it is stored as a JSON *string* of its digits — distinct from the JSON *number* `10`. |
+| The entire JSON slot is `{"__serializeError": "…"}` | Returned a value JSON cannot encode at all (its JSON conversion throws). | **The page's whole component state is lost in that save: the code the learner submitted (`codeContent`), their score, and their test results are all absent from the saved copy.** While the unserialisable value remains in memory, every later save of that page fails the same way and writes the marker again — but the marker is dropped when the save is loaded, so it can never reappear next to data that has since recovered, and after a reload the page's component state starts fresh (the failed save never contained it to restore). Other pages and course progress (completion, score, watch time, attempts) are unaffected and save normally. |
 
 ## **2\. Module: LMS Manager (lms.js)**
 

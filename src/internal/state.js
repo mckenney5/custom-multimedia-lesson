@@ -227,6 +227,38 @@ let state = {
 
 	},
 
+	// JSON.stringify throws outright on a circular structure ("Converting
+	// circular structure to JSON"), and on a BigInt ("Do not know how to
+	// serialize a BigInt"), and learner code controls what lands in
+	// testResults — one self-referential or BigInt return value would
+	// otherwise disable every save (interval, finalizePage, onbeforeunload)
+	// until that component runs again. The replacer tracks the ancestor path
+	// the same way components._displayText does when rendering: inside a
+	// replacer `this` is the object the value was read off, so popping the
+	// stack back to `this` is the path to the root, and only an ancestor seen
+	// again is a cycle. The pop runs first for every value, before any branch,
+	// so no early return can leave stale ancestors behind. A merely shared
+	// reference is not a cycle and must serialize normally. BigInt has no JSON
+	// form, so it is normalised to its decimal string (a JSON string, distinct
+	// from a JSON number).
+	_stringifyCycleSafe: function(value){
+		const ancestors = [];
+		return JSON.stringify(value, function(_key, val){
+			// The pop runs first for every value, so no branch below it can
+			// return early with stale ancestors left on the stack.
+			while(ancestors.length > 0 && ancestors[ancestors.length - 1] !== this){
+				ancestors.pop();
+			}
+			// BigInt is not an object: it never enters the ancestor stack.
+			if(typeof val === "bigint") return val.toString();
+			if(val !== null && typeof val === "object"){
+				if(ancestors.includes(val)) return "[circular]";
+				ancestors.push(val);
+			}
+			return val;
+		});
+	},
+
 	serialize: function(){
 		const delta = this.data.delta;
 		const data = [
@@ -254,8 +286,24 @@ let state = {
 				complexState = { userAnswers: p.userAnswers };
 			}
 
-			// Stringify and Sanitize
-			data.push(journaler.sanitize(JSON.stringify(complexState)));
+			// Stringify and Sanitize. The replacer above covers the known
+			// learner-reachable cases (cycles, BigInt), but stringify can still
+			// throw before the replacer ever sees a value — a hostile toJSON or
+			// getter, or anything a future structured-clone passthrough admits.
+			// The serialize boundary must be total: one bad page must never
+			// disable every save, so on any throw the slot gets a marker blob
+			// instead. The page layout stays 7 entries (deserialize() still
+			// parses it), and the reason stays visible in the saved data.
+			let blob;
+			try {
+				blob = journaler.sanitize(this._stringifyCycleSafe(complexState));
+			} catch (e) {
+				console.warn("Failed to serialize page state blob", e);
+				blob = journaler.sanitize(JSON.stringify({
+					__serializeError: String((e && e.message) || e),
+				}));
+			}
+			data.push(blob);
 		});
 
 		return data;
@@ -289,6 +337,12 @@ let state = {
 			// Restore Complex State
 			try {
 				const savedBlob = JSON.parse(arr[base + 6] || "{}");
+				// A fail-soft save writes {"__serializeError": "..."} instead of
+				// this page's component state. Never merge that marker: once in
+				// components it would re-persist on every save forever, sitting
+				// next to data that may long since have recovered. Dropping it
+				// here keeps the blob honest about the current state of the page.
+				delete savedBlob.__serializeError;
 				p.components = { ...p.components, ...savedBlob };
 			} catch (e) {
 				console.warn("Failed to deserialize page state blob", e);
