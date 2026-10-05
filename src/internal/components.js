@@ -1552,6 +1552,11 @@ class CourseProgramming extends CourseComponent {
 			if (this.editor) {
 				this.editor.setValue(value.savedCode);
 			}
+		} else if (isConfigPayload && this.editor && this._savedCode === undefined) {
+			// First load: no draft in sessionStorage yet. Populate editor with
+			// starterCode from config so the placeholder appears immediately.
+			this._savedCode = value.starterCode || "";
+			this.editor.setValue(this._savedCode);
 		}
 
 		// A reply for a run that never reached the sandbox carries the persisted
