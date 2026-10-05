@@ -1091,8 +1091,9 @@ class CourseProgramming extends CourseComponent {
 			outputDiv.textContent = "Error: Component configuration not loaded yet. Please wait.";
 			this.send("CODE_EXECUTION", {
 				// No draft to publish: until the first reply the editor only holds
-				// the placeholder, never the saved code, so sending it would
-				// overwrite the persisted codeContent with a throwaway string.
+				// the placeholder, never the real draft, so sending it would
+				// overwrite this tab's stored draft (sessionStorage, see
+				// state._storeDraft) with a throwaway string.
 				code: undefined,
 				stdout: [],
 				returnValue: undefined,
