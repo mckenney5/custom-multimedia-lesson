@@ -138,7 +138,14 @@ The page object looks like this, NOTE: *page order matters* :
 	- Great for checking prior knowledge, highlighting key points, checking for understanding, summative knowledge
 	- Common Completion Rules:
 		- score: The minimum score to move on. Usually 70%
-		- attempts:  How many attempts the student gets before blocking their submission
+		- attempts:  How many attempts the student gets before blocking their submission (`0` or absent = unlimited)
+- Programming
+	- Used to run code the student writes, in a sandboxed editor on the page, and grade the result
+	- Great for exercises where the student writes the logic themselves (function in, value out)
+	- Common Completion Rules:
+		- score: The minimum score to move on
+		- requireSubmission: Every quiz or programming component on the page must have **passed** — attempting is not enough
+		- attempts: How many runs the student gets. `0` or absent means unlimited — see the warnings below before you set it
 
 #### Questions Object
 
@@ -209,6 +216,131 @@ points of every page and adding the total earned points. Dividing earned / possi
 
 
 
+#### Programming Object
+
+A programming component puts a code editor on the page, runs what the student
+writes in a sandboxed iframe, and grades the run. Add the element to the page's
+HTML and configure it in `course_data.json`:
+
+```HTML
+<course-programming id="prog_hello"></course-programming>
+```
+
+```JSON
+"components": [
+	{
+		"id": "prog_hello",
+		"type": "programming",
+		"language": "javascript",
+		"starterCode": "function greet() {\n  return \"\";\n}\n\nconsole.log(greet());",
+		"timeout": 5000,
+		"expectedOutput": "Hello, World!",
+		"bannedPatterns": [
+			"console\\.log\\s*\\(\\s*['\"]Hello,\\s*World!['\"]\\s*\\)"
+		],
+		"testCases": [
+			{
+				"label": "greet() returns Hello, World!",
+				"functionName": "greet",
+				"args": [],
+				"expected": "Hello, World!"
+			}
+		]
+	}
+]
+```
+
+`src/lessons/programming_example.html` is a working example of all of this — two
+components, both graded, on a page that is part of the shipped lesson. The full
+component reference lives in `docs/internal/programming-component.md`.
+
+| Property                       | Notes                                                                                                                            |
+|--------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| `id`                           | Unique identifier. Must match the `id` attribute on the `<course-programming>` element                                          |
+| `type`                         | `"programming"`                                                                                                                  |
+| `language`                     | Editor syntax mode only — `javascript`, `js`, `python`, `html`, `css`, `java`. **The runner always executes JavaScript**            |
+| `starterCode`                  | Initial contents of the editor. The component falls back to a comment placeholder if empty                                         |
+| `timeout`                      | Milliseconds before a run is killed (default `5000`)                                                                              |
+| `expectedOutput`               | One point, if the run's stdout plus return value matches (see *Grading* below)                                                     |
+| `testCases`                    | Array of test cases, one point each (see below)                                                                                    |
+| `testCases[].label`            | Name of the row in the student's results panel. Defaults to `Test case N`                                                          |
+| `testCases[].functionName`     | The function to call. Must exist in the student's code                                                                            |
+| `testCases[].args`             | Arguments passed to it (default `[]`)                                                                                             |
+| `testCases[].expected`         | What the call should return. **A case with no `expected`, or `expected: null`, is an authoring error** (see *Authoring traps*)      |
+| `bannedPatterns`               | Regex strings. Code matching one is refused before it runs, and the refusal costs the student no attempt                           |
+| `options`                      | Accepted, but the programming component does not act on any option today. The `show-wrong` / `show-answer` flags belong to `quiz`     |
+
+##### Grading
+
+Every criterion is worth one point. A component's maximum is the sum of its own
+criteria — `expectedOutput` (if present) plus one per gradeable test case — and a
+page's maximum is the sum across its components. A component with no
+`expectedOutput` and no `testCases` cannot be scored, so it completes on a run
+that does not error rather than on a score.
+
+Two paths are supported and both work today:
+
+- **`testCases` — the intended primary path.** The student's function is called
+  with `args` and the return value is compared to `expected`. This is the one to
+  reach for: it says what the code should *do*, not what it should print.
+- **`expectedOutput` — stdout matching.** Everything the run printed, plus its
+  return value, joined by newlines, is compared to `expectedOutput` after
+  normalization. Useful for a single "run this and check the output" exercise.
+  Both components in the shipped lesson use it alongside `testCases`.
+
+##### Matching
+
+Comparison is deliberately not a raw `===` on everything, because `expected`
+crosses into the sandbox by `postMessage` and arrives as a fresh copy, so an
+object could never be identical:
+
+- **Text on both sides** (this includes every `expectedOutput`) is compared
+  after normalization: carriage returns folded, each line trimmed, runs of
+  whitespace collapsed to one space, blank lines dropped. Trailing spaces and
+  blank lines therefore never fail a case.
+- **Objects and arrays on both sides** are compared structurally and recursively.
+  Key order does not matter, but the keys must match exactly — an extra or
+  missing property fails.
+- **Everything else** keeps a strict `===`, so numbers and booleans stay distinct
+  from their text spelling: a case expecting the number `4` does not pass a
+  function returning `"4"`.
+
+##### Authoring traps
+
+- **A test case with a missing or `null` `expected` is an authoring error.** It
+  is not graded, it does not count toward the maximum, and the student gets a
+  failing row they cannot do anything about. It is reported by name in the
+  browser console — but only when a run happens, so the message lands in the
+  student's console rather than yours. Run the exercise yourself once after
+  adding cases to see it. Give every case an `expected`, or delete it.
+- **A case whose `functionName` is not a function in the student's code** fails
+  with "Function 'x' is not defined". A thrown error inside the function fails
+  the case the same way.
+- **Banned patterns are checked before the sandbox**, so a refusal never spends
+  an attempt. The patterns are regexes — quote anything that is regex syntax, as
+  in the example above.
+- **`language` is cosmetic.** Setting `python` highlights like Python and still
+  runs as JavaScript.
+- **`attempts` is unforgiving.** `0` or absent means unlimited, which is what
+  the shipped example uses. If you do set a limit, know that the Run button
+  disables once it is gone and never comes back: the page's rule check ignores
+  attempts entirely, so a student who runs out before reaching `score` cannot
+  advance. The only way out is **Reset Course Progress** in the help menu, which
+  clears their scores as well — the ↺ Reset button inside the component just
+  empties the editor and does not return an attempt. Prefer `0`.
+
+##### What a submission records
+
+The saved course data holds **no copy of the student's source code**. Their
+in-progress draft lives in the browser tab (`sessionStorage`), so a reload in the
+same tab restores it but a save/resume in a new tab or on another machine does
+not. The log records that a submission happened, its score, and when — not the
+code, not the output it printed, and no attempt counter or time-to-complete
+field: the number of submissions, and the time between them, can be derived from
+those timestamps. (The page state does keep a count of runs, which is what the
+"Attempts left" display reads.)
+
+
 ### Page Rules
 *Each* page has access to these rules:
 
@@ -230,9 +362,9 @@ points of every page and adding the total earned points. Dividing earned / possi
 | `watchTime`         | How long the student must be on that page                                |
 | `score`             | The minimum score to move on to the next page (use 0 to disable)         |
 | `scrolled`          | The student must scroll to the bottom                                    |
-| `attempts`          | The ammount of time the student can submit quiz answers                  |
+| `attempts`          | How many times the student may submit on this page. `0` or absent means unlimited. On a quiz this caps the Submit button; on a programming page it caps the Run button, and once spent there is no way back (see *Authoring traps*) |
 | `videoProgress`     | The percentage of the video that must be watched. 1.0 is the whole video | 
-| `requireSubmission` | Something must be submitted by the student to move on (e.g. a quiz or a programming assignment). Fails closed: the page must declare at least one quiz or programming component, otherwise it can never be completed (a load-time error names the page). See `docs/adr/0006-require-submission-fail-closed.md` |
+| `requireSubmission` | Something must be submitted by the student to move on (e.g. a quiz or a programming assignment) — specifically, every quiz and programming component on the page must have *passed*, not merely been attempted. Fails closed: the page must declare at least one quiz or programming component, otherwise it can never be completed (a load-time error names the page). See `docs/adr/0006-require-submission-fail-closed.md` |
 
 
 ### Creating a page in HTML
