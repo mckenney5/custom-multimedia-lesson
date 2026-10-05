@@ -449,4 +449,73 @@ test.describe("helpModal", () => {
 		expect(result.firstRender).toBe(true);
 		expect(result.secondRender).toBe(true);
 	});
+
+	test("showPageHelp fails closed with a Submission Required row when requireSubmission has zero submission components", async () => {
+		const result = await page.evaluate(() => {
+			if (!ui.infoBanner) ui.init();
+			if (typeof completion === "undefined") return { error: "completion not defined" };
+
+			const makeRules = () => ({
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				requireSubmission: true,
+			});
+			const makeDelta = () => ({
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				components: {},
+			});
+
+			// Input 1: no `components` key at all.
+			const noKeyPage = { completionRules: makeRules(), maxScore: 0 };
+			ui.showPageHelp(noKeyPage, makeDelta());
+			const noKeyHtml = ui.helpContent.innerHTML;
+			const noKeyRow = noKeyHtml.split("<tr>").find(r => r.includes("Submit all")) || "";
+			const noKeyVerdict = completion.checkIfComplete(noKeyPage, makeDelta());
+
+			// Input 2: components present, none a quiz/programming.
+			const articleOnlyPage = {
+				completionRules: makeRules(),
+				maxScore: 0,
+				components: [{ id: "art1", type: "article" }],
+			};
+			ui.showPageHelp(articleOnlyPage, makeDelta());
+			const articleHtml = ui.helpContent.innerHTML;
+			const articleRow = articleHtml.split("<tr>").find(r => r.includes("Submit all")) || "";
+			const articleVerdict = completion.checkIfComplete(articleOnlyPage, makeDelta());
+
+			const summarize = (row) => ({
+				found: row.length > 0,
+				label: row.includes("Submission Required"),
+				misleadingLabel: row.includes("Submit Quizzes"),
+				pending: row.includes("Pending"),
+				submitted: row.includes("Submitted"),
+				failIcon: row.includes("status-fail"),
+				passIcon: row.includes("status-pass"),
+			});
+
+			return {
+				noKey: summarize(noKeyRow),
+				articleOnly: summarize(articleRow),
+				// ui and completion must agree on the verdict for both fixtures.
+				agreement: noKeyVerdict === false && articleVerdict === false,
+			};
+		});
+
+		expect(result.error).toBeUndefined();
+		for (const fixture of [result.noKey, result.articleOnly]) {
+			expect(fixture.found).toBe(true);
+			expect(fixture.label).toBe(true);
+			expect(fixture.misleadingLabel).toBe(false);
+			expect(fixture.pending).toBe(true);
+			expect(fixture.submitted).toBe(false);
+			expect(fixture.failIcon).toBe(true);
+			expect(fixture.passIcon).toBe(false);
+		}
+		expect(result.agreement).toBe(true);
+	});
 });

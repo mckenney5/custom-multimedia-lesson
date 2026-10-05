@@ -121,17 +121,27 @@ const ui = {
 		let submissionLabel = "Submit Quizzes";
 		if (rules.requireSubmission) {
 			const submissions = (page.components || []).filter(c => c.type === "quiz" || c.type === "programming");
-			const quizCount = submissions.filter(c => c.type === "quiz").length;
-			const progCount = submissions.length - quizCount;
-			if (quizCount > 0 && progCount > 0) {
-				submissionLabel = "Submit Quizzes & Assignments";
-			} else if (progCount > 0) {
-				submissionLabel = "Complete Code Assignments";
+			if (submissions.length === 0) {
+				// Fail closed (ticket #62 / ADR 0006): no quiz/programming
+				// exists on this page, so the default label would name
+				// requirements that cannot be met. Render an honest failing
+				// row instead; state.loadCourseData console.errors the page
+				// for the author.
+				submissionsSatisfied = false;
+				submissionLabel = "Submission Required";
+			} else {
+				const quizCount = submissions.filter(c => c.type === "quiz").length;
+				const progCount = submissions.length - quizCount;
+				if (quizCount > 0 && progCount > 0) {
+					submissionLabel = "Submit Quizzes & Assignments";
+				} else if (progCount > 0) {
+					submissionLabel = "Complete Code Assignments";
+				}
+				submissionsSatisfied = submissions.every(sub => {
+					const compState = pageDelta.components && pageDelta.components[sub.id];
+					return compState && compState.completed === true;
+				});
 			}
-			submissionsSatisfied = submissions.every(sub => {
-				const compState = pageDelta.components && pageDelta.components[sub.id];
-				return compState && compState.completed === true;
-			});
 		}
 
 		const checks = {

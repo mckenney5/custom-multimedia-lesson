@@ -7,7 +7,12 @@ let completion = {
 		if (page.completionRules.requireSubmission) {
 			const submissions = (page.components || []).filter(c => c.type === "quiz" || c.type === "programming");
 
-			submissionsSatisfied = submissions.every(sub => {
+			// Fail closed (ticket #62 / ADR 0006): a page that requires a
+			// submission but declares no quiz/programming component can never
+			// satisfy the rule, and `[].every(...)` would pass it vacuously —
+			// silently ignoring the author's explicit instruction. The
+			// load-time diagnostic in state.loadCourseData names the page.
+			submissionsSatisfied = submissions.length > 0 && submissions.every(sub => {
 				const compState = pageDelta.components[sub.id];
 				return compState && compState.completed === true;
 			});

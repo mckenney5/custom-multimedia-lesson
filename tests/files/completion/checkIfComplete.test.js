@@ -320,10 +320,10 @@ test.describe("completion.checkIfComplete", () => {
 		expect(result.result).toBe(false);
 	});
 
-	test("requireSubmission passes vacuously when the page has no components key", async () => {
-		// PINS CURRENT BEHAVIOR — open decision on ticket #62 (fail open vs fail closed).
-		// Guards the `|| []` at completion.js:8 (page.components === undefined).
-		// Flip the expected value only as part of that decision, never as a drive-by.
+	test("requireSubmission fails closed when the page has no components key", async () => {
+		// DECIDED (ticket #62 / ADR 0006): fail closed. The fixture omits the
+		// `components` key entirely, so `(page.components || [])` yields [] and
+		// the gate must refuse to pass on an empty submission list.
 		const result = await page.evaluate(() => {
 			if (typeof completion === "undefined") return { error: "completion not defined" };
 
@@ -349,14 +349,13 @@ test.describe("completion.checkIfComplete", () => {
 		});
 
 		expect(result.error).toBeUndefined();
-		expect(result.result).toBe(true);
+		expect(result.result).toBe(false);
 	});
 
-	test("requireSubmission passes vacuously when no declared component is a submission", async () => {
-		// PINS CURRENT BEHAVIOR — open decision on ticket #62 (fail open vs fail closed).
-		// The authoring-mistake case: components exist, but none is a quiz/programming,
-		// so `filter` returns [] and `every()` is vacuously true.
-		// Flip the expected value only as part of that decision, never as a drive-by.
+	test("requireSubmission fails closed when no declared component is a submission", async () => {
+		// DECIDED (ticket #62 / ADR 0006): fail closed. The fixture declares a
+		// components array, but its only entry is an article, so `filter`
+		// returns [] and the gate must refuse to pass on that too.
 		const result = await page.evaluate(() => {
 			if (typeof completion === "undefined") return { error: "completion not defined" };
 
@@ -385,7 +384,7 @@ test.describe("completion.checkIfComplete", () => {
 		});
 
 		expect(result.error).toBeUndefined();
-		expect(result.result).toBe(true);
+		expect(result.result).toBe(false);
 	});
 
 	test("should handle maxScore of 0 gracefully without crashing", async () => {

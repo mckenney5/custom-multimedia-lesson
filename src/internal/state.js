@@ -1018,6 +1018,19 @@ let state = {
 					});
 				}
 
+				// Fail closed (ticket #62 / ADR 0006): a page that requires a
+				// submission but declares no quiz/programming component can never
+				// be completed. Authoring-time diagnostic — the learner never
+				// sees it; completion.checkIfComplete refuses the page and the
+				// help modal shows an honest failing "Submission Required" row.
+				if (page.completionRules && page.completionRules.requireSubmission) {
+					const submissionCount = (Array.isArray(page.components) ? page.components : [])
+						.filter(c => c.type === "quiz" || c.type === "programming").length;
+					if (submissionCount === 0) {
+						console.error(`Page '${page.name}' sets requireSubmission but declares no quiz or programming components - fail closed: it can never be completed (see docs/adr/0006-require-submission-fail-closed.md)`);
+					}
+				}
+
 				this.data.delta.pagesState.push(pageState);
 
 				return {
