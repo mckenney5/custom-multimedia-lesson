@@ -2,7 +2,7 @@
 
 ## Overview
 
-E2E tests walk through the full course as a real user would — scrolling articles, answering quizzes, playing videos, navigating pages, and verifying end-screen outcomes. Three scenarios: passing (100%), failing (28.6%), and barely-passing (71.4%) with comprehensive interaction coverage.
+E2E tests walk through the full course as a real user would — scrolling articles, answering quizzes, playing videos, navigating pages, and verifying end-screen outcomes. Three whole-course scenarios: passing (100%), failing (28.6%), and barely-passing (71.4%) with comprehensive interaction coverage. A fourth file, `programming-flow.test.js`, covers the JS-assignment page in depth: eight journeys through the programming component inside a real lesson, rather than one end-to-end grade.
 
 Tests use Playwright with real user interactions (`.click()`, `.fill()`, smooth scroll). No `page.evaluate()` shortcuts for state manipulation. Video plays for real. WatchTime waits are handled by waiting for the completion banner rather than fixed timeouts.
 
@@ -11,12 +11,15 @@ Tests use Playwright with real user interactions (`.click()`, `.fill()`, smooth 
 ```
 tests/
   helpers/
-    e2e-setup.js        # Shared setup: clear storage, navigate, wait for init
+    page-setup.js       # Base setup: crash recorder, navigate, wait for state.initialized
+    e2e-setup.js        # setupPage + localStorage.clear() on every navigation
+    navigation.js       # Shared interaction helpers (programming code, reload waits)
   files/
     e2e/
       pass.test.js       # 100% score, "passed" end screen
       fail.test.js       # 28.6% score, "failed" end screen
       barely-pass.test.js # 71.4% score, full interaction coverage
+      programming-flow.test.js # 8 journeys through the JS-assignment page
 ```
 
 ## Core Principles
@@ -25,21 +28,109 @@ tests/
 2. **Banner-driven timing** — every page waits for `#info-banner.warning` (the "This page is completed" banner) before clicking next, rather than hard-coded timeouts.
 3. **Iframe targeting** — all child page interactions go through `page.frameLocator('#lesson-frame')`.
 4. **Vertical slices** — each slice delivers a working, independently runnable test slice that builds on the previous.
+5. **Never edit shipped lesson data** — a test that needs different `course_data.json` rewrites it at the network boundary instead (`withProgrammingAttemptLimit` below). Otherwise one test's config leaks into the next run and into whatever an instructor later downloads.
 
-## Reusable Helper: `tests/helpers/e2e-setup.js`
+## Programming Flow Suite
+
+`programming-flow.test.js` is not a whole-course grade check; it is eight focused journeys through the JS-assignment page, each of which walks pages 0-2 on the way there. Only the first three are about advancing, so the suite covers four things the three grade scenarios cannot reach: partial credit, the attempt limit, the editor draft across a reload, and what the parent records when a component runs before its config arrives.
+
+| Test | Covers |
+|------|--------|
+| wrong programming answer blocks page advancement until corrected | fail → banner + no navigation; correct → advances |
+| partial credit on programming page does not allow advancement | a passing exercise is not enough while another fails |
+| next stays blocked after a failing run until every assignment passes | the blocking is not a one-shot banner |
+| reload mid-assignment restores the editor draft from session storage | CODE_EXECUTION → draft store → reload → restored editor content (uses `setupPage`, see above) |
+| exhausting the attempt limit disables run and leaves the final score visible | `withProgrammingAttemptLimit`; Run disabled, best score still shown |
+| running before the config reply stores no draft and spends no attempt | `withholdProgrammingConfig`; the post-clone payload is captured in the parent |
+| programming state preserved across prev/next navigation | scores and rows survive leaving and re-entering the page |
+| programming execution events appear in journal | `CODE_EXEC` rows, read via `journaler.report()` |
+
+Journeys 4 and 6 exist because of decisions that would otherwise be untested from the outside: the draft lives in `sessionStorage` rather than the save file, and a run that happens before the component's config reply must not consume an attempt or overwrite a stored draft.
+
+## Reusable Helpers
+
+### `tests/helpers/e2e-setup.js` — `setupE2EPage(page)`
 
 ```js
 async function setupE2EPage(page) {
-  await page.addInitScript(() => localStorage.clear());
-  await page.goto('http://localhost:8080/');
-  await page.waitForFunction(() =>
-    typeof state !== 'undefined' && state.initialized
-  );
-  return page;
+	await page.addInitScript(() => localStorage.clear());
+	return setupPage(page);
 }
 ```
 
-Note: `barely-pass.test.js` does NOT use this helper because it needs to survive a page refresh (to test save/load persistence). `setupE2EPage` clears `localStorage` unconditionally on every navigation, which would wipe saved state after a refresh. Instead, barely-pass uses its own `addInitScript` that clears `localStorage` only on the first load (using `sessionStorage._cleared` as a persistent flag).
+It is now a thin wrapper: the clear-on-every-navigation is the only thing it adds on top of `setupPage`. Everything else (the crash recorder, the real `state.initialized` wait, the init-failure error that reports the browser console) lives in `setupPage` and is shared with the unit suites.
+
+### `tests/helpers/page-setup.js` — `setupPage(page)`
+
+The base every other setup funnels through. Navigates to the test server and waits for `state.init()` to finish, so `state.handleMessage()` and the rest of the public `state` API are usable the moment it resolves. It arms a crash recorder *before* navigating, because `state.init()` failures die inside the async `window.onload` handler — without it a page can look fully loaded while `state` never initialized, and the test fails later on a bare wait timeout instead of reporting the real cause.
+
+### When NOT to use `setupE2EPage`
+
+`setupE2EPage` clears `localStorage` from an init script, and **init scripts run again on every navigation**, so any test that reloads the page loses the save it is trying to exercise. Two tests need a reload, and they escape differently:
+
+| Test | Escape | Why that one |
+|------|--------|--------------|
+| `barely-pass.test.js` | its own `addInitScript` that clears only on the **first** load, using `sessionStorage._cleared` as a persistent flag, then goes straight to `goto` + `waitForFunction` | it wants a clean first load *and* a surviving reload in the same test, so it keeps `setupE2EPage`'s clearing behavior and makes it once-only |
+| `programming-flow.test.js` ("reload mid-assignment restores the editor draft from session storage") | plain `setupPage` | a fresh Playwright context already has empty storage, so the clear buys nothing and only costs the save |
+
+Rule of thumb: use the `sessionStorage` flag when the test still needs a guaranteed-clean first load; use plain `setupPage` when the context is already empty. Either way, register `page.on("dialog", ...)` if the reload raises `confirm`/`beforeunload`, or the navigation is cancelled.
+
+### `tests/helpers/navigation.js`
+
+Interaction helpers shared by the e2e files (used by `pass`, `fail`, `barely-pass`, and `programming-flow`):
+
+- `setProgrammingCode(iframe, id, code)` — waits for the component's config to load, then sets the editor value. Without the wait it writes into the pre-reply placeholder.
+- `runProgrammingCode(iframe, id)` — clicks the component's Run button.
+- `assertProgrammingResult(iframe, id, resultClass)` — waits for a `.prog-test-result.<class>` row (`passed` / `failed`).
+- `completeProgrammingExercises(iframe)` — runs both shipped exercises to a passing state.
+- `clickAndWaitForReload(page, locator)` — clicks something that triggers `window.location.reload()` (Refresh This Web Page, Reset) and waits for the *replacement* document to finish initializing. `state.initialized` is still true on the document that is about to navigate, so the helper marks the current one and waits for the mark to disappear. Registering the confirm-dialog handler is the caller's job — without it Playwright auto-dismisses, no reload happens, and the wait times out on a message that never mentions the confirm.
+
+## Local Test Helpers Worth Reusing
+
+`programming-flow.test.js` defines two file-local helpers. They are not exported, but both are general recipes, and both are the answer to "how do I test this without editing `src/` or the shipped lesson data?"
+
+### `withProgrammingAttemptLimit(page, attempts)`
+
+Rewrites `completionRules.attempts` for the programming page **at the network boundary**, via `page.route("**/lessons/course_data.json", ...)`:
+
+```js
+async function withProgrammingAttemptLimit(page, attempts) {
+	await page.route("**/lessons/course_data.json", async (route) => {
+		const data = await (await route.fetch()).json();
+		const programmingPage = data.pages.find((p) => p.name === "programming_example.html");
+		if (!programmingPage) {
+			console.error("withProgrammingAttemptLimit: no page named programming_example.html");
+			await route.continue();
+			return;
+		}
+		programmingPage.completionRules = { ...(programmingPage.completionRules || {}), attempts };
+		await route.fulfill({ json: data });
+	});
+}
+```
+
+This is the general pattern for **any** behavior that depends on lesson config: fetch the real data, mutate the one field under test, fulfill. `src/lessons/course_data.json` ships untouched, so a test cannot leave the lesson data in a state the next test — or the next instructor — inherits. Two details worth copying: the `find()` is guarded so a renamed lesson page logs a named message and falls through to `route.continue()` instead of throwing an opaque `TypeError` inside the route handler, and `completionRules` is rebuilt with a spread so a page that has no `completionRules` key still works.
+
+### `withholdProgrammingConfig(page)`
+
+Puts a programming component into its genuine **config-not-loaded** state by swallowing the parent's `PROGRAMMING_DATA` reply:
+
+```js
+async function withholdProgrammingConfig(page) {
+	await page.addInitScript(() => {
+		if (window === window.top) return;
+		const nativePostMessage = window.postMessage.bind(window);
+		window.postMessage = (data, ...rest) => {
+			if (data && data.type === "PROGRAMMING_DATA") return;
+			return nativePostMessage(data, ...rest);
+		};
+	});
+}
+```
+
+The mechanism is indirect and worth knowing before you reuse it. It intercepts **nothing the child sends**: `children.send()` uses `window.parent.postMessage(...)`, which resolves on the *parent's* global and must keep flowing. What it catches is the parent's reply, because `state.js` posts via `this.lessonFrame.contentWindow.postMessage(...)`, which resolves `postMessage` on the **child's** global — the one being overridden here. Re-wiring the parent side to a captured `Window.prototype.postMessage` therefore bypasses the override and breaks the test loudly (the config loads, the run executes, the payload assertions fail). The child side is not part of the contract.
+
+It also runs in *every* frame, including the sandbox iframe, where it is inert only because no sandbox message carries `type: "PROGRAMMING_DATA"`. The `window === window.top` guard keeps it from touching the top window.
 
 ## Answer Maps
 
@@ -330,7 +421,7 @@ Note: Anti-cheat events are not fired on page 1. Both quiz1 and quiz2 have `disa
    - `VIDEO_MUTED`
    - `VIDEO_FULL_SCREEN`, `VIDEO_NORMAL_SCREEN` (conditional: if one present, check both)
    - `QUIZ_SUBMITTED`, `QUESTION_ANSWERED`
-   - `PAGE_NEXT`, `PAGE_PREV` (conditional: see ticket #28 — state.js does not log these yet)
+   - `PAGE_NEXT`, `PAGE_PREV`
    - `PAGE_COMPLETE` (at least 3 — or 4 depending on refresh)
    - `COURSE_COMPLETE`
 
@@ -358,11 +449,12 @@ Events that MUST appear in the log (at least once):
 | VISIBILITY_VISIBLE | Page 0 visibility change |
 | CLICK_OFF | Page 1 and page 2 blur |
 | CLICK_BACK | Page 1 and page 2 focus |
-| PAGE_NEXT | Navigation forward (conditional: see ticket #28) |
-| PAGE_PREV | Navigation backward (conditional: see ticket #28) |
+| PAGE_NEXT | Navigation forward |
+| PAGE_PREV | Navigation backward |
 | QUESTIONS_RENDERED | Quiz data received |
 | QUESTION_ANSWERED | Quiz radio/text interactions |
 | QUIZ_SUBMITTED | Quiz submit clicks |
+| CODE_EXEC | Programming runs (`barely-pass` completes both exercises) |
 | SUSPICIOUS_ACTION | Right-click and copy |
 | VIDEO_PLAY | Video start/resume |
 | VIDEO_PAUSE | Video pause |
@@ -380,14 +472,12 @@ Events that SHOULD appear (verify counts ≥ expected):
 |-------|-----------|
 | CLICK_OFF | 2 |
 | CLICK_BACK | 2 |
-| PAGE_NEXT | 5+ (conditional: see ticket #28) |
-| PAGE_PREV | 1 (conditional: see ticket #28) |
 | QUIZ_SUBMITTED | 4 |
 | QUESTION_ANSWERED | 8+ (one per question interaction) |
 | VIDEO_FULL_SCREEN | 0 or 2 |
 | VIDEO_NORMAL_SCREEN | 0 or 2 |
 
-Note: PAGE_NEXT and PAGE_PREV are listed in the journalist encoding maps (codes '8' and '9') but no code in state.js currently calls `journaler.log('PAGE_NEXT', ...)` or `journaler.log('PAGE_PREV', ...)`. See ticket #28. The test asserts these conditionally — if they appear, they must have positive count; if they don't appear yet (due to the bug), the test doesn't fail.
+`state.js` logs `PAGE_NEXT` and `PAGE_PREV` (`:453`, `:514`), so both are asserted as required events (at least one of each) rather than conditionally. `VIDEO_FULL_SCREEN` / `VIDEO_NORMAL_SCREEN` are the only genuinely conditional pair, because headless Chromium may refuse `requestFullscreen()` — see Key Technical Approaches.
 
 ### Key Technical Approaches
 
@@ -437,3 +527,8 @@ Note: Only effective on quizzes without `disable-anticheat`. In the barely-pass 
 | pass.test.js | 90000ms |
 | fail.test.js | 90000ms |
 | barely-pass.test.js | 120000ms |
+| programming-flow.test.js | 120000ms |
+
+`programming-flow.test.js` needs the longer budget for the same reason `barely-pass` does: several of its journeys walk pages 0-2 first (including page 2's 10s watch-time requirement), so one test legitimately covers most of a course run.
+
+Note for anyone adding a test to these files: the suite runs with `retries: 0`, so a timeout under load is a hard failure rather than a reported flake. Two tests in `programming-execute.test.js` have flaked this way when a run stretched to ~40s instead of the usual ~10s.
