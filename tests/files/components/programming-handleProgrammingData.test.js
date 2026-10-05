@@ -232,4 +232,70 @@ test.describe('CourseProgramming._handleProgrammingData', () => {
 		expect(state.afterStateReply.display).toBe("block");
 		expect(state.afterStateReply.rows).toBe(1);
 	});
+
+	test("_resetCode clears sessionStorage draft", async () => {
+		const result = await page.evaluate(() => {
+			const prog = document.createElement("course-programming");
+			prog.setAttribute("id", "prog1");
+			prog.connectedCallback();
+
+			window.dispatchEvent(new CustomEvent("programming-data", {
+				detail: {
+					id: "prog1",
+					value: {
+						starterCode: 'function greet() { return "Hello"; }',
+						pageName: "programming_example.html",
+						attemptsLeft: 3,
+					},
+				},
+			}));
+
+			// Simulate a draft being stored in sessionStorage
+			window.sessionStorage.setItem("cml:draft:programming_example.html:prog1", "OLD CODE");
+
+			prog._resetCode();
+
+			return {
+				editorValue: prog.editor.getValue(),
+				draftCleared: window.sessionStorage.getItem("cml:draft:programming_example.html:prog1") === null,
+			};
+		});
+
+		expect(result.editorValue).toBe('function greet() { return "Hello"; }');
+		expect(result.draftCleared).toBe(true);
+	});
+
+	test("_resetCode clears sessionStorage draft even when called before config arrives", async () => {
+		const result = await page.evaluate(() => {
+			const prog = document.createElement("course-programming");
+			prog.setAttribute("id", "prog2");
+			prog.connectedCallback();
+
+			// Simulate a draft being stored in sessionStorage BEFORE config arrives
+			window.sessionStorage.setItem("cml:draft:programming_example.html:prog2", "OLD CODE");
+
+			// Call reset BEFORE config arrives
+			prog._resetCode();
+
+			// Now simulate config arriving
+			window.dispatchEvent(new CustomEvent("programming-data", {
+				detail: {
+					id: "prog2",
+					value: {
+						starterCode: 'function greet() { return "Hello"; }',
+						pageName: "programming_example.html",
+						attemptsLeft: 3,
+					},
+				},
+			}));
+
+			return {
+				editorValue: prog.editor.getValue(),
+				draftCleared: window.sessionStorage.getItem("cml:draft:programming_example.html:prog2") === null,
+			};
+		});
+
+		expect(result.editorValue).toBe('function greet() { return "Hello"; }');
+		expect(result.draftCleared).toBe(true);
+	});
 });

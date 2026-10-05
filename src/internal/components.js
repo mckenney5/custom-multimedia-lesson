@@ -1488,11 +1488,36 @@ class CourseProgramming extends CourseComponent {
 	}
 
 	_resetCode() {
-		const config = this._componentConfig || {};
-		const starterCode = config.starterCode || "// Write your code here\n";
+		// Use real starterCode if config has loaded; otherwise default placeholder.
+		// Do NOT set _savedCode unless we have real starterCode, so the
+		// first-load logic in _handleProgrammingData can still populate it.
+		// Also, editor.setValue() fires the "change" handler, so we must reset
+		// _savedCode to undefined after the programmatic setValue.
+		const hasRealConfig = this._componentConfig && this._componentConfig.starterCode;
+		const starterCode = hasRealConfig ? this._componentConfig.starterCode : "// Write your code here\n";
 		this.editor.setValue(starterCode);
-		this._savedCode = starterCode;
+		if (hasRealConfig) {
+			this._savedCode = starterCode;
+		} else {
+			this._savedCode = undefined;
+		}
+
+		// Clear sessionStorage draft for this component so a refresh after
+		// reset shows the placeholder, not the old code.
+		const componentId = this.getAttribute("id");
+		if (this._pageName && componentId) {
+			const key = `cml:draft:${this._pageName}:${componentId}`;
+			try {
+				window.sessionStorage.removeItem(key);
+			} catch (_e) {
+				// Ignore storage errors.
+			}
+		} else if (componentId) {
+			// Config not loaded yet; defer the clear until pageName arrives.
+			this._resetPending = true;
+		}
 	}
+
 
 	_validateCode(code, config) {
 		const patterns = config.bannedPatterns;
@@ -1540,6 +1565,22 @@ class CourseProgramming extends CourseComponent {
 				bannedPatterns: value.bannedPatterns || [],
 			};
 			this._componentConfig = { ...this._staticConfig };
+			if (value.pageName) {
+				this._pageName = value.pageName;
+				// If a reset was requested before config arrived, clear the draft now.
+				if (this._resetPending) {
+					this._resetPending = false;
+					const componentId = this.getAttribute("id");
+					if (componentId) {
+						const key = `cml:draft:${this._pageName}:${componentId}`;
+						try {
+							window.sessionStorage.removeItem(key);
+						} catch (_e) {
+							// Ignore storage errors.
+						}
+					}
+				}
+			}
 		}
 
 		if (value.attemptsLeft !== undefined) this.attemptsLeft = value.attemptsLeft;

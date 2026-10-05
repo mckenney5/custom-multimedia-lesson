@@ -899,6 +899,7 @@ let state = {
 									hasAttempted: (compState.attempts || 0) > 0,
 									score: compState.score,
 									maxScore: compState.maxScore,
+									pageName: page.name,
 								},
 							},
 						}, window.location.origin);
