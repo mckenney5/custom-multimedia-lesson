@@ -340,7 +340,7 @@ test.describe("state.loadCourseData: component validation", () => {
 				return {
 					hasComponent: !!progComp,
 					type: progComp?.type,
-					codeContent: progComp?.codeContent,
+					hasCodeField: "codeContent" in (progComp || {}),
 					hasTestResults: "testResults" in (progComp || {}),
 					score: progComp?.score,
 					maxScore: progComp?.maxScore,
@@ -353,7 +353,9 @@ test.describe("state.loadCourseData: component validation", () => {
 		expect(result.error).toBeUndefined();
 		expect(result.hasComponent).toBe(true);
 		expect(result.type).toBe("programming");
-		expect(result.codeContent).toBe("// write code");
+		// No code field at all: the learner's source is not saved course data,
+		// so a fresh course state must not even have somewhere to put it.
+		expect(result.hasCodeField).toBe(false);
 		expect(result.hasTestResults).toBe(true);
 		expect(result.score).toBe(0);
 		expect(result.maxScore).toBe(0);

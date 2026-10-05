@@ -29,7 +29,6 @@ test.describe("state.serialize: fail-soft persistence", () => {
 							components: {
 								prog1: {
 									type: "programming",
-									codeContent: "// starter",
 									testResults: [],
 									score: 0,
 									maxScore: 0,
@@ -221,7 +220,6 @@ test.describe("state.serialize: fail-soft persistence", () => {
 			// Simulate arriving at the page fresh: wipe the component state the
 			// reload is expected to bring back.
 			const compState = state.data.delta.pagesState[0].components.prog1;
-			compState.codeContent = null;
 			compState.testResults = [];
 			compState.score = 0;
 			compState.maxScore = 0;
@@ -250,7 +248,6 @@ test.describe("state.serialize: fail-soft persistence", () => {
 			return {
 				saveError,
 				loadError,
-				codeContent: restored.codeContent,
 				maxScore: restored.maxScore,
 				resultLabel: restored.testResults && restored.testResults[0]
 					? restored.testResults[0].label
@@ -263,7 +260,6 @@ test.describe("state.serialize: fail-soft persistence", () => {
 		expect(result.error).toBeUndefined();
 		expect(result.saveError).toBeNull();
 		expect(result.loadError).toBeNull();
-		expect(result.codeContent).toBe("// circular draft");
 		expect(result.maxScore).toBe(1);
 		expect(result.resultLabel).toBe("returns object");
 		expect(result.blobOk).toBe(true);
@@ -449,8 +445,7 @@ test.describe("state.serialize: fail-soft persistence", () => {
 				components: {
 					prog1: {
 						type: "programming",
-						codeContent: "// page 2 code",
-						testResults: [],
+						testResults: [{ label: "page 2 result", passed: true }],
 						score: 3,
 						maxScore: 3,
 						completed: true,
@@ -484,7 +479,7 @@ test.describe("state.serialize: fail-soft persistence", () => {
 			let length = 0;
 			let page0Blob = null;
 			let page1Metrics = null;
-			let page1Code = null;
+			let page1ResultLabel = null;
 			let readError = null;
 			try {
 				const arr = state.serialize();
@@ -495,12 +490,14 @@ test.describe("state.serialize: fail-soft persistence", () => {
 					GLOBALS_COUNT + 2 * ITEMS_PER_PAGE - 1,
 				);
 				const page1Blob = JSON.parse(arr[GLOBALS_COUNT + 2 * ITEMS_PER_PAGE - 1]);
-				page1Code = page1Blob.prog1 ? page1Blob.prog1.codeContent : null;
+				page1ResultLabel = page1Blob.prog1 && page1Blob.prog1.testResults
+					? page1Blob.prog1.testResults[0].label
+					: null;
 			} catch (e) {
 				readError = String((e && e.message) || e);
 			}
 
-			return { saveError, length, page0Blob, page1Metrics, page1Code, readError };
+			return { saveError, length, page0Blob, page1Metrics, page1ResultLabel, readError };
 		});
 
 		expect(result.error).toBeUndefined();
@@ -510,7 +507,7 @@ test.describe("state.serialize: fail-soft persistence", () => {
 		expect(typeof result.page0Blob.__serializeError).toBe("string");
 		// completed, scrolled, score*100, watchTime, attempts, videoProgress*100
 		expect(result.page1Metrics).toEqual([1, 1, 75, 42, 2, 50]);
-		expect(result.page1Code).toBe("// page 2 code");
+		expect(result.page1ResultLabel).toBe("page 2 result");
 	});
 
 	test("fail-soft -> reload -> healthy run: marker is not restored and the recovered blob is clean", async () => {
@@ -592,7 +589,7 @@ test.describe("state.serialize: fail-soft persistence", () => {
 		// recovered blob carries only the healthy component data.
 		expect(result.markerAfterLoad).toBe(false);
 		expect(result.recoverBlob.__serializeError).toBeUndefined();
-		expect(result.recoverBlob.prog1.codeContent).toBe("// fixed code");
+		expect(result.recoverBlob.prog1.testResults[0].label).toBe("ok");
 		expect(result.recoverBlob.prog1.score).toBe(1);
 	});
 });

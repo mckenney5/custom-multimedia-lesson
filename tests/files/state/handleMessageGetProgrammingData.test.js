@@ -40,16 +40,15 @@ test.describe("state.handleMessage: GET_PROGRAMMING_DATA", () => {
 			state.data.delta.pagesState = [
 				{
 					completed: false,
-					score: 1,
+					score: 0,
 					components: {
 						prog1: {
 							type: "programming",
-							codeContent: 'console.log("saved code");',
-							testResults: [{ label: "Output matches expected", passed: true }],
-							score: 1,
-							maxScore: 1,
-							completed: true,
-							attempts: 1,
+							testResults: [],
+							score: 0,
+							maxScore: 0,
+							completed: false,
+							attempts: 0,
 						},
 					},
 				},
@@ -62,10 +61,37 @@ test.describe("state.handleMessage: GET_PROGRAMMING_DATA", () => {
 					postMessage: (...args) => { postMessages.push(args); },
 				},
 			};
+			state.finalizePage = () => {};
 
 			state.pageAPISecret = "TEST_SECRET";
 
-			const getMsg = {
+			// Both nonces sit safely in the past: a nonce stamped "now" is
+			// rejected as future-dated by the time the handler reads the clock.
+			const baseNonce = Date.now() - 100;
+
+			// The learner runs their exercise...
+			state.handleMessage({
+				data: {
+					type: "CODE_EXECUTION",
+					message: {
+						id: "prog1",
+						value: {
+							code: 'console.log("saved code");',
+							stdout: ["saved code"],
+							testResults: [{ label: "Output matches expected", passed: true }],
+							score: 1,
+							maxScore: 1,
+							completed: true,
+						},
+					},
+					code: "TEST_SECRET",
+					nonce: baseNonce,
+				},
+				origin: window.location.origin,
+			});
+
+			// ...and a component asking what it already has.
+			state.handleMessage({
 				data: {
 					type: "GET_PROGRAMMING_DATA",
 					message: {
@@ -73,14 +99,12 @@ test.describe("state.handleMessage: GET_PROGRAMMING_DATA", () => {
 						value: "",
 					},
 					code: "TEST_SECRET",
-					nonce: Date.now(),
+					nonce: baseNonce + 1,
 				},
 				origin: window.location.origin,
-			};
+			});
 
-			state.handleMessage(getMsg);
-
-			const progMsg = postMessages.find(m => m[0] && m[0].type === "PROGRAMMING_DATA");
+			const progMsg = postMessages.filter(m => m[0] && m[0].type === "PROGRAMMING_DATA").pop();
 
 			if (!progMsg) return { error: "No PROGRAMMING_DATA message sent" };
 
@@ -139,7 +163,6 @@ test.describe("state.handleMessage: GET_PROGRAMMING_DATA", () => {
 					components: {
 						prog1: {
 							type: "programming",
-							codeContent: "// code",
 							testResults: [],
 							score: 1,
 							maxScore: 1,
@@ -206,7 +229,6 @@ test.describe("state.handleMessage: GET_PROGRAMMING_DATA", () => {
 					components: {
 						prog1: {
 							type: "programming",
-							codeContent: "// starter",
 							testResults: [],
 							score: 0,
 							maxScore: 0,

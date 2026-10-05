@@ -18,7 +18,6 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 					ids.forEach((id) => {
 						componentState[id] = {
 							type: "programming",
-							codeContent: "// starter",
 							testResults: [],
 							score: 0,
 							maxScore: 0,
@@ -74,6 +73,13 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 				compState(id) {
 					return state.data.delta.pagesState[0].components[id || "prog1"];
 				},
+				storedDrafts() {
+					// Key-agnostic: the draft store's keys are an implementation
+					// detail, the code they hold is the behaviour.
+					return Object.keys(window.sessionStorage).map(
+						(key) => window.sessionStorage.getItem(key),
+					);
+				},
 				pageState() {
 					return state.data.delta.pagesState[0];
 				},
@@ -85,7 +91,7 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 		await page.close();
 	});
 
-	test("should save code, testResults, and score from CODE_EXECUTION to pageDelta", async () => {
+	test("should store the draft, testResults, and score from CODE_EXECUTION", async () => {
 		const result = await page.evaluate(() => {
 			if (typeof state === "undefined") return { error: "state not defined" };
 
@@ -103,7 +109,7 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 			});
 
 			return {
-				codeContent: harness.compState().codeContent,
+				storedDrafts: harness.storedDrafts(),
 				testResults: harness.compState().testResults,
 				score: harness.compState().score,
 				maxScore: harness.compState().maxScore,
@@ -115,7 +121,8 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 		});
 
 		expect(result.error).toBeUndefined();
-		expect(result.codeContent).toBe('console.log("hello");');
+		// The code is kept as this tab's draft, not as saved course data.
+		expect(result.storedDrafts).toContain('console.log("hello");');
 		expect(result.testResults).toEqual([
 			{ label: "Output matches expected", passed: true }
 		]);
@@ -427,7 +434,6 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 
 			const harness = window.__codeExec;
 			harness.setup({ attempts: 5 });
-			harness.compState().codeContent = "// saved draft from last session";
 			harness.compState().testResults = [{ label: "Restored from LMS", passed: true }];
 			harness.compState().score = 1;
 			harness.compState().maxScore = 1;
@@ -448,7 +454,6 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 			const progMsg = harness.postMessages.filter(m => m[0] && m[0].type === "PROGRAMMING_DATA").pop();
 
 			return {
-				codeContent: harness.compState().codeContent,
 				testResults: harness.compState().testResults,
 				score: harness.compState().score,
 				completed: harness.compState().completed,
@@ -460,7 +465,6 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 		});
 
 		expect(result.error).toBeUndefined();
-		expect(result.codeContent).toBe("// saved draft from last session");
 		expect(result.testResults).toEqual([{ label: "Restored from LMS", passed: true }]);
 		expect(result.score).toBe(1);
 		expect(result.completed).toBe(true);
@@ -470,7 +474,7 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 		expect(result.replyConsumesAttempt).toBe(false);
 	});
 
-	test("a non-consuming run still saves the edited code", async () => {
+	test("a non-consuming run still stores the edited draft", async () => {
 		const result = await page.evaluate(() => {
 			if (typeof state === "undefined") return { error: "state not defined" };
 
@@ -494,13 +498,13 @@ test.describe("state.handleMessage: CODE_EXECUTION", () => {
 			});
 
 			return {
-				codeContent: harness.compState().codeContent,
+				storedDrafts: harness.storedDrafts(),
 				testResults: harness.compState().testResults,
 			};
 		});
 
 		expect(result.error).toBeUndefined();
-		expect(result.codeContent).toBe("evil_code();");
+		expect(result.storedDrafts).toContain("evil_code();");
 		expect(result.testResults).toEqual([{ label: "Output matches expected", passed: true }]);
 	});
 

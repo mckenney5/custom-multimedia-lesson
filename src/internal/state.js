@@ -1,5 +1,14 @@
 // eslint-disable-next-line no-var
 var debugging = new URLSearchParams(window.location.search).get("debug") === "true";
+
+// Where the in-progress programming draft lives (see CODE_EXECUTION). The
+// product's data policy is that the saved course data holds no copy of the
+// learner's source, so the draft is kept in sessionStorage instead: per tab,
+// surviving a reload, gone when the tab closes — and never handed to
+// lms.saveData(). Scoped per page and component id so two exercises on one page
+// cannot overwrite each other.
+const draftKeyPrefix = "cml:draft:";
+
 let state = {
 	// --- Properties (Data) ---
 	data: {
@@ -343,6 +352,16 @@ let state = {
 				// next to data that may long since have recovered. Dropping it
 				// here keeps the blob honest about the current state of the page.
 				delete savedBlob.__serializeError;
+				// A save written before the draft moved to sessionStorage still
+				// carries the learner's source in its blob. Restore everything
+				// else, but never that: merging it would re-persist the code on
+				// every save from then on.
+				Object.keys(savedBlob).forEach((componentID) => {
+					const restored = savedBlob[componentID];
+					if(restored && typeof restored === "object"){
+						delete restored.codeContent;
+					}
+				});
 				p.components = { ...p.components, ...savedBlob };
 			} catch (e) {
 				console.warn("Failed to deserialize page state blob", e);
@@ -554,6 +573,7 @@ let state = {
 		if(confirmed){
 			this.pauseSave = true;
 			console.debug("Resetting progress");
+			this._clearDrafts(); // <-- the in-progress drafts are progress too
 			//localStorage.removeItem("courseProgress");
 			lms.reset(); // <-- set the saved data to nothing
 			this.lessonFrame.src = this.data.pages[0].path + "?_cb=" + Date.now();
@@ -820,9 +840,7 @@ let state = {
 
 				if (componentID && pageDelta.components && pageDelta.components[componentID]) {
 					const compState = pageDelta.components[componentID];
-					if (typeof msgData.code === "string") {
-						compState.codeContent = msgData.code;
-					}
+					this._storeDraft(page.name, componentID, msgData.code);
 					compState.score = Math.max(compState.score || 0, Number.isFinite(msgData.score) ? msgData.score : 0);
 					compState.maxScore = Math.max(compState.maxScore || 0, Number.isFinite(msgData.maxScore) ? msgData.maxScore : 0);
 					compState.completed = compState.completed === true || msgData.completed;
@@ -875,7 +893,7 @@ let state = {
 									testCases: compConfig.testCases || [],
 									bannedPatterns: compConfig.bannedPatterns || [],
 									options: compConfig.options || [],
-									savedCode: compState.codeContent,
+									savedCode: this._readDraft(page.name, componentID),
 									testResults: compState.testResults,
 									attemptsLeft: (page.completionRules.attempts || Infinity) - (compState.attempts || 0),
 									hasAttempted: (compState.attempts || 0) > 0,
@@ -921,6 +939,49 @@ let state = {
 				type: "NONCE_REJECTED",
 				nonce: nonce,
 			}, window.location.origin);
+		}
+	},
+
+	_draftKey: function(pageName, componentId){
+		return `${draftKeyPrefix}${pageName}:${componentId}`;
+	},
+
+	_storeDraft: function(pageName, componentId, code){
+		// A run that never reached the sandbox publishes no draft at all (the
+		// editor only holds the pre-reply placeholder), and overwriting a real
+		// draft with it would lose the learner's work.
+		if(typeof code !== "string") return false;
+		// Storage can refuse — blocked, disabled, out of quota. The draft is
+		// convenience; the attempt and score the learner just earned are not,
+		// so a failed write is swallowed rather than allowed to abandon the run.
+		try {
+			window.sessionStorage.setItem(this._draftKey(pageName, componentId), code);
+			return true;
+		} catch(e) {
+			console.warn(`state._storeDraft: ${this._draftKey(pageName, componentId)} could not be stored, this run will not be restorable:`, e);
+			return false;
+		}
+	},
+
+	_readDraft: function(pageName, componentId){
+		try {
+			return window.sessionStorage.getItem(this._draftKey(pageName, componentId));
+		} catch(e) {
+			console.warn("state._readDraft: stored draft could not be read:", e);
+			return undefined;
+		}
+	},
+
+	// A reset promises the learner their progress is gone, and a reload keeps
+	// sessionStorage alive — so the drafts have to go with it. Only our own
+	// entries: everything else in this tab's storage is not ours to delete.
+	_clearDrafts: function(){
+		try {
+			Object.keys(window.sessionStorage)
+				.filter(key => key.startsWith(draftKeyPrefix))
+				.forEach(key => window.sessionStorage.removeItem(key));
+		} catch(e) {
+			console.warn("state._clearDrafts: stored drafts could not be cleared:", e);
 		}
 	},
 
@@ -1002,7 +1063,10 @@ let state = {
 							compState.scrolled = false;
 						}
 						else if (comp.type === "programming") {
-							compState.codeContent = comp.starterCode || "";
+							// No codeContent here: a learner's source is not saved course
+							// data. The in-progress draft lives in sessionStorage (see
+							// CODE_EXECUTION) and the starter code is read from the page
+							// config, so this state holds progress only.
 							compState.testResults = [];
 							compState.score = 0;
 							const pMax = (comp.expectedOutput !== undefined && comp.expectedOutput !== null ? 1 : 0)

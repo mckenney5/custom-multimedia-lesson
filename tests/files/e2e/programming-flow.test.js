@@ -264,10 +264,11 @@ test.describe("E2E Programming Component Integration in Lesson Flow", () => {
 		});
 	});
 
-	test("reload mid-assignment restores the editor draft from the saved component state", async ({ page }) => {
+	test("reload mid-assignment restores the editor draft from session storage", async ({ page }) => {
 		// setupE2EPage clears localStorage from an init script, and init scripts run
-		// again on the reload — that would wipe the very save this journey restores,
-		// so go through setupPage (the context starts empty anyway).
+		// again on the reload — that would wipe the save that carries the learner's
+		// place in the course, so go through setupPage (the context starts empty
+		// anyway). The code draft itself no longer travels in that save at all.
 		await setupPage(page);
 		// onbeforeunload advertises "progress may be lost" for an incomplete page;
 		// accept it or the reload is cancelled.
@@ -291,7 +292,23 @@ test.describe("E2E Programming Component Integration in Lesson Flow", () => {
 			await expect(iframe.locator("h1")).toHaveText("JavaScript Basics", { timeout: 10000 });
 		});
 
-		await test.step("editor shows the draft that was saved before the reload", async () => {
+		await test.step("the saved course data carries none of the learner's source", async () => {
+			// The draft's *source* is what this policy is about, so assert on source
+			// syntax the program never produces as output. The string the learner's
+			// function returned ("Howdy!") does legitimately appear in the save,
+			// inside testResults[].actual — what to keep there is the open,
+			// deliberately deferred question (#81), not something to pin here.
+			const blob = await page.evaluate(() => JSON.stringify(state.serialize()));
+			expect(blob).not.toContain("function greet()");
+			expect(blob).not.toContain("console.log(greet())");
+		});
+
+		await test.step("editor shows the draft this tab was holding", async () => {
+			const storedDrafts = await page.evaluate(() =>
+				Object.keys(sessionStorage).map((key) => sessionStorage.getItem(key)),
+			);
+			expect(storedDrafts).toContain(draft);
+
 			await expect.poll(
 				() => iframe
 					.locator("course-programming#prog_hello")
@@ -335,7 +352,7 @@ test.describe("E2E Programming Component Integration in Lesson Flow", () => {
 		});
 	});
 
-	test("running before the config reply leaves the saved draft untouched", async ({ page }) => {
+	test("running before the config reply stores no draft and spends no attempt", async ({ page }) => {
 		await withholdProgrammingConfig(page);
 		await setupE2EPage(page);
 		const iframe = page.frameLocator("#lesson-frame");
@@ -397,18 +414,16 @@ test.describe("E2E Programming Component Integration in Lesson Flow", () => {
 			);
 			expect(handled.length).toBeGreaterThanOrEqual(1);
 
-			const componentState = await page.evaluate(() => {
-				const page = state.data.pages[state.data.delta.currentPageIndex];
-				const pageDelta = state.data.delta.pagesState[state.data.delta.currentPageIndex];
-				const config = page.components.find((c) => c.id === "prog_hello");
-				return {
-					codeContent: pageDelta.components.prog_hello.codeContent,
-					starterCode: config.starterCode,
-					attempts: pageDelta.components.prog_hello.attempts,
-				};
-			});
-			expect(componentState.codeContent).toBe(componentState.starterCode);
-			expect(componentState.attempts).toBe(0);
+			// Nothing was published, so nothing may be stored: this tab holds no
+			// draft at all, and the run left the attempt count alone.
+			const result = await page.evaluate(() => ({
+				storedDrafts: Object.keys(sessionStorage).map((key) => sessionStorage.getItem(key)),
+				attempts: state.data.delta.pagesState[
+					state.data.delta.currentPageIndex
+				].components.prog_hello.attempts,
+			}));
+			expect(result.storedDrafts).toEqual([]);
+			expect(result.attempts).toBe(0);
 		});
 	});
 
