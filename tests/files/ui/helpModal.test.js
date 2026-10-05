@@ -450,7 +450,7 @@ test.describe("helpModal", () => {
 		expect(result.secondRender).toBe(true);
 	});
 
-	test("showPageHelp fails closed with a Submission Required row when requireSubmission has zero submission components", async () => {
+	test("showPageHelp and completion.checkIfComplete agree on every requireSubmission fixture", async () => {
 		const result = await page.evaluate(() => {
 			if (!ui.infoBanner) ui.init();
 			if (typeof completion === "undefined") return { error: "completion not defined" };
@@ -462,55 +462,96 @@ test.describe("helpModal", () => {
 				videoProgress: 0,
 				requireSubmission: true,
 			});
-			const makeDelta = () => ({
+			const makeDelta = (components) => ({
 				watchTime: 0,
 				score: 0,
 				scrolled: false,
 				videoProgress: 0,
-				components: {},
+				...(components === undefined ? {} : {components}),
 			});
 
-			// Input 1: no `components` key at all.
-			const noKeyPage = { completionRules: makeRules(), maxScore: 0 };
-			ui.showPageHelp(noKeyPage, makeDelta());
-			const noKeyHtml = ui.helpContent.innerHTML;
-			const noKeyRow = noKeyHtml.split("<tr>").find(r => r.includes("Submit all")) || "";
-			const noKeyVerdict = completion.checkIfComplete(noKeyPage, makeDelta());
+			// Every requireSubmission shape that can leave the gate without
+			// per-component state to read. Each must render an honest failing
+			// row AND report the same verdict, so the learner is never told
+			// "Submitted" while state.next() still blocks the page.
+			const fixtures = [
+				{
+					name: "noKey",
+					// The page omits the `components` key entirely.
+					page: {completionRules: makeRules(), maxScore: 0},
+					delta: makeDelta({}),
+					expectLabel: "Submission Required",
+					forbidLabel: "Submit Quizzes",
+				},
+				{
+					name: "articleOnly",
+					// The page declares a component, but none is a submission.
+					page: {
+						completionRules: makeRules(),
+						maxScore: 0,
+						components: [{id: "art1", type: "article"}],
+					},
+					delta: makeDelta({}),
+					expectLabel: "Submission Required",
+					forbidLabel: "Submit Quizzes",
+				},
+				{
+					name: "declaredQuizNoDeltaState",
+					// The page does declare a submission, but the delta carries
+					// no component state for it at all (no `components` key).
+					page: {
+						completionRules: makeRules(),
+						maxScore: 0,
+						components: [{id: "quiz1", type: "quiz"}],
+					},
+					delta: makeDelta(undefined),
+					expectLabel: "Submit Quizzes",
+					forbidLabel: "Complete Code Assignments",
+				},
+			];
 
-			// Input 2: components present, none a quiz/programming.
-			const articleOnlyPage = {
-				completionRules: makeRules(),
-				maxScore: 0,
-				components: [{ id: "art1", type: "article" }],
-			};
-			ui.showPageHelp(articleOnlyPage, makeDelta());
-			const articleHtml = ui.helpContent.innerHTML;
-			const articleRow = articleHtml.split("<tr>").find(r => r.includes("Submit all")) || "";
-			const articleVerdict = completion.checkIfComplete(articleOnlyPage, makeDelta());
-
-			const summarize = (row) => ({
+			const summarize = (row, fixture) => ({
 				found: row.length > 0,
-				label: row.includes("Submission Required"),
-				misleadingLabel: row.includes("Submit Quizzes"),
+				label: row.includes(fixture.expectLabel),
+				forbidden: row.includes(fixture.forbidLabel),
 				pending: row.includes("Pending"),
 				submitted: row.includes("Submitted"),
 				failIcon: row.includes("status-fail"),
 				passIcon: row.includes("status-pass"),
 			});
 
+			const verdicts = {};
+			const rows = {};
+			for (const fixture of fixtures) {
+				let verdict = null;
+				let threw = null;
+				try {
+					verdict = completion.checkIfComplete(fixture.page, fixture.delta);
+				} catch (e) {
+					threw = e.message;
+				}
+				ui.showPageHelp(fixture.page, fixture.delta);
+				const html = ui.helpContent.innerHTML;
+				const row = html.split("<tr>").find(r => r.includes("Submit all")) || "";
+				rows[fixture.name] = summarize(row, fixture);
+				verdicts[fixture.name] = {verdict, threw};
+			}
+
 			return {
-				noKey: summarize(noKeyRow),
-				articleOnly: summarize(articleRow),
-				// ui and completion must agree on the verdict for both fixtures.
-				agreement: noKeyVerdict === false && articleVerdict === false,
+				error: undefined,
+				rows,
+				verdicts,
+				// ui and completion must agree on the verdict for every fixture.
+				agreement: Object.keys(verdicts).every(k => verdicts[k].threw === null && verdicts[k].verdict === false),
 			};
 		});
 
 		expect(result.error).toBeUndefined();
-		for (const fixture of [result.noKey, result.articleOnly]) {
+		expect(Object.keys(result.rows)).toEqual(["noKey", "articleOnly", "declaredQuizNoDeltaState"]);
+		for (const fixture of Object.values(result.rows)) {
 			expect(fixture.found).toBe(true);
 			expect(fixture.label).toBe(true);
-			expect(fixture.misleadingLabel).toBe(false);
+			expect(fixture.forbidden).toBe(false);
 			expect(fixture.pending).toBe(true);
 			expect(fixture.submitted).toBe(false);
 			expect(fixture.failIcon).toBe(true);

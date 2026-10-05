@@ -387,6 +387,45 @@ test.describe("completion.checkIfComplete", () => {
 		expect(result.result).toBe(false);
 	});
 
+	test("requireSubmission fails closed when the page delta carries no component state", async () => {
+		// The page declares a quiz, so the submission list is non-empty and the
+		// gate must read component state out of the delta. When the delta has
+		// no `components` key there is nothing to read, so the page is not
+		// complete — it must degrade like ui.showPageHelp's row, not throw.
+		const result = await page.evaluate(() => {
+			if (typeof completion === "undefined") return { error: "completion not defined" };
+
+			const page = {
+				maxScore: 0,
+				completionRules: {
+					watchTime: 0,
+					score: 0,
+					scrolled: false,
+					videoProgress: 0,
+					requireSubmission: true,
+				},
+				components: [
+					{ id: "quiz1", type: "quiz" },
+				],
+			};
+			const pageDelta = {
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+			};
+
+			try {
+				return { result: completion.checkIfComplete(page, pageDelta) };
+			} catch (e) {
+				return { threw: e.message };
+			}
+		});
+
+		expect(result.threw).toBeUndefined();
+		expect(result.result).toBe(false);
+	});
+
 	test("should handle maxScore of 0 gracefully without crashing", async () => {
 		const result = await page.evaluate(() => {
 			if (typeof completion === "undefined") return { error: "completion not defined" };

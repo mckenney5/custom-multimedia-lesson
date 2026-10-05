@@ -13,7 +13,7 @@ let completion = {
 			// silently ignoring the author's explicit instruction. The
 			// load-time diagnostic in state.loadCourseData names the page.
 			submissionsSatisfied = submissions.length > 0 && submissions.every(sub => {
-				const compState = pageDelta.components[sub.id];
+				const compState = pageDelta.components && pageDelta.components[sub.id];
 				return compState && compState.completed === true;
 			});
 		}
