@@ -1070,7 +1070,16 @@ let state = {
 							compState.testResults = [];
 							compState.score = 0;
 							const pMax = (comp.expectedOutput !== undefined && comp.expectedOutput !== null ? 1 : 0)
-								+ (comp.testCases && Array.isArray(comp.testCases) ? comp.testCases.length : 0);
+							+ (comp.testCases && Array.isArray(comp.testCases)
+								// Ticket #68: a case that declares no expected is not
+								// gradeable, so it is not a point of the maximum
+								// either. This has to agree with _autograde, which
+								// counts the same rows the same way — otherwise the
+								// Math.max below keeps this inflated number for the
+								// life of the page and the component's own score can
+								// never make the page add up.
+								? comp.testCases.filter(tc => tc && tc.expected !== undefined && tc.expected !== null).length
+								: 0);
 							compState.maxScore = pMax;
 							calculatedMaxScore += pMax;
 							compState.completed = false;

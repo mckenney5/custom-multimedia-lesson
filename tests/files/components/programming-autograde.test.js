@@ -273,8 +273,8 @@ test.describe('CourseProgramming _autograde()', () => {
       const prog = document.createElement('course-programming');
       const config = {
         testCases: [
-          { label: "TC1" },
-          { label: "TC2" },
+          { label: "TC1", functionName: "one", args: [], expected: 1 },
+          { label: "TC2", functionName: "two", args: [], expected: 2 },
         ],
       };
       const grade = prog._autograde(config, [], undefined, null);
@@ -325,9 +325,9 @@ test.describe('CourseProgramming _autograde()', () => {
     expect(result.results[0].error).toBeNull();
   });
 
-  test('lone CR line endings in expectedOutput pass', async () => {
+  test("lone CR line endings in expectedOutput pass", async () => {
     const result = await page.evaluate(() => {
-      const prog = document.createElement('course-programming');
+      const prog = document.createElement("course-programming");
       const grade = prog._autograde(
         { expectedOutput: "Hello\rWorld" },
         ["Hello", "World"],
@@ -339,5 +339,30 @@ test.describe('CourseProgramming _autograde()', () => {
 
     expect(result.score).toBe(1);
     expect(result.total).toBe(1);
+  });
+
+  // Ticket #68, on the other branch. When the sandbox never comes back at all
+  // (killed, or timed out) every case falls back to a not-passed row, and the
+  // rule has to hold there too: a fallback row has no comparison behind it
+  // either, so a case that declared nothing still must not count. Otherwise a
+  // timed-out run would score differently from a completed one.
+  test("a fallback row with no declared expected is not counted either", async () => {
+    const result = await page.evaluate(() => {
+      const prog = document.createElement("course-programming");
+      const config = {
+        testCases: [
+          { label: "Declared", functionName: "one", args: [], expected: 1 },
+          { label: "Undeclared", functionName: "two", args: [], expected: null },
+        ],
+      };
+      return prog._autograde(config, [], undefined, "Execution timed out");
+    });
+
+    expect(result.score).toBe(0);
+    expect(result.total).toBe(1);
+    expect(result.results[0].label).toBe("Declared");
+    expect(result.results[0].expected).toBe(1);
+    expect(result.results[1].label).toBe("Undeclared");
+    expect(result.results[1].expected).toBeUndefined();
   });
 });

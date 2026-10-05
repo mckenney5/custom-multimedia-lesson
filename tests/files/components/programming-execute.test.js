@@ -996,4 +996,89 @@ test.describe("CourseProgramming execute() wiring", () => {
 		expect(rows[0]).toContain("truncated");
 		expect(rows[0].length).toBeLessThan(4000);
 	});
+
+	// Ticket #68. A test case that declares no `expected` has nothing to grade,
+	// so it earns no point and costs none. It used to be a free point: the
+	// sandbox compares the return value against `undefined` with ===, so a
+	// function that returns nothing "passed" a case that declared nothing.
+	// The declared case still has to be earned, and the page must be reachable.
+	test("a test case that declares no expected is not a free point", async () => {
+		const result = await page.evaluate(async () => {
+			const prog = window.__mkProg({
+				config: {
+					testCases: [
+						{ label: "Greets", functionName: "greet", args: [], expected: "hi" },
+						{ label: "Nothing declared", functionName: "shout", args: [] },
+					],
+				},
+				code: 'function greet() { return "hi"; }\nfunction shout() { console.log("hi"); }',
+			});
+			await prog.execute();
+			const sent = prog.sends.find((s) => s.type === "CODE_EXECUTION");
+			return { score: sent.data.score, maxScore: sent.data.maxScore, completed: sent.data.completed };
+		});
+
+		expect(result).toEqual({ score: 1, maxScore: 1, completed: true });
+	});
+
+	// The same authoring mistake, failing the other way. `expected: null` reads
+	// as "declared, and nothing" to the sandbox's ===, so the case scored zero
+	// and the learner could never finish the page over a config error. It is the
+	// same ungradeable row as the case above and gets the same treatment: not
+	// counted, not scored, page still reachable.
+	test("a test case that declares expected null is not a silent failure", async () => {
+		const result = await page.evaluate(async () => {
+			const prog = window.__mkProg({
+				config: {
+					testCases: [
+						{ label: "Greets", functionName: "greet", args: [], expected: "hi" },
+						{ label: "Expects nothing", functionName: "shout", args: [], expected: null },
+					],
+				},
+				code: 'function greet() { return "hi"; }\nfunction shout() { console.log("hi"); }',
+			});
+			await prog.execute();
+			const sent = prog.sends.find((s) => s.type === "CODE_EXECUTION");
+			return { score: sent.data.score, maxScore: sent.data.maxScore, completed: sent.data.completed };
+		});
+
+		expect(result).toEqual({ score: 1, maxScore: 1, completed: true });
+	});
+
+	// The learner-facing side of the rule is silent by design: an ungradeable row
+	// is a course-config mistake, and no amount of learner effort resolves it. The
+	// row itself cannot say what is wrong with the config, so the console is where
+	// the author finds out — which makes this diagnostic the only way the mistake
+	// is ever reported, and the reason it has to name the case and the component.
+	test("an ungradeable test case is reported to the author", async () => {
+		const logged = await page.evaluate(async () => {
+			const captured = [];
+			const original = console.error;
+			console.error = (...args) => captured.push(args.join(" "));
+			try {
+				const prog = window.__mkProg({
+					id: "prog_report",
+					config: {
+						testCases: [
+							{ label: "Greets", functionName: "greet", args: [], expected: "hi" },
+							{ label: "Nothing declared", functionName: "shout", args: [] },
+						],
+					},
+					code: 'function greet() { return "hi"; }\nfunction shout() { console.log("hi"); }',
+				});
+				await prog.execute();
+			} finally {
+				console.error = original;
+			}
+			return captured;
+		});
+
+		// The harness's sends also trip state.handleMessage's sender check on this
+		// page, so the log carries unrelated lines; what matters is that exactly
+		// one of them is about an ungradeable case, and that it can be acted on.
+		const diagnostics = logged.filter((line) => line.includes("declares no usable expected value"));
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]).toContain("Test case 2 ('Nothing declared')");
+		expect(diagnostics[0]).toContain("prog_report");
+	});
 });

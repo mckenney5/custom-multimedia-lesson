@@ -1142,7 +1142,12 @@ class CourseProgramming extends CourseComponent {
 			outputDiv.textContent = this._boundedDump(lines.join("\n")) || "(no output)";
 
 			const grade = this._autograde(config, stdout, returnValue, error, sandboxTestResults);
-			if (grade.total > 0) {
+			// Gated on having rows, not on having something to count: a case that
+			// declares no expected is not scored (ticket #68), but the row it
+			// produces can still carry the only clue there is — a missing
+			// function, a thrown error — and that must not vanish because the
+			// config left nothing gradeable behind.
+			if (grade.results.length > 0) {
 				resultsDiv.style.display = "block";
 				resultsList.innerHTML = this._resultsHTML(grade.results);
 			}
@@ -1222,6 +1227,19 @@ class CourseProgramming extends CourseComponent {
 				sandboxTestResults.forEach((tcResult, i) => {
 					const spec = config.testCases[i] || {};
 					const expected = this._expectedFor(tcResult, spec);
+					if (!this._gradeable(expected)) {
+						this._reportUngradeableCase(i, tcResult.label, tcResult.actual);
+						results.push({
+							label: tcResult.label,
+							// No comparison was ever made, so there is nothing to
+							// pass. The sandbox's verdict here is an artifact of
+							// comparing a return value against undefined.
+							passed: false,
+							actual: tcResult.actual,
+							error: tcResult.error || null,
+						});
+						return;
+					}
 					const passed = this._testCasePassed(tcResult, spec);
 					total++;
 					if (passed) score++;
@@ -1235,6 +1253,15 @@ class CourseProgramming extends CourseComponent {
 				});
 			} else {
 				config.testCases.forEach((tc, i) => {
+					if (!this._gradeable(tc.expected)) {
+						this._reportUngradeableCase(i, tc.label || `Test case ${i + 1}`, undefined);
+						results.push({
+							label: tc.label || `Test case ${i + 1}`,
+							passed: false,
+							error: error || null,
+						});
+						return;
+					}
 					total++;
 					results.push({
 						label: tc.label || `Test case ${i + 1}`,
@@ -1247,6 +1274,29 @@ class CourseProgramming extends CourseComponent {
 		}
 
 		return { score, total, results };
+	}
+
+	// A test case is gradeable only if it declares something to compare against.
+	// `expected: null` and an absent `expected` are the same authoring mistake:
+	// the sandbox compares with ===, so an absent one "passes" whenever the
+	// function returns nothing (a free point) while null scores zero (a lock-out
+	// the learner cannot fix). Neither can move `total`, so a case nobody
+	// declared can neither inflate the score nor stand between a learner and a
+	// finished page. Same rule the expectedOutput branch above already applies.
+	_gradeable(expected) {
+		return expected !== undefined && expected !== null;
+	}
+
+	// Authoring-time diagnostic for an ungradeable case. It says nothing to the
+	// learner beyond the row itself, but the row cannot say what is wrong with
+	// the course config, so this is where the author finds out.
+	_reportUngradeableCase(index, label, actual) {
+		const componentID = this.getAttribute("id");
+		console.error(
+			`Test case ${index + 1} ('${label}') of programming component '${componentID || "(no id)"}' `
+			+ "declares no usable expected value, so it was not graded and did not count toward the score. "
+			+ `Give the case an expected, or remove it. Learner returned: ${this._displayValue(actual)}`,
+		);
 	}
 
 	// The sandbox grades a test case with a strict === on the two values it was
