@@ -1,5 +1,60 @@
+const fs = require("fs");
+const path = require("path");
 const { test, expect } = require("@playwright/test");
 const { setupPage } = require("../../helpers/page-setup.js");
+
+// The budgets that bound a payload live in the source modules, so they are read
+// from there rather than restated here. A restated literal is how this file came
+// to cite a suspend_data limit that no longer applied, and a declaration that
+// cannot be found fails the file loudly at load instead of leaving a silently
+// stale bound. Numbers are what get derived: the two marker strings are
+// deliberately written out where they are asserted, because what a learner is
+// shown is a fact to pin and mirroring it from the source would make the
+// assertion true by construction. STDOUT_SENTINEL is read only because its
+// LENGTH is a term in the bound below; its exact text is pinned literally in
+// tests/files/sandbox/sandbox-evaluate.test.js.
+const SRC_DIR = path.join(__dirname, "..", "..", "..", "src", "internal");
+const sourceText = {};
+
+const sourceLiteral = (file, name) => {
+	if (!(file in sourceText)) {
+		sourceText[file] = fs.readFileSync(path.join(SRC_DIR, file), "utf8");
+	}
+	const match = sourceText[file].match(new RegExp(`const ${name} = ("[^"]*"|\\d+);`));
+	if (!match) {
+		throw new Error(`src/internal/${file} no longer declares \`const ${name} = <literal>;\``);
+	}
+	return JSON.parse(match[1]);
+};
+
+const sandboxLiteral = (name) => sourceLiteral("sandbox.js", name);
+const componentLiteral = (name) => sourceLiteral("components.js", name);
+
+const MAX_STDOUT_LINES = sandboxLiteral("MAX_STDOUT_LINES");
+const MAX_STDOUT_CHARS = sandboxLiteral("MAX_STDOUT_CHARS");
+const MAX_OUTPUT_CHARS = componentLiteral("MAX_OUTPUT_CHARS");
+const STDOUT_SENTINEL = sandboxLiteral("STDOUT_SENTINEL");
+
+// The worst case the capture path can hand the parent, as the persisted grading
+// row sees it. MEASURED: 10519 chars. Content is capped at MAX_STDOUT_CHARS and
+// the sentinel is pushed outside that budget, so the sum is MAX_STDOUT_CHARS
+// plus the sentinel. With the line cap already full, the log that trips it still
+// pushes the part of the line that fits (sandbox.js), so stdout holds
+// MAX_STDOUT_LINES + 2 entries and the join turns those into
+// MAX_STDOUT_LINES + 1 newlines. The empty entry _autograde appends for an
+// undefined returnValue is dropped by the blank-line filter in
+// _normalizeOutput, so it contributes no characters.
+const MAX_ACTUAL_CHARS =
+	MAX_STDOUT_CHARS + STDOUT_SENTINEL.length + MAX_STDOUT_LINES + 1;
+
+// 499 lines of 20 characters fill 9980 and one 19 character line brings that to
+// 9999, so the line cap is now full with a single character of budget left. The
+// last log therefore takes the partial-line path, which is the shape that
+// maximises the entry count and the joined length at the same time.
+const WORST_CASE_FLOOD =
+	`for (var i = 0; i < ${MAX_STDOUT_LINES - 1}; i++) console.log("${"x".repeat(20)}");` +
+	`console.log("${"y".repeat(MAX_STDOUT_CHARS - 1 - (MAX_STDOUT_LINES - 1) * 20)}");` +
+	`console.log("${"z".repeat(64)}");`;
 
 test.describe("CourseProgramming execute() wiring", () => {
 	let page;
@@ -35,27 +90,31 @@ test.describe("CourseProgramming execute() wiring", () => {
 		await page.close();
 	});
 
-	test("a flooding run sends a bounded stdout payload to the parent", async () => {
-		const result = await page.evaluate(async () => {
+	test("a worst-case flood sends a bounded stdout payload to the parent", async () => {
+		const result = await page.evaluate(async (code) => {
 			const prog = window.__mkProg({
 				config: { expectedOutput: "line 0" },
-				code: "for (var i = 0; i < 2000; i++) console.log('line ' + i);",
+				code: code,
 			});
 			await prog.execute();
 			const sent = prog.sends.find(s => s.type === "CODE_EXECUTION");
 			return {
 				stdoutLines: sent.data.stdout.length,
+				contentChars: sent.data.stdout.reduce((sum, line) => sum + line.length, 0),
 				lastLine: sent.data.stdout[sent.data.stdout.length - 1],
+				returnValueIsUndefined: sent.data.returnValue === undefined,
 				actual: sent.data.testResults[0].actual.length,
 				score: sent.data.score,
 			};
-		});
+		}, WORST_CASE_FLOOD);
 
-		expect(result.stdoutLines).toBeLessThanOrEqual(501);
-		expect(result.lastLine).toBe("[output truncated]");
-		// The joined output also rides the parent's persisted testResults, which
-		// the LMS must fit in its suspend_data budget.
-		expect(result.actual).toBeLessThanOrEqual(10018);
+		expect(result.stdoutLines).toBe(MAX_STDOUT_LINES + 2);
+		expect(result.contentChars).toBe(MAX_STDOUT_CHARS + STDOUT_SENTINEL.length);
+		expect(result.lastLine).toBe(STDOUT_SENTINEL);
+		// The bound above assumes the run returned nothing, so the empty entry
+		// _autograde appends stays filtered out of the normalized string.
+		expect(result.returnValueIsUndefined).toBe(true);
+		expect(result.actual).toBeLessThanOrEqual(MAX_ACTUAL_CHARS);
 		expect(result.score).toBe(0);
 	});
 
@@ -66,7 +125,12 @@ test.describe("CourseProgramming execute() wiring", () => {
 			return prog.querySelector("#prog-output-text").textContent;
 		});
 
-		expect(dump.length).toBeLessThanOrEqual(10000 + "\n… (truncated)".length);
+		// MAX_OUTPUT_CHARS is components.js's own panel budget, read from the
+		// source above so it cannot go stale here. The marker stays written out:
+		// what the learner is shown is asserted as a fact on the next line, and
+		// mirroring it from the source would make that assertion true by
+		// construction.
+		expect(dump.length).toBeLessThanOrEqual(MAX_OUTPUT_CHARS + "\n… (truncated)".length);
 		expect(dump).toMatch(/^y+\n… \(truncated\)$/);
 	});
 
@@ -80,9 +144,13 @@ test.describe("CourseProgramming execute() wiring", () => {
 		});
 
 		const lines = dump.split("\n");
-		expect(lines.length).toBeLessThanOrEqual(501);
+		// Short lines trip the line cap well before the character cap, so this
+		// flood stays inside the panel budget and the capture sentinel really is
+		// the last thing visible. The bound is the worst case over any flood,
+		// since the partial line the character-cap path keeps is one entry more.
+		expect(lines.length).toBeLessThanOrEqual(MAX_STDOUT_LINES + 2);
 		expect(lines[0]).toBe("line 0");
-		expect(lines[lines.length - 1]).toBe("[output truncated]");
+		expect(lines[lines.length - 1]).toBe(STDOUT_SENTINEL);
 	});
 
 	test("error-free run of a component with no expectedOutput or testCases completes", async () => {
