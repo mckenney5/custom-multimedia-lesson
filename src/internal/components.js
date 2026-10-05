@@ -1014,13 +1014,22 @@ class CourseProgramming extends CourseComponent {
 			</div>
 		`;
 
+		// Inject CodeMirror CML theme CSS if not already present
+		if (!document.getElementById("cml-codemirror-theme")) {
+			const link = document.createElement("link");
+			link.id = "cml-codemirror-theme";
+			link.rel = "stylesheet";
+			link.href = "internal/codemirror-theme.css";
+			document.head.appendChild(link);
+		}
+
 		const editorDiv = this.querySelector("#prog-editor");
 		const starterCode = config.starterCode || "// Write your code here\n";
 
 		this.editor = CodeMirror(editorDiv, {
 			value: this._savedCode || starterCode,
 			mode: this._modeForLanguage(lang),
-			theme: "default",
+			theme: "cml",
 			lineNumbers: true,
 			matchBrackets: true,
 			indentUnit: 2,
