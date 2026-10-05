@@ -48,16 +48,16 @@ const ui = {
 		return this.infoBanner.style.display === "flex";
 	},
 
-	updateInfo: function({currentPageIndex, pageCount, progress}) {
+	updateInfo: function({currentPageIndex, pageCount, totalSteps, progress}) {
 		const currentPage = currentPageIndex + 1;
-		const totalSteps = Math.max(1, pageCount - 1);
-		const pct = Math.round((progress / totalSteps) * 100);
+		const steps = Number.isFinite(totalSteps) && totalSteps > 0 ? totalSteps : Math.max(1, pageCount - 1);
+		const pct = Math.min(100, Math.round((progress / steps) * 100));
 
 		this.infoBar.innerHTML = `
 			<div id="info-bar-fill" style="width: ${pct}%;"></div>
 			<span id="info-bar-text">Page ${currentPage} of ${pageCount} &nbsp;&nbsp;&bull;&nbsp;&nbsp; ${pct}% Complete</span>
 		`;
- 	},
+	},
 
 	toggleHelp: function() {
 		if (this.helpOverlay.style.display === "flex") {

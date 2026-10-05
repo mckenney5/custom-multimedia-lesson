@@ -74,6 +74,9 @@ let state = {
 		// Finds the required iframe
 		this.lessonFrame = document.getElementById(frameId);
 
+		// Helper: count pages that have at least one completable requirement
+		this._totalCompletableSteps = this._countCompletableSteps(this.data.pages);
+
 		// Attempt to load the course (static data)
 		await this.loadCourseData();
 
@@ -105,6 +108,7 @@ let state = {
 		ui.updateInfo({
 			currentPageIndex: this.data.delta.currentPageIndex,
 			pageCount: this.data.pages.length,
+			totalSteps: this._totalCompletableSteps,
 			progress: this.data.delta.progress,
 		});
 
@@ -482,6 +486,7 @@ let state = {
 		ui.updateInfo({
 			currentPageIndex: this.data.delta.currentPageIndex,
 			pageCount: this.data.pages.length,
+			totalSteps: this._totalCompletableSteps,
 			progress: this.data.delta.progress,
 		});
 
@@ -518,6 +523,7 @@ let state = {
 		ui.updateInfo({
 			currentPageIndex: this.data.delta.currentPageIndex,
 			pageCount: this.data.pages.length,
+			totalSteps: this._totalCompletableSteps,
 			progress: this.data.delta.progress,
 		});
 
@@ -1132,6 +1138,18 @@ let state = {
 
 		// Send it to the child iframe
 		this.sendMessage("SET_THEME", themeName);
+	},
+
+// Count pages that have at least one non-trivial completion rule
+	_countCompletableSteps: function(pages){
+		return pages.filter(p => {
+			const r = p.completionRules || {};
+			return (r.watchTime > 0) ||
+			       (r.score > 0) ||
+			       (r.scrolled === true) ||
+			       (r.videoProgress > 0) ||
+			       (r.requireSubmission === true);
+		}).length;
 	},
 
 };
