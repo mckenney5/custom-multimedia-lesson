@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 echo "--Copying edited source code files"
 mkdir -p ./example

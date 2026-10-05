@@ -44,6 +44,9 @@ let
 
       # Needed for the tests
       lsof
+
+      # Needed for packaging
+      zip
     ];
     
     runScript = "bash";
