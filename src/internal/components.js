@@ -1,6 +1,12 @@
 /* ==========================================================================
  BASE CLASS: The foundation for all course widgets          *
  ========================================================================== */
+
+// Character budget for the output panel of a programming run. Same size as
+// the sandbox's own stdout capture cap, so output that survives capture is
+// shown in full and only an unbounded return value or error is cut here.
+const MAX_OUTPUT_CHARS = 10000;
+
 class CourseComponent extends HTMLElement {
 	constructor() {
 		super();
@@ -1133,7 +1139,7 @@ class CourseProgramming extends CourseComponent {
 			if (stdout.length > 0) lines.push(stdout.join("\n"));
 			if (returnValue !== undefined) lines.push(String(returnValue));
 			if (error) lines.push(`Error: ${error}`);
-			outputDiv.textContent = lines.join("\n") || "(no output)";
+			outputDiv.textContent = this._boundedDump(lines.join("\n")) || "(no output)";
 
 			const grade = this._autograde(config, stdout, returnValue, error, sandboxTestResults);
 			if (grade.total > 0) {
@@ -1164,6 +1170,17 @@ class CourseProgramming extends CourseComponent {
 			// maxScore are deliberately left alone: only the reply may latch them.
 			this._updateToolbarReadout();
 		}
+	}
+
+	// The sandbox caps stdout as it captures it, but the return value and the
+	// error of a run are single strings no sandbox cap can bound: a learner
+	// returning a large string would put it all in this panel. Same budget and
+	// same visible marker the results rows use (_displayValue), so a cut dump
+	// reads the same way as a cut value.
+	_boundedDump(text) {
+		return text.length > MAX_OUTPUT_CHARS
+			? `${text.slice(0, MAX_OUTPUT_CHARS)}\n… (truncated)`
+			: text;
 	}
 
 	_markRunButtonExhausted() {

@@ -58,6 +58,29 @@ test.describe("sandbox.evaluate()", () => {
     expect(result.returnValue).toBeUndefined();
   });
 
+  test("stdout beyond the line cap is cut with a truncation sentinel", async () => {
+    const result = await page.evaluate(async () => {
+      const out = await sandbox.evaluate("for (var i = 0; i < 2000; i++) console.log('line ' + i);");
+      return out.stdout;
+    });
+
+    expect(result.length).toBeLessThanOrEqual(501);
+    expect(result[0]).toBe("line 0");
+    expect(result[result.length - 1]).toBe("[output truncated]");
+  });
+
+  test("one enormous console.log line is bounded by the character cap", async () => {
+    const result = await page.evaluate(async () => {
+      const out = await sandbox.evaluate("console.log('x'.repeat(1000000));");
+      return out.stdout;
+    });
+
+    const totalChars = result.reduce((sum, line) => sum + line.length, 0);
+    expect(totalChars).toBeLessThanOrEqual(10000 + "[output truncated]".length);
+    expect(result[result.length - 1]).toBe("[output truncated]");
+    expect(result[0]).toMatch(/^x+$/);
+  });
+
   test("timeout fires for infinite loop with short timeout", async () => {
     const result = await page.evaluate(async () => {
       const out = await sandbox.evaluate("while(true){}", { timeout: 100 });

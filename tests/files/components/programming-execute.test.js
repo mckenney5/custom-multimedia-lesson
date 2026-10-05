@@ -35,6 +35,56 @@ test.describe("CourseProgramming execute() wiring", () => {
 		await page.close();
 	});
 
+	test("a flooding run sends a bounded stdout payload to the parent", async () => {
+		const result = await page.evaluate(async () => {
+			const prog = window.__mkProg({
+				config: { expectedOutput: "line 0" },
+				code: "for (var i = 0; i < 2000; i++) console.log('line ' + i);",
+			});
+			await prog.execute();
+			const sent = prog.sends.find(s => s.type === "CODE_EXECUTION");
+			return {
+				stdoutLines: sent.data.stdout.length,
+				lastLine: sent.data.stdout[sent.data.stdout.length - 1],
+				actual: sent.data.testResults[0].actual.length,
+				score: sent.data.score,
+			};
+		});
+
+		expect(result.stdoutLines).toBeLessThanOrEqual(501);
+		expect(result.lastLine).toBe("[output truncated]");
+		// The joined output also rides the parent's persisted testResults, which
+		// the LMS must fit in its suspend_data budget.
+		expect(result.actual).toBeLessThanOrEqual(10018);
+		expect(result.score).toBe(0);
+	});
+
+	test("a huge return value cannot flood the output panel", async () => {
+		const dump = await page.evaluate(async () => {
+			const prog = window.__mkProg({ code: "'y'.repeat(1000000)" });
+			await prog.execute();
+			return prog.querySelector("#prog-output-text").textContent;
+		});
+
+		expect(dump.length).toBeLessThanOrEqual(10000 + "\n… (truncated)".length);
+		expect(dump).toMatch(/^y+\n… \(truncated\)$/);
+	});
+
+	test("a flooding run shows a bounded output panel with the truncation sentinel visible", async () => {
+		const dump = await page.evaluate(async () => {
+			const prog = window.__mkProg({
+				code: "for (var i = 0; i < 2000; i++) console.log('line ' + i);",
+			});
+			await prog.execute();
+			return prog.querySelector("#prog-output-text").textContent;
+		});
+
+		const lines = dump.split("\n");
+		expect(lines.length).toBeLessThanOrEqual(501);
+		expect(lines[0]).toBe("line 0");
+		expect(lines[lines.length - 1]).toBe("[output truncated]");
+	});
+
 	test("error-free run of a component with no expectedOutput or testCases completes", async () => {
 		const result = await page.evaluate(async () => {
 			const prog = window.__mkProg({ code: "1 + 1" });
