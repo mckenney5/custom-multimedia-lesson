@@ -592,4 +592,66 @@ test.describe("state.serialize: fail-soft persistence", () => {
 		expect(result.recoverBlob.prog1.testResults[0].label).toBe("ok");
 		expect(result.recoverBlob.prog1.score).toBe(1);
 	});
+
+	test("a save carrying a stale marker beside real data keeps the data and drops the marker", async () => {
+		const result = await page.evaluate(() => {
+			if (typeof state === "undefined") return { error: "state not defined" };
+
+			window.__ser.setup();
+
+			// The other shape the marker reaches a save file in: not the whole blob,
+			// but a valid component *beside* the marker. That is what a build which
+			// merged the key wrote, so it is what every learner's file still holds —
+			// the test above can only produce the marker-only shape.
+			const saved = state.serialize();
+			saved[saved.length - 1] = JSON.stringify({
+				prog1: {
+					type: "programming",
+					testResults: [
+						{ label: "restored from the LMS", passed: true, expected: 1, actual: 1, error: null },
+					],
+					score: 1,
+					maxScore: 1,
+					completed: true,
+					attempts: 2,
+				},
+				__serializeError: "boom",
+			});
+
+			// Arrive at the page the way a reload does, then restore the save.
+			const before = state.data.delta.pagesState[0].components.prog1;
+			before.score = 0;
+			before.completed = false;
+			before.attempts = 0;
+			before.testResults = [];
+
+			state.deserialize(saved);
+
+			const components = state.data.delta.pagesState[0].components;
+
+			return {
+				componentKeys: Object.keys(components),
+				score: components.prog1.score,
+				completed: components.prog1.completed,
+				attempts: components.prog1.attempts,
+				resultLabel: components.prog1.testResults[0].label,
+				// And the next save of this page, which is where a resident marker
+				// would come back to life.
+				blob: JSON.parse(state.serialize()[saved.length - 1]),
+			};
+		});
+
+		expect(result.error).toBeUndefined();
+		// Dropping the marker must not cost the component it was sitting next to.
+		expect(result.score).toBe(1);
+		expect(result.completed).toBe(true);
+		expect(result.attempts).toBe(2);
+		expect(result.resultLabel).toBe("restored from the LMS");
+		// The marker never becomes resident...
+		expect(result.componentKeys).toEqual(["prog1"]);
+		// ...so the next save is clean, with no trace of it.
+		expect(result.blob.__serializeError).toBeUndefined();
+		expect(Object.keys(result.blob)).toEqual(["prog1"]);
+		expect(result.blob.prog1.score).toBe(1);
+	});
 });
