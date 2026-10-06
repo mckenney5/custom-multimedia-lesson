@@ -1,5 +1,14 @@
 // eslint-disable-next-line no-var
 var debugging = new URLSearchParams(window.location.search).get("debug") === "true";
+
+// Where the in-progress programming draft lives (see CODE_EXECUTION). The
+// product's data policy is that the saved course data holds no copy of the
+// learner's source, so the draft is kept in sessionStorage instead: per tab,
+// surviving a reload, gone when the tab closes — and never handed to
+// lms.saveData(). Scoped per page and component id so two exercises on one page
+// cannot overwrite each other.
+const draftKeyPrefix = "cml:draft:";
+
 let state = {
 	// --- Properties (Data) ---
 	data: {
@@ -65,6 +74,9 @@ let state = {
 		// Finds the required iframe
 		this.lessonFrame = document.getElementById(frameId);
 
+		// Helper: count pages that have at least one completable requirement
+		this._totalCompletableSteps = this._countCompletableSteps(this.data.pages);
+
 		// Attempt to load the course (static data)
 		await this.loadCourseData();
 
@@ -96,6 +108,7 @@ let state = {
 		ui.updateInfo({
 			currentPageIndex: this.data.delta.currentPageIndex,
 			pageCount: this.data.pages.length,
+			totalSteps: this._totalCompletableSteps,
 			progress: this.data.delta.progress,
 		});
 
@@ -227,6 +240,38 @@ let state = {
 
 	},
 
+	// JSON.stringify throws outright on a circular structure ("Converting
+	// circular structure to JSON"), and on a BigInt ("Do not know how to
+	// serialize a BigInt"), and learner code controls what lands in
+	// testResults — one self-referential or BigInt return value would
+	// otherwise disable every save (interval, finalizePage, onbeforeunload)
+	// until that component runs again. The replacer tracks the ancestor path
+	// the same way components._displayText does when rendering: inside a
+	// replacer `this` is the object the value was read off, so popping the
+	// stack back to `this` is the path to the root, and only an ancestor seen
+	// again is a cycle. The pop runs first for every value, before any branch,
+	// so no early return can leave stale ancestors behind. A merely shared
+	// reference is not a cycle and must serialize normally. BigInt has no JSON
+	// form, so it is normalised to its decimal string (a JSON string, distinct
+	// from a JSON number).
+	_stringifyCycleSafe: function(value){
+		const ancestors = [];
+		return JSON.stringify(value, function(_key, val){
+			// The pop runs first for every value, so no branch below it can
+			// return early with stale ancestors left on the stack.
+			while(ancestors.length > 0 && ancestors[ancestors.length - 1] !== this){
+				ancestors.pop();
+			}
+			// BigInt is not an object: it never enters the ancestor stack.
+			if(typeof val === "bigint") return val.toString();
+			if(val !== null && typeof val === "object"){
+				if(ancestors.includes(val)) return "[circular]";
+				ancestors.push(val);
+			}
+			return val;
+		});
+	},
+
 	serialize: function(){
 		const delta = this.data.delta;
 		const data = [
@@ -254,8 +299,24 @@ let state = {
 				complexState = { userAnswers: p.userAnswers };
 			}
 
-			// Stringify and Sanitize
-			data.push(journaler.sanitize(JSON.stringify(complexState)));
+			// Stringify and Sanitize. The replacer above covers the known
+			// learner-reachable cases (cycles, BigInt), but stringify can still
+			// throw before the replacer ever sees a value — a hostile toJSON or
+			// getter, or anything a future structured-clone passthrough admits.
+			// The serialize boundary must be total: one bad page must never
+			// disable every save, so on any throw the slot gets a marker blob
+			// instead. The page layout stays 7 entries (deserialize() still
+			// parses it), and the reason stays visible in the saved data.
+			let blob;
+			try {
+				blob = journaler.sanitize(this._stringifyCycleSafe(complexState));
+			} catch (e) {
+				console.warn("Failed to serialize page state blob", e);
+				blob = journaler.sanitize(JSON.stringify({
+					__serializeError: String((e && e.message) || e),
+				}));
+			}
+			data.push(blob);
 		});
 
 		return data;
@@ -289,6 +350,22 @@ let state = {
 			// Restore Complex State
 			try {
 				const savedBlob = JSON.parse(arr[base + 6] || "{}");
+				// A fail-soft save writes {"__serializeError": "..."} instead of
+				// this page's component state. Never merge that marker: once in
+				// components it would re-persist on every save forever, sitting
+				// next to data that may long since have recovered. Dropping it
+				// here keeps the blob honest about the current state of the page.
+				delete savedBlob.__serializeError;
+				// A save written before the draft moved to sessionStorage still
+				// carries the learner's source in its blob. Restore everything
+				// else, but never that: merging it would re-persist the code on
+				// every save from then on.
+				Object.keys(savedBlob).forEach((componentID) => {
+					const restored = savedBlob[componentID];
+					if(restored && typeof restored === "object"){
+						delete restored.codeContent;
+					}
+				});
 				p.components = { ...p.components, ...savedBlob };
 			} catch (e) {
 				console.warn("Failed to deserialize page state blob", e);
@@ -409,6 +486,7 @@ let state = {
 		ui.updateInfo({
 			currentPageIndex: this.data.delta.currentPageIndex,
 			pageCount: this.data.pages.length,
+			totalSteps: this._totalCompletableSteps,
 			progress: this.data.delta.progress,
 		});
 
@@ -445,6 +523,7 @@ let state = {
 		ui.updateInfo({
 			currentPageIndex: this.data.delta.currentPageIndex,
 			pageCount: this.data.pages.length,
+			totalSteps: this._totalCompletableSteps,
 			progress: this.data.delta.progress,
 		});
 
@@ -500,6 +579,7 @@ let state = {
 		if(confirmed){
 			this.pauseSave = true;
 			console.debug("Resetting progress");
+			this._clearDrafts(); // <-- the in-progress drafts are progress too
 			//localStorage.removeItem("courseProgress");
 			lms.reset(); // <-- set the saved data to nothing
 			this.lessonFrame.src = this.data.pages[0].path + "?_cb=" + Date.now();
@@ -761,6 +841,78 @@ let state = {
 				journaler.log("VIDEO_STATS", `${index},${componentID},${msgData.avgSpeed},${msgData.visiblePct}`);
 				break;
 
+			case "CODE_EXECUTION":
+				journaler.log("CODE_EXEC", `${index},${componentID},score:${msgData.score}/${msgData.maxScore}`);
+
+				if (componentID && pageDelta.components && pageDelta.components[componentID]) {
+					const compState = pageDelta.components[componentID];
+					this._storeDraft(page.name, componentID, msgData.code);
+					compState.score = Math.max(compState.score || 0, Number.isFinite(msgData.score) ? msgData.score : 0);
+					compState.maxScore = Math.max(compState.maxScore || 0, Number.isFinite(msgData.maxScore) ? msgData.maxScore : 0);
+					compState.completed = compState.completed === true || msgData.completed;
+					if (msgData.consumesAttempt !== false) {
+						compState.attempts = (compState.attempts || 0) + 1;
+						compState.testResults = msgData.testResults;
+					}
+
+					// Re-sum total page score
+					let totalScore = 0;
+					for (const key in pageDelta.components) {
+						const s = pageDelta.components[key].score;
+						if (typeof s === "number") totalScore += s;
+					}
+					pageDelta.score = totalScore;
+
+					// Send updated state back to component
+					this.lessonFrame.contentWindow.postMessage({
+						type: "PROGRAMMING_DATA",
+						message: {
+							id: componentID,
+							value: {
+								attemptsLeft: (page.completionRules.attempts || Infinity) - (compState.attempts || 0),
+								hasAttempted: (compState.attempts || 0) > 0,
+								score: compState.score,
+								maxScore: compState.maxScore,
+								testResults: compState.testResults,
+								consumesAttempt: msgData.consumesAttempt !== false,
+							},
+						},
+					}, window.location.origin);
+				}
+				this.finalizePage();
+				break;
+
+			case "GET_PROGRAMMING_DATA":
+				if (componentID && page.components) {
+					const compConfig = page.components.find(c => c.id === componentID);
+					const compState = pageDelta.components[componentID];
+					if (compConfig && compState) {
+						this.lessonFrame.contentWindow.postMessage({
+							type: "PROGRAMMING_DATA",
+							message: {
+								id: componentID,
+								value: {
+									starterCode: compConfig.starterCode || "",
+									language: compConfig.language || "javascript",
+									timeout: compConfig.timeout || 5000,
+									expectedOutput: compConfig.expectedOutput,
+									testCases: compConfig.testCases || [],
+									bannedPatterns: compConfig.bannedPatterns || [],
+									options: compConfig.options || [],
+									savedCode: this._readDraft(page.name, componentID),
+									testResults: compState.testResults,
+									attemptsLeft: (page.completionRules.attempts || Infinity) - (compState.attempts || 0),
+									hasAttempted: (compState.attempts || 0) > 0,
+									score: compState.score,
+									maxScore: compState.maxScore,
+									pageName: page.name,
+								},
+							},
+						}, window.location.origin);
+					}
+				}
+				break;
+
 			case "GET_STUDENT_DATA":
 				const grade = String(Math.floor((completion.calculateOverallGrade(this.data.pages, this.data.delta.pagesState).ratio * 100)));
 				this.lessonFrame.contentWindow.postMessage({ type: "GET_STUDENT_DATA", message: {
@@ -794,6 +946,49 @@ let state = {
 				type: "NONCE_REJECTED",
 				nonce: nonce,
 			}, window.location.origin);
+		}
+	},
+
+	_draftKey: function(pageName, componentId){
+		return `${draftKeyPrefix}${pageName}:${componentId}`;
+	},
+
+	_storeDraft: function(pageName, componentId, code){
+		// A run that never reached the sandbox publishes no draft at all (the
+		// editor only holds the pre-reply placeholder), and overwriting a real
+		// draft with it would lose the learner's work.
+		if(typeof code !== "string") return false;
+		// Storage can refuse — blocked, disabled, out of quota. The draft is
+		// convenience; the attempt and score the learner just earned are not,
+		// so a failed write is swallowed rather than allowed to abandon the run.
+		try {
+			window.sessionStorage.setItem(this._draftKey(pageName, componentId), code);
+			return true;
+		} catch(e) {
+			console.warn(`state._storeDraft: ${this._draftKey(pageName, componentId)} could not be stored, this run will not be restorable:`, e);
+			return false;
+		}
+	},
+
+	_readDraft: function(pageName, componentId){
+		try {
+			return window.sessionStorage.getItem(this._draftKey(pageName, componentId));
+		} catch(e) {
+			console.warn("state._readDraft: stored draft could not be read:", e);
+			return undefined;
+		}
+	},
+
+	// A reset promises the learner their progress is gone, and a reload keeps
+	// sessionStorage alive — so the drafts have to go with it. Only our own
+	// entries: everything else in this tab's storage is not ours to delete.
+	_clearDrafts: function(){
+		try {
+			Object.keys(window.sessionStorage)
+				.filter(key => key.startsWith(draftKeyPrefix))
+				.forEach(key => window.sessionStorage.removeItem(key));
+		} catch(e) {
+			console.warn("state._clearDrafts: stored drafts could not be cleared:", e);
 		}
 	},
 
@@ -874,10 +1069,46 @@ let state = {
 						else if (comp.type === "article") {
 							compState.scrolled = false;
 						}
+						else if (comp.type === "programming") {
+							// No codeContent here: a learner's source is not saved course
+							// data. The in-progress draft lives in sessionStorage (see
+							// CODE_EXECUTION) and the starter code is read from the page
+							// config, so this state holds progress only.
+							compState.testResults = [];
+							compState.score = 0;
+							const pMax = (comp.expectedOutput !== undefined && comp.expectedOutput !== null ? 1 : 0)
+							+ (comp.testCases && Array.isArray(comp.testCases)
+								// Ticket #68: a case that declares no expected is not
+								// gradeable, so it is not a point of the maximum
+								// either. This has to agree with _autograde, which
+								// counts the same rows the same way — otherwise the
+								// Math.max below keeps this inflated number for the
+								// life of the page and the component's own score can
+								// never make the page add up.
+								? comp.testCases.filter(tc => tc && tc.expected !== undefined && tc.expected !== null).length
+								: 0);
+							compState.maxScore = pMax;
+							calculatedMaxScore += pMax;
+							compState.completed = false;
+							compState.attempts = 0;
+						}
 
 						// Add to the map
 						pageState.components[comp.id] = compState;
 					});
+				}
+
+				// Fail closed (ticket #62 / ADR 0006): a page that requires a
+				// submission but declares no quiz/programming component can never
+				// be completed. Authoring-time diagnostic — the learner never
+				// sees it; completion.checkIfComplete refuses the page and the
+				// help modal shows an honest failing "Submission Required" row.
+				if (page.completionRules && page.completionRules.requireSubmission) {
+					const submissionCount = (Array.isArray(page.components) ? page.components : [])
+						.filter(c => c.type === "quiz" || c.type === "programming").length;
+					if (submissionCount === 0) {
+						console.error(`Page '${page.name}' sets requireSubmission but declares no quiz or programming components - fail closed: it can never be completed (see docs/adr/0006-require-submission-fail-closed.md)`);
+					}
 				}
 
 				this.data.delta.pagesState.push(pageState);
@@ -907,6 +1138,18 @@ let state = {
 
 		// Send it to the child iframe
 		this.sendMessage("SET_THEME", themeName);
+	},
+
+// Count pages that have at least one non-trivial completion rule
+	_countCompletableSteps: function(pages){
+		return pages.filter(p => {
+			const r = p.completionRules || {};
+			return (r.watchTime > 0) ||
+			       (r.score > 0) ||
+			       (r.scrolled === true) ||
+			       (r.videoProgress > 0) ||
+			       (r.requireSubmission === true);
+		}).length;
 	},
 
 };

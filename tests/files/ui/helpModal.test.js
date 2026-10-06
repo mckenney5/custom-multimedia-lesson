@@ -181,6 +181,152 @@ test.describe("helpModal", () => {
 		expect(result.scoreDisplayed).toBe(true);
 	});
 
+	test("showPageHelp shows Pending and a fail icon for an incomplete programming component", async () => {
+		const result = await page.evaluate(() => {
+			if(!ui.infoBanner) ui.init();
+			const page = {
+				completionRules: {
+					watchTime: 0,
+					score: 0,
+					scrolled: false,
+					videoProgress: 0,
+					requireSubmission: true,
+				},
+				maxScore: 0,
+				components: [{ id: "prog1", type: "programming" }],
+			};
+			const pageDelta = {
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				components: { prog1: { type: "programming", completed: false } },
+			};
+
+			ui.showPageHelp(page, pageDelta);
+
+			const html = ui.helpContent.innerHTML;
+			const row = html.split("<tr>").find(r => r.includes("Submit all")) || "";
+			return { rowFound: row.length > 0, row, text: ui.helpContent.textContent };
+		});
+
+		expect(result.rowFound).toBe(true);
+		expect(result.text).toContain("Complete Code Assignments");
+		expect(result.row).toContain("Pending");
+		expect(result.row).toContain("status-fail");
+	});
+
+	test("showPageHelp shows Submitted and a pass icon for a completed programming component", async () => {
+		const result = await page.evaluate(() => {
+			if(!ui.infoBanner) ui.init();
+			const page = {
+				completionRules: {
+					watchTime: 0,
+					score: 0,
+					scrolled: false,
+					videoProgress: 0,
+					requireSubmission: true,
+				},
+				maxScore: 0,
+				components: [{ id: "prog1", type: "programming" }],
+			};
+			const pageDelta = {
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				components: { prog1: { type: "programming", completed: true } },
+			};
+
+			ui.showPageHelp(page, pageDelta);
+
+			const html = ui.helpContent.innerHTML;
+			const row = html.split("<tr>").find(r => r.includes("Submit all")) || "";
+			return { rowFound: row.length > 0, row, text: ui.helpContent.textContent };
+		});
+
+		expect(result.rowFound).toBe(true);
+		expect(result.text).toContain("Complete Code Assignments");
+		expect(result.row).toContain("Submitted");
+		expect(result.row).toContain("status-pass");
+	});
+
+	test("showPageHelp keeps the Submit Quizzes label for quiz-only pages", async () => {
+		const result = await page.evaluate(() => {
+			if(!ui.infoBanner) ui.init();
+			const page = {
+				completionRules: {
+					watchTime: 0,
+					score: 0,
+					scrolled: false,
+					videoProgress: 0,
+					requireSubmission: true,
+				},
+				maxScore: 0,
+				components: [{ id: "quiz1", type: "quiz" }],
+			};
+			const pageDelta = {
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				components: { quiz1: { type: "quiz", completed: true } },
+			};
+
+			ui.showPageHelp(page, pageDelta);
+
+			const html = ui.helpContent.innerHTML;
+			const row = html.split("<tr>").find(r => r.includes("Submit all")) || "";
+			return { row, text: ui.helpContent.textContent };
+		});
+
+		expect(result.row).toContain("<td>Submit Quizzes</td>");
+		expect(result.row).toContain("Submitted");
+		expect(result.row).toContain("status-pass");
+		expect(result.text).not.toContain("Complete Code Assignments");
+	});
+
+	test("showPageHelp mixes labels on a page with both a quiz and a programming component", async () => {
+		const result = await page.evaluate(() => {
+			if(!ui.infoBanner) ui.init();
+			const page = {
+				completionRules: {
+					watchTime: 0,
+					score: 0,
+					scrolled: false,
+					videoProgress: 0,
+					requireSubmission: true,
+				},
+				maxScore: 0,
+				components: [
+					{ id: "quiz1", type: "quiz" },
+					{ id: "prog1", type: "programming" },
+				],
+			};
+			const pageDelta = {
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				components: {
+					quiz1: { type: "quiz", completed: true },
+					prog1: { type: "programming", completed: false },
+				},
+			};
+
+			ui.showPageHelp(page, pageDelta);
+
+			const html = ui.helpContent.innerHTML;
+			const row = html.split("<tr>").find(r => r.includes("Submit all")) || "";
+			return { rowFound: row.length > 0, row, text: ui.helpContent.textContent };
+		});
+
+		expect(result.rowFound).toBe(true);
+		expect(result.text).toContain("Submit Quizzes & Assignments");
+		expect(result.row).toContain("Pending");
+		expect(result.row).toContain("status-fail");
+	});
+
 	test("showGeneralHelp should render help iframe", async () => {
 		const result = await page.evaluate(() => {
 			if(!ui.infoBanner) ui.init();
@@ -302,5 +448,115 @@ test.describe("helpModal", () => {
 
 		expect(result.firstRender).toBe(true);
 		expect(result.secondRender).toBe(true);
+	});
+
+	test("showPageHelp and completion.checkIfComplete agree on every requireSubmission fixture", async () => {
+		const result = await page.evaluate(() => {
+			if (!ui.infoBanner) ui.init();
+			if (typeof completion === "undefined") return { error: "completion not defined" };
+
+			const makeRules = () => ({
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				requireSubmission: true,
+			});
+			const makeDelta = (components) => ({
+				watchTime: 0,
+				score: 0,
+				scrolled: false,
+				videoProgress: 0,
+				...(components === undefined ? {} : {components}),
+			});
+
+			// Every requireSubmission shape that can leave the gate without
+			// per-component state to read. Each must render an honest failing
+			// row AND report the same verdict, so the learner is never told
+			// "Submitted" while state.next() still blocks the page.
+			const fixtures = [
+				{
+					name: "noKey",
+					// The page omits the `components` key entirely.
+					page: {completionRules: makeRules(), maxScore: 0},
+					delta: makeDelta({}),
+					expectLabel: "Submission Required",
+					forbidLabel: "Submit Quizzes",
+				},
+				{
+					name: "articleOnly",
+					// The page declares a component, but none is a submission.
+					page: {
+						completionRules: makeRules(),
+						maxScore: 0,
+						components: [{id: "art1", type: "article"}],
+					},
+					delta: makeDelta({}),
+					expectLabel: "Submission Required",
+					forbidLabel: "Submit Quizzes",
+				},
+				{
+					name: "declaredQuizNoDeltaState",
+					// The page does declare a submission, but the delta carries
+					// no component state for it at all (no `components` key).
+					page: {
+						completionRules: makeRules(),
+						maxScore: 0,
+						components: [{id: "quiz1", type: "quiz"}],
+					},
+					delta: makeDelta(undefined),
+					expectLabel: "Submit Quizzes",
+					forbidLabel: "Complete Code Assignments",
+				},
+			];
+
+			const summarize = (row, fixture) => ({
+				found: row.length > 0,
+				label: row.includes(fixture.expectLabel),
+				forbidden: row.includes(fixture.forbidLabel),
+				pending: row.includes("Pending"),
+				submitted: row.includes("Submitted"),
+				failIcon: row.includes("status-fail"),
+				passIcon: row.includes("status-pass"),
+			});
+
+			const verdicts = {};
+			const rows = {};
+			for (const fixture of fixtures) {
+				let verdict = null;
+				let threw = null;
+				try {
+					verdict = completion.checkIfComplete(fixture.page, fixture.delta);
+				} catch (e) {
+					threw = e.message;
+				}
+				ui.showPageHelp(fixture.page, fixture.delta);
+				const html = ui.helpContent.innerHTML;
+				const row = html.split("<tr>").find(r => r.includes("Submit all")) || "";
+				rows[fixture.name] = summarize(row, fixture);
+				verdicts[fixture.name] = {verdict, threw};
+			}
+
+			return {
+				error: undefined,
+				rows,
+				verdicts,
+				// ui and completion must agree on the verdict for every fixture.
+				agreement: Object.keys(verdicts).every(k => verdicts[k].threw === null && verdicts[k].verdict === false),
+			};
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(Object.keys(result.rows)).toEqual(["noKey", "articleOnly", "declaredQuizNoDeltaState"]);
+		for (const fixture of Object.values(result.rows)) {
+			expect(fixture.found).toBe(true);
+			expect(fixture.label).toBe(true);
+			expect(fixture.forbidden).toBe(false);
+			expect(fixture.pending).toBe(true);
+			expect(fixture.submitted).toBe(false);
+			expect(fixture.failIcon).toBe(true);
+			expect(fixture.passIcon).toBe(false);
+		}
+		expect(result.agreement).toBe(true);
 	});
 });

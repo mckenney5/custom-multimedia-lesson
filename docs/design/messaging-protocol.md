@@ -341,6 +341,8 @@ The 3-retry cap prevents infinite loops. In practice, retries should rarely fire
 | `SEND_META` | Request page metadata | `""` |
 | `QUIZ_RESULT` | Quiz submission | `{ id, value: { score, maxScore, answers } }` |
 | `GET_QUIZ_DATA` | Request quiz state | `{ id, value: "" }` |
+| `CODE_EXECUTION` | Programming run results (code, stdout, grade). `consumesAttempt: false` marks a run that never reached the sandbox (config not loaded / banned pattern) so it does not count against `completionRules.attempts`; omit it for a real run. `code` is the editor contents and is **not** saved course data: the parent keeps it as this tab's draft in `sessionStorage` (`cml:draft:<pageName>:<componentId>`), which is what a reload in the same tab restores and what `state.reset()` clears. On the config-not-loaded path it is `undefined` and no draft is written — the editor only holds the pre-reply placeholder then, and storing it would overwrite the learner's real draft | `{ id, value: { code, stdout, returnValue, error, testResults, score, maxScore, completed, consumesAttempt? } }` |
+| `GET_PROGRAMMING_DATA` | Request programming component state | `{ id, value: "" }` |
 
 ### Parent → Child
 
@@ -354,6 +356,7 @@ The 3-retry cap prevents infinite loops. In practice, retries should rarely fire
 | `QUIZ_RESULTS` | Quiz results notification | result data |
 | `SET_THEME` | Theme switch | theme name string |
 | `NONCE_REJECTED` | Nonce validation failure | `{ nonce }` |
+| `PROGRAMMING_DATA` | Programming state response — after `GET_PROGRAMMING_DATA` it carries config + the tab's stored draft; after `CODE_EXECUTION` only `attemptsLeft`, `hasAttempted`, `score`, `maxScore`, `testResults`, `consumesAttempt`. `savedCode` is read from `sessionStorage` on the `GET_PROGRAMMING_DATA` reply, never from the save file, and is `null` when the learner has no draft in this tab (the component then keeps `starterCode`). `testResults` is always the persisted value, and `consumesAttempt: false` tells the component to keep it as state without repainting the results panel (the run produced nothing); the field is absent on `GET_PROGRAMMING_DATA` replies, which do render | `{ id, value: { starterCode, language, timeout, expectedOutput, testCases, bannedPatterns, options, savedCode, testResults, attemptsLeft, hasAttempted, score, maxScore, consumesAttempt? } }` |
 
 ---
 

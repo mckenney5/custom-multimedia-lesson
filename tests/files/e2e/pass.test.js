@@ -1,5 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const { setupE2EPage } = require("../../helpers/e2e-setup.js");
+const { completeProgrammingExercises } = require("../../helpers/navigation.js");
 
 test.describe("Complete course with passing grade", () => {
 	test.setTimeout(90000);
@@ -71,7 +72,15 @@ test.describe("Complete course with passing grade", () => {
 			await page.locator("#next").click();
 		});
 
-		// === PAGE 3: finish.html ===
+		// === PAGE 3: programming_example.html ===
+		await test.step("programming page: complete both exercises correctly and advance", async () => {
+			await expect(iframe.locator("h1")).toHaveText("JavaScript Basics");
+			await completeProgrammingExercises(iframe);
+			await page.locator("#info-banner.warning").waitFor({ timeout: 15000 });
+			await page.locator("#next").click();
+		});
+
+		// === PAGE 4: finish.html ===
 		await test.step("finish page: wait and trigger end screen", async () => {
 			await expect(iframe.locator("h1")).toHaveText("Congrats!");
 			await page.locator("#info-banner.warning").waitFor({ timeout: 15000 });

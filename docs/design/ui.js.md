@@ -229,14 +229,17 @@ URLs in certificate images are double-validated: first via `utils.validateUrl()`
 
 ## Test Coverage
 
-Located in `tests/files/ui/` — ~85 test cases across 7 files:
+Located in `tests/files/ui/` — 87 test cases across 7 files:
 
-| Test file | What it covers |
-|---|---|
-| `bannerMessage.test.js` | Error/warning CSS classes, icon rendering, HTML escaping, hide/show, role attributes |
-| `updateInfo.test.js` | Progress bar width, page counter, edge cases (0%, 100%, single-page, multi-update) |
-| `helpModal.test.js` | Open/close lifecycle, all 4 menu buttons, completion table rendering, iframe rendering, focus restoration, Escape key, no-arg `showPageHelp()` |
-| `settingsModal.test.js` | Open/close, theme selector rendering, callback firing, focus restoration |
-| `showEndScreen.test.js` | Pass/fail screens, cert button visibility, score display, XSS escaping (scores, titles, attribute-breaking payloads), `onPrint` callback, `onQuit` callback, `_printData` storage |
-| `printCertificate.test.js` | Placeholder substitution, logo/signature/watermark inclusion rules, XSS prevention (URL injection, script injection, attribute breakout in all placeholders), `window.print()` call, NaN/zero edge cases |
-| `regression.test.js` | Regression guards: `showPageHelp` without args (state-independent), `_onRefresh` save+reload, `showEndScreen` print callback wiring |
+| Test file | Tests | What it covers |
+|---|---|---|
+| `bannerMessage.test.js` | 8 | Error/warning CSS classes, icon rendering, HTML escaping, hide/show, role attributes |
+| `updateInfo.test.js` | 5 | Progress bar width, page counter, edge cases (0%, 100%, single-page, multi-update) |
+| `helpModal.test.js` | 15 | Open/close lifecycle, all 4 menu buttons, completion table rendering with per-requirement rows, iframe rendering, focus restoration, no-arg `showPageHelp()`, the Pending/fail and Submitted/pass labels for a programming component, the quiz-only Submit Quizzes label, mixed quiz+programming labels, and a fixture-array parity test asserting `showPageHelp` and `completion.checkIfComplete` reach the same verdict on every `requireSubmission` shape — including the fail-closed Submission Required row when the page has no submission components, and a declared quiz whose page delta carries no component state |
+| `settingsModal.test.js` | 6 | Open/close, theme selector rendering, callback firing, focus restoration |
+| `showEndScreen.test.js` | 15 | Pass/fail screens, cert button visibility, score display, XSS escaping (scores, titles, attribute-breaking payloads), `onPrint` callback, `onQuit` callback, `_printData` storage |
+| `printCertificate.test.js` | 34 | Placeholder substitution, logo/signature/watermark inclusion rules, XSS prevention (URL injection, script injection, attribute breakout in all placeholders), `window.print()` call, NaN/zero edge cases |
+| `regression.test.js` | 4 | Regression guards: `showPageHelp` without args (state-independent), `_onRefresh` save+reload, `showEndScreen` print callback wiring |
+
+Not covered: there is no Escape-key handling in `ui.js`, and therefore no test
+for one. The earlier version of this table claimed otherwise.

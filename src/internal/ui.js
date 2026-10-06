@@ -48,16 +48,16 @@ const ui = {
 		return this.infoBanner.style.display === "flex";
 	},
 
-	updateInfo: function({currentPageIndex, pageCount, progress}) {
+	updateInfo: function({currentPageIndex, pageCount, totalSteps, progress}) {
 		const currentPage = currentPageIndex + 1;
-		const totalSteps = Math.max(1, pageCount - 1);
-		const pct = Math.round((progress / totalSteps) * 100);
+		const steps = Number.isFinite(totalSteps) && totalSteps > 0 ? totalSteps : Math.max(1, pageCount - 1);
+		const pct = Math.min(100, Math.round((progress / steps) * 100));
 
 		this.infoBar.innerHTML = `
 			<div id="info-bar-fill" style="width: ${pct}%;"></div>
 			<span id="info-bar-text">Page ${currentPage} of ${pageCount} &nbsp;&nbsp;&bull;&nbsp;&nbsp; ${pct}% Complete</span>
 		`;
- 	},
+	},
 
 	toggleHelp: function() {
 		if (this.helpOverlay.style.display === "flex") {
@@ -117,10 +117,31 @@ const ui = {
 		const rules = page.completionRules;
 		const scorePct = page.maxScore > 0 ? (pageDelta.score / page.maxScore) : 0;
 
-		let quizzesSatisfied = true;
+		let submissionsSatisfied = true;
+		let submissionLabel = "Submit Quizzes";
 		if (rules.requireSubmission) {
-			const quizComponents = (page.components || []).filter(c => c.type === "quiz");
-			quizzesSatisfied = quizComponents.every(q => pageDelta.components[q.id] && pageDelta.components[q.id].completed);
+			const submissions = (page.components || []).filter(c => c.type === "quiz" || c.type === "programming");
+			if (submissions.length === 0) {
+				// Fail closed (ticket #62 / ADR 0006): no quiz/programming
+				// exists on this page, so the default label would name
+				// requirements that cannot be met. Render an honest failing
+				// row instead; state.loadCourseData console.errors the page
+				// for the author.
+				submissionsSatisfied = false;
+				submissionLabel = "Submission Required";
+			} else {
+				const quizCount = submissions.filter(c => c.type === "quiz").length;
+				const progCount = submissions.length - quizCount;
+				if (quizCount > 0 && progCount > 0) {
+					submissionLabel = "Submit Quizzes & Assignments";
+				} else if (progCount > 0) {
+					submissionLabel = "Complete Code Assignments";
+				}
+				submissionsSatisfied = submissions.every(sub => {
+					const compState = pageDelta.components && pageDelta.components[sub.id];
+					return compState && compState.completed === true;
+				});
+			}
 		}
 
 		const checks = {
@@ -128,7 +149,7 @@ const ui = {
 			score: scorePct >= rules.score,
 			scrolled: !rules.scrolled || pageDelta.scrolled,
 			videoProgress: pageDelta.videoProgress >= rules.videoProgress,
-			requireSubmission: quizzesSatisfied,
+			requireSubmission: submissionsSatisfied,
 		};
 
 		const formatIcon = (passed) => passed ? '<span aria-hidden="true" class="status-pass">✅</span>' : '<span aria-hidden="true" class="status-fail">❌</span>';
@@ -151,7 +172,7 @@ const ui = {
 		if (rules.score > 0) html += `<tr><td>Minimum Score</td><td>${utils.escapeHTML(String(Math.round(rules.score * 100)))}%</td><td>${utils.escapeHTML(String(Math.round(scorePct * 100)))}%</td><td>${formatIcon(checks.score)}</td></tr>`;
 		if (rules.scrolled) html += `<tr><td>Read Entire Article</td><td>Scroll to Bottom</td><td>${utils.escapeHTML(pageDelta.scrolled ? "Scrolled" : "Not Scrolled")}</td><td>${formatIcon(checks.scrolled)}</td></tr>`;
 		if (rules.videoProgress > 0) html += `<tr><td>Watch Video</td><td>${utils.escapeHTML(String(Math.round(rules.videoProgress * 100)))}%</td><td>${utils.escapeHTML(String(Math.round(pageDelta.videoProgress * 100)))}%</td><td>${formatIcon(checks.videoProgress)}</td></tr>`;
-		if (rules.requireSubmission) html += `<tr><td>Submit Quizzes</td><td>Submit all</td><td>${utils.escapeHTML(quizzesSatisfied ? "Submitted" : "Pending")}</td><td>${formatIcon(checks.requireSubmission)}</td></tr>`;
+		if (rules.requireSubmission) html += `<tr><td>${utils.escapeHTML(submissionLabel)}</td><td>Submit all</td><td>${utils.escapeHTML(submissionsSatisfied ? "Submitted" : "Pending")}</td><td>${formatIcon(checks.requireSubmission)}</td></tr>`;
 
 		html += `</table>
 			<div class="help-btn-group-row">

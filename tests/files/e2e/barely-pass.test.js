@@ -1,4 +1,5 @@
 const { test, expect } = require("@playwright/test");
+const { completeProgrammingExercises, clickAndWaitForReload } = require("../../helpers/navigation.js");
 
 test.describe("Complete course with barely-passing grade", () => {
 	test.setTimeout(120000);
@@ -130,7 +131,15 @@ test.describe("Complete course with barely-passing grade", () => {
 			await page.locator("#next").click();
 		});
 
-		// === PAGE 3: finish.html ===
+		// === PAGE 3: programming_example.html ===
+		await test.step("programming page: complete both exercises correctly and advance", async () => {
+			await expect(iframe.locator("h1")).toHaveText("JavaScript Basics");
+			await completeProgrammingExercises(iframe);
+			await page.locator("#info-banner.warning").waitFor({ timeout: 15000 });
+			await page.locator("#next").click();
+		});
+
+		// === PAGE 4: finish.html ===
 		await test.step("finish page: settings, help, refresh, prev verification, advance", async () => {
 			await expect(iframe.locator("h1")).toHaveText("Congrats!", { timeout: 15000 });
 
@@ -148,14 +157,16 @@ test.describe("Complete course with barely-passing grade", () => {
 			await page.locator("button.help-action-btn", { hasText: "Help with Current Page" }).click();
 			await expect(page.locator("#help-content")).toContainText("Requirement");
 			await page.locator("button.help-action-btn", { hasText: "Back to Menu" }).click();
-			await page.locator("button.help-action-btn", { hasText: "Refresh This Web Page" }).click();
-
-			await page.waitForFunction(() =>
-				typeof state !== "undefined" && state.initialized,
+			await clickAndWaitForReload(
+				page,
+				page.locator("button.help-action-btn", { hasText: "Refresh This Web Page" }),
 			);
 
 			const pageIdx = await page.evaluate(() => state.data.delta.currentPageIndex);
-			expect(pageIdx).toBe(3);
+			expect(pageIdx).toBe(4);
+
+			await page.locator("#prev").click();
+			await expect(iframe.locator("h1")).toHaveText("JavaScript Basics", { timeout: 10000 });
 
 			await page.locator("#prev").click();
 			await expect(iframe.locator("h1")).toHaveText("Page 4", { timeout: 10000 });
@@ -168,6 +179,9 @@ test.describe("Complete course with barely-passing grade", () => {
 				state.data.delta.pagesState[2].components["quiz4"]?.completed,
 			);
 			expect(quiz4Completed).toBe(true);
+
+			await page.locator("#next").click();
+			await expect(iframe.locator("h1")).toHaveText("JavaScript Basics", { timeout: 10000 });
 
 			await page.locator("#next").click();
 			await expect(iframe.locator("h1")).toHaveText("Congrats!", { timeout: 10000 });
@@ -191,7 +205,7 @@ test.describe("Complete course with barely-passing grade", () => {
 			await expect(helpOverlay).toBeVisible({ timeout: 15000 });
 			await expect(helpOverlay).toHaveCSS("display", "flex");
 			await expect(helpOverlay.locator("#help-content")).toContainText("Course Completed");
-			await expect(helpOverlay.locator("#help-content")).toContainText("71%");
+			await expect(helpOverlay.locator("#help-content")).toContainText("83%");
 
 			const certBtn = helpOverlay.locator("button", { hasText: "Print Certificate" });
 			await expect(certBtn).toBeVisible();
@@ -199,7 +213,7 @@ test.describe("Complete course with barely-passing grade", () => {
 			await page.evaluate(() => window.print = () => {});
 			await certBtn.click();
 			const certArea = page.locator("#certificate-print-area");
-			await expect(certArea).toContainText("71%");
+			await expect(certArea).toContainText("83%");
 			await expect(certArea).toContainText("Student");
 
 			const report = await page.evaluate(() => {
@@ -232,6 +246,7 @@ test.describe("Complete course with barely-passing grade", () => {
 				"PAGE_COMPLETE",
 				"PAGE_NEXT",
 				"PAGE_PREV",
+				"CODE_EXEC",
 				"COURSE_COMPLETE",
 			];
 
@@ -260,16 +275,14 @@ test.describe("Complete course with barely-passing grade", () => {
 		// === RESET ===
 		await test.step("reset via help modal: dismiss end screen, reset, verify fresh state", async () => {
 			await page.locator("button.help-action-btn", { hasText: "Review Course Materials" }).click();
-			await page.waitForFunction(() =>
-				typeof state !== "undefined" && state.initialized,
-			);
+			await expect(page.locator("#help-overlay")).not.toBeVisible({ timeout: 5000 });
 
 			page.on("dialog", dialog => dialog.accept());
 
 			await page.locator("#help-btn").click();
-			await page.locator("button.help-action-btn", { hasText: "Reset Course Progress" }).click();
-			await page.waitForFunction(() =>
-				typeof state !== "undefined" && state.initialized,
+			await clickAndWaitForReload(
+				page,
+				page.locator("button.help-action-btn", { hasText: "Reset Course Progress" }),
 			);
 
 			await expect(iframe.locator("h1")).toHaveText("Lesson Directions", { timeout: 10000 });

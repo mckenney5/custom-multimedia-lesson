@@ -47,6 +47,7 @@ const journaler = {
 		"ADVANCE_DENIED" : "t",
 		"PAGE_IDLE" : "u",
 		"SUSPICIOUS_ACTION" : "v",
+		"CODE_EXEC" : "w",
 	},
 
 	_decoding: {
@@ -82,6 +83,7 @@ const journaler = {
 		"t": "ADVANCE_DENIED",
 		"u": "PAGE_IDLE",
 		"v": "SUSPICIOUS_ACTION",
+		"w": "CODE_EXEC",
 	},
 
 	initialized: false,

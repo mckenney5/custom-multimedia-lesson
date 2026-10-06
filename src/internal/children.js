@@ -138,6 +138,8 @@ const child = {
 		const id = event.data.id; // <-- Capture the ID from Parent
 		console.debug(`Child: recieved '${subject}'\n `, event);
 
+		if (event.origin === "null") return;
+
 		if(event.origin !== this.parentOrigin){
 			console.error("Blocked message --> ", event);
 			return;
@@ -174,6 +176,9 @@ const child = {
 				break;
 			case "SET_THEME":
 				document.documentElement.setAttribute("data-theme", message);
+				break;
+			case "PROGRAMMING_DATA":
+				this.events.fire("programming-data", message);
 				break;
 			case "NONCE_REJECTED":
 				if(!this._lastSent) break;

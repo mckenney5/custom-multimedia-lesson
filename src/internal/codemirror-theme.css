@@ -1,0 +1,116 @@
+/* ==========================================================================
+ *  CODEMIRROR CML THEME — uses project CSS variables
+ *  Automatically adapts to light / dark / high-contrast via data-theme on :root
+ * ========================================================================== */
+
+.cm-s-cml {
+	/* Editor background & text */
+	background-color: var(--bg-panel);
+	color: var(--text-main);
+}
+
+.cm-s-cml .CodeMirror-gutters {
+	background-color: var(--bg-main);
+	border-right: 1px solid var(--border-color);
+	color: var(--text-muted);
+}
+
+.cm-s-cml .CodeMirror-linenumber {
+	color: var(--text-muted);
+	padding: 0 8px 0 4px;
+}
+
+.cm-s-cml .CodeMirror-cursor {
+	border-left: 1px solid var(--text-main);
+}
+
+.cm-s-cml .CodeMirror-selected {
+	background: var(--brand-100);
+}
+
+.cm-s-cml .CodeMirror-line::selection,
+.cm-s-cml .CodeMirror-line > span::selection,
+.cm-s-cml .CodeMirror-line > span > span::selection {
+	background: var(--brand-100);
+}
+
+.cm-s-cml .CodeMirror-line::-moz-selection,
+.cm-s-cml .CodeMirror-line > span::-moz-selection,
+.cm-s-cml .CodeMirror-line > span > span::-moz-selection {
+	background: var(--brand-100);
+}
+
+/* Token colors — use brand and semantic variables */
+.cm-s-cml .cm-keyword { color: var(--brand-800); font-weight: 600; }
+.cm-s-cml .cm-atom { color: var(--brand); }
+.cm-s-cml .cm-number { color: var(--brand); }
+.cm-s-cml .cm-def { color: var(--brand-800); }
+.cm-s-cml .cm-variable { color: var(--text-main); }
+.cm-s-cml .cm-variable-2 { color: var(--text-main); }
+.cm-s-cml .cm-variable-3 { color: var(--text-muted); }
+.cm-s-cml .cm-property { color: var(--text-main); }
+.cm-s-cml .cm-operator { color: var(--brand); }
+.cm-s-cml .cm-comment { color: var(--text-muted); font-style: italic; }
+.cm-s-cml .cm-string { color: var(--brand-700); }
+.cm-s-cml .cm-string-2 { color: var(--brand-700); }
+.cm-s-cml .cm-meta { color: var(--text-muted); }
+.cm-s-cml .cm-qualifier { color: var(--text-muted); }
+.cm-s-cml .cm-builtin { color: var(--brand-800); }
+.cm-s-cml .cm-bracket { color: var(--text-main); }
+.cm-s-cml .cm-tag { color: var(--brand-800); }
+.cm-s-cml .cm-attribute { color: var(--brand); }
+.cm-s-cml .cm-header { color: var(--brand-800); font-weight: 600; }
+.cm-s-cml .cm-quote { color: var(--text-muted); }
+.cm-s-cml .cm-hr { border-top: 1px solid var(--border-color); }
+.cm-s-cml .cm-link { color: var(--brand); }
+
+/* Active line highlight */
+.cm-s-cml .CodeMirror-activeline-background {
+	background: var(--bg-content);
+}
+
+/* Matching brackets */
+.cm-s-cml .CodeMirror-matchingbracket {
+	color: var(--brand-800);
+	text-decoration: underline;
+}
+.cm-s-cml .CodeMirror-nonmatchingbracket {
+	color: var(--danger);
+	text-decoration: underline;
+}
+
+/* Search highlight */
+.cm-s-cml .CodeMirror-searching {
+	background: var(--warning-bg);
+	color: var(--warning-text);
+}
+
+/* Fold markers */
+.cm-s-cml .CodeMirror-foldgutter {
+	background: var(--bg-main);
+	border-right: 1px solid var(--border-color);
+}
+.cm-s-cml .CodeMirror-foldgutter-open,
+.cm-s-cml .CodeMirror-foldgutter-folded {
+	color: var(--text-main);
+}
+
+/* Scrollbar (WebKit) */
+.cm-s-cml ::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+.cm-s-cml ::-webkit-scrollbar-track {
+	background: var(--bg-main);
+}
+.cm-s-cml ::-webkit-scrollbar-thumb {
+	background: var(--border-color);
+	border-radius: 5px;
+	border: 2px solid var(--bg-main);
+}
+.cm-s-cml ::-webkit-scrollbar-thumb:hover {
+	background: var(--text-muted);
+}
+
+/* High contrast specific overrides are automatic via CSS variables */
+/* No extra rules needed — :root[data-theme="high-contrast"] redefines all vars */

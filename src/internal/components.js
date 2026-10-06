@@ -1,6 +1,12 @@
 /* ==========================================================================
  BASE CLASS: The foundation for all course widgets          *
  ========================================================================== */
+
+// Character budget for the output panel of a programming run. Same size as
+// the sandbox's own stdout capture cap, so output that survives capture is
+// shown in full and only an unbounded return value or error is cut here.
+const MAX_OUTPUT_CHARS = 10000;
+
 class CourseComponent extends HTMLElement {
 	constructor() {
 		super();
@@ -964,7 +970,688 @@ class CourseQuiz extends CourseComponent {
 	}
 }
 
+/* ==========================================================================
+ *  PROGRAMMING COMPONENT: <course-programming></course-programming>
+ *  ========================================================================== */
+class CourseProgramming extends CourseComponent {
+	static get observedAttributes() {
+		return ["language"];
+	}
+
+	attributeChangedCallback(name, oldValue, newValue) {
+		if (name === "language" && this.editor) {
+			this.editor.setOption("mode", this._modeForLanguage(newValue));
+		}
+	}
+
+	connectedCallback() {
+		super.connectedCallback();
+		this.send("GET_PROGRAMMING_DATA", "");
+	}
+
+	render() {
+		const lang = this.attr("language", "javascript");
+		const config = this._componentConfig || {};
+
+		this.innerHTML = `
+			<div class="prog-container">
+				<div class="prog-toolbar">
+					<span class="prog-lang-badge">${lang}</span>
+					<span class="prog-score" role="status" aria-live="polite">Best score: —</span>
+					<span class="prog-attempts" role="status" aria-live="polite">Attempts left: —</span>
+					<button class="prog-btn-run" id="prog-btn-run">▶ Run</button>
+					<button class="prog-btn-reset" id="prog-btn-reset">↺ Reset</button>
+				</div>
+				<div class="prog-editor" id="prog-editor"></div>
+				<div class="prog-output" id="prog-output">
+					<div class="prog-output-header">Output</div>
+					<pre class="prog-output-text" id="prog-output-text"></pre>
+				</div>
+				<div class="prog-results" id="prog-results" style="display:none">
+					<div class="prog-results-header">Test Results</div>
+					<div class="prog-results-list" id="prog-results-list"></div>
+				</div>
+			</div>
+		`;
+
+		// Inject CodeMirror CML theme CSS if not already present
+		if (!document.getElementById("cml-codemirror-theme")) {
+			const link = document.createElement("link");
+			link.id = "cml-codemirror-theme";
+			link.rel = "stylesheet";
+			link.href = "internal/codemirror-theme.css";
+			document.head.appendChild(link);
+		}
+
+		const editorDiv = this.querySelector("#prog-editor");
+		const starterCode = config.starterCode || "// Write your code here\n";
+
+		this.editor = CodeMirror(editorDiv, {
+			value: this._savedCode || starterCode,
+			mode: this._modeForLanguage(lang),
+			theme: "cml",
+			lineNumbers: true,
+			matchBrackets: true,
+			indentUnit: 2,
+			tabSize: 2,
+			lineWrapping: false,
+			viewportMargin: Infinity,
+			extraKeys: {
+				"Ctrl-Enter": () => this.execute(),
+				"Cmd-Enter": () => this.execute(),
+			},
+		});
+	}
+
+	attachListeners() {
+		this.querySelector("#prog-btn-run").addEventListener("click", () => this.execute());
+		this.querySelector("#prog-btn-reset").addEventListener("click", () => this._resetCode());
+
+		this.editor.on("change", () => {
+			this._savedCode = this.editor.getValue();
+		});
+
+		this._boundProgHandler = this._handleProgrammingData.bind(this);
+		window.addEventListener("programming-data", this._boundProgHandler);
+	}
+
+	disconnectedCallback() {
+		if (this._boundProgHandler) {
+			window.removeEventListener("programming-data", this._boundProgHandler);
+		}
+		super.disconnectedCallback();
+	}
+
+	_modeForLanguage(lang) {
+		const map = {
+			javascript: "javascript",
+			js: "javascript",
+			python: "python",
+			html: "htmlmixed",
+			css: "css",
+			java: "text/x-java",
+		};
+		return map[lang] || "javascript";
+	}
+
+	async execute() {
+		if (this._runInFlight) return;
+		if (this.attemptsLeft <= 0) {
+			this._markRunButtonExhausted();
+			return;
+		}
+
+		const code = this.editor.getValue();
+		const config = this._componentConfig || {};
+		const timeout = config.timeout || 5000;
+
+		const btn = this.querySelector("#prog-btn-run");
+		btn.disabled = true;
+		btn.textContent = "⏳ Running...";
+
+		const outputDiv = this.querySelector("#prog-output-text");
+		const resultsDiv = this.querySelector("#prog-results");
+		const resultsList = this.querySelector("#prog-results-list");
+
+		outputDiv.textContent = "";
+		resultsDiv.style.display = "none";
+
+		if (!this._componentConfig) {
+			outputDiv.textContent = "Error: Component configuration not loaded yet. Please wait.";
+			this.send("CODE_EXECUTION", {
+				// No draft to publish: until the first reply the editor only holds
+				// the placeholder, never the real draft, so sending it would
+				// overwrite this tab's stored draft (sessionStorage, see
+				// state._storeDraft) with a throwaway string.
+				code: undefined,
+				stdout: [],
+				returnValue: undefined,
+				error: "Component configuration not loaded",
+				testResults: [],
+				score: 0,
+				maxScore: 0,
+				completed: false,
+				consumesAttempt: false,
+			});
+			btn.disabled = false;
+			btn.textContent = "▶ Run";
+			return;
+		}
+
+		const validation = this._validateCode(code, config);
+		if (!validation.valid) {
+			outputDiv.textContent = `Error: ${validation.error}`;
+			this.send("CODE_EXECUTION", {
+				code,
+				stdout: [],
+				returnValue: undefined,
+				error: validation.error,
+				testResults: [],
+				score: 0,
+				maxScore: 0,
+				completed: false,
+				consumesAttempt: false,
+			});
+			btn.disabled = false;
+			btn.textContent = "▶ Run";
+			return;
+		}
+
+		this._runInFlight = true;
+		if (Number.isFinite(this.attemptsLeft)) this.attemptsLeft--;
+
+		try {
+			const testCases = config.testCases || [];
+			const { stdout, returnValue, error, testResults: sandboxTestResults } =
+				await sandbox.evaluate(code, { timeout, testCases });
+
+			const lines = [];
+			if (stdout.length > 0) lines.push(stdout.join("\n"));
+			if (returnValue !== undefined) lines.push(String(returnValue));
+			if (error) lines.push(`Error: ${error}`);
+			outputDiv.textContent = this._boundedDump(lines.join("\n")) || "(no output)";
+
+			const grade = this._autograde(config, stdout, returnValue, error, sandboxTestResults);
+			// Gated on having rows, not on having something to count: a case that
+			// declares no expected is not scored (ticket #68), but the row it
+			// produces can still carry the only clue there is — a missing
+			// function, a thrown error — and that must not vanish because the
+			// config left nothing gradeable behind.
+			if (grade.results.length > 0) {
+				resultsDiv.style.display = "block";
+				resultsList.innerHTML = this._resultsHTML(grade.results);
+			}
+
+			this.send("CODE_EXECUTION", {
+				code,
+				stdout,
+				returnValue,
+				error,
+				testResults: grade.results,
+				score: grade.score,
+				maxScore: grade.total,
+				completed: grade.total > 0 ? grade.score === grade.total : !error,
+			});
+		} finally {
+			this._runInFlight = false;
+			if (this.attemptsLeft <= 0) {
+				this._markRunButtonExhausted();
+			} else {
+				btn.disabled = false;
+				btn.textContent = "▶ Run";
+			}
+			// The attempt was consumed locally, so the readout must not claim one
+			// is still available while we wait for the parent's reply. Score and
+			// maxScore are deliberately left alone: only the reply may latch them.
+			this._updateToolbarReadout();
+		}
+	}
+
+	// The sandbox caps stdout as it captures it, but the return value and the
+	// error of a run are single strings no sandbox cap can bound: a learner
+	// returning a large string would put it all in this panel. Same budget and
+	// same visible marker the results rows use (_displayValue), so a cut dump
+	// reads the same way as a cut value.
+	_boundedDump(text) {
+		return text.length > MAX_OUTPUT_CHARS
+			? `${text.slice(0, MAX_OUTPUT_CHARS)}\n… (truncated)`
+			: text;
+	}
+
+	_markRunButtonExhausted() {
+		if (!(this.attemptsLeft <= 0)) return;
+		const btn = this.querySelector("#prog-btn-run");
+		if (!btn) return;
+		btn.disabled = true;
+		// The best score lives in the toolbar readout now; the button stays a
+		// constant label so the two never disagree about what they report.
+		btn.textContent = "No Attempts Left";
+	}
+
+	// Percent scored so far, or null until a run with scoring criteria reports.
+	_scorePercent() {
+		if (!Number.isFinite(this.score) || !Number.isFinite(this.maxScore) || this.maxScore <= 0) {
+			return null;
+		}
+		return Math.round((this.score / this.maxScore) * 100);
+	}
+
+	_autograde(config, stdout, returnValue, error, sandboxTestResults) {
+		const results = [];
+		let score = 0;
+		let total = 0;
+
+		if (config.expectedOutput !== undefined && config.expectedOutput !== null) {
+			total++;
+			const expected = this._normalizeOutput(config.expectedOutput);
+			const actual = this._normalizeOutput(
+				[...stdout, returnValue !== undefined ? String(returnValue) : ""].join("\n"),
+			);
+			const passed = actual === expected && !error;
+			if (passed) score++;
+			results.push({ label: "Output matches expected", passed, expected, actual, error: error || null });
+		}
+
+		if (config.testCases && Array.isArray(config.testCases)) {
+			if (sandboxTestResults && Array.isArray(sandboxTestResults)) {
+				sandboxTestResults.forEach((tcResult, i) => {
+					const spec = config.testCases[i] || {};
+					const expected = this._expectedFor(tcResult, spec);
+					if (!this._gradeable(expected)) {
+						this._reportUngradeableCase(i, tcResult.label, tcResult.actual);
+						results.push({
+							label: tcResult.label,
+							// No comparison was ever made, so there is nothing to
+							// pass. The sandbox's verdict here is an artifact of
+							// comparing a return value against undefined.
+							passed: false,
+							actual: tcResult.actual,
+							error: tcResult.error || null,
+						});
+						return;
+					}
+					const passed = this._testCasePassed(tcResult, spec);
+					total++;
+					if (passed) score++;
+					results.push({
+						label: tcResult.label,
+						passed,
+						actual: tcResult.actual,
+						expected,
+						error: tcResult.error || null,
+					});
+				});
+			} else {
+				config.testCases.forEach((tc, i) => {
+					if (!this._gradeable(tc.expected)) {
+						this._reportUngradeableCase(i, tc.label || `Test case ${i + 1}`, undefined);
+						results.push({
+							label: tc.label || `Test case ${i + 1}`,
+							passed: false,
+							error: error || null,
+						});
+						return;
+					}
+					total++;
+					results.push({
+						label: tc.label || `Test case ${i + 1}`,
+						passed: false,
+						expected: tc.expected,
+						error: error || null,
+					});
+				});
+			}
+		}
+
+		return { score, total, results };
+	}
+
+	// A test case is gradeable only if it declares something to compare against.
+	// `expected: null` and an absent `expected` are the same authoring mistake:
+	// the sandbox compares with ===, so an absent one "passes" whenever the
+	// function returns nothing (a free point) while null scores zero (a lock-out
+	// the learner cannot fix). Neither can move `total`, so a case nobody
+	// declared can neither inflate the score nor stand between a learner and a
+	// finished page. Same rule the expectedOutput branch above already applies.
+	_gradeable(expected) {
+		return expected !== undefined && expected !== null;
+	}
+
+	// Authoring-time diagnostic for an ungradeable case. It says nothing to the
+	// learner beyond the row itself, but the row cannot say what is wrong with
+	// the course config, so this is where the author finds out.
+	_reportUngradeableCase(index, label, actual) {
+		const componentID = this.getAttribute("id");
+		console.error(
+			`Test case ${index + 1} ('${label}') of programming component '${componentID || "(no id)"}' `
+			+ "declares no usable expected value, so it was not graded and did not count toward the score. "
+			+ `Give the case an expected, or remove it. Learner returned: ${this._displayValue(actual)}`,
+		);
+	}
+
+	// The sandbox grades a test case with a strict === on the two values it was
+	// handed, so a return value carrying trailing spaces or CRLF fails a case
+	// whose expected text was visibly identical to what the expectedOutput path
+	// accepts. Two strings are therefore compared normalized, the same way.
+	//
+	// Text is not the only type the sandbox gets wrong. `expected` reaches the
+	// iframe through postMessage, so it arrives as a structured clone and can
+	// never be === the learner's return value, which means an object or array
+	// case could never pass no matter how correct the answer was. Plain
+	// containers are therefore compared structurally here instead.
+	//
+	// Everything else keeps the sandbox's verdict. _normalizeOutput is a text
+	// normalizer, so running a non-string through it would mean stringifying,
+	// and String({a: 1}) === String({a: 2}) would score a wrong object return as
+	// a pass; a Date or Map has no JSON spelling to be compared against at all.
+	// The guards are what stop the loosening from reaching those.
+	_testCasePassed(tcResult, spec) {
+		const { actual } = tcResult;
+		const expected = this._expectedFor(tcResult, spec);
+
+		if (typeof actual === "string" && typeof expected === "string") {
+			return this._normalizeOutput(actual) === this._normalizeOutput(expected);
+		}
+		if (this._isPlainContainer(actual) && this._isPlainContainer(expected)) {
+			return this._deepEqual(actual, expected);
+		}
+		return tcResult.passed;
+	}
+
+	// The sandbox reports no `expected` on the two paths that never produced a
+	// value to compare — the name is not a function, or it threw — so those rows
+	// would show a bare error with nothing to aim at. It builds one result per
+	// test case in order, so the config entry at the same index supplies it. A
+	// case that declares no expected keeps its row free of one.
+	//
+	// Resolved in one place because the verdict and the rendered row must never
+	// disagree about what the case was aiming at.
+	_expectedFor(tcResult, spec) {
+		return tcResult.expected !== undefined ? tcResult.expected : spec.expected;
+	}
+
+	// Only plain objects and arrays are comparable structurally. A Date, Map,
+	// Set or RegExp survives postMessage as itself rather than as data, so it
+	// reaches here as a non-plain object with no JSON spelling to match against;
+	// it keeps the sandbox's === and fails, which is the safe direction, since
+	// the lesson JSON cannot express one as `expected` either and such a case
+	// therefore has no correct answer to record.
+	//
+	// A class instance is NOT in that group: structured clone flattens it to a
+	// plain object on the way out of the iframe, so it lands here as a plain
+	// container and its own enumerable properties are compared structurally,
+	// which is what an author means by writing `expected: { a: 1 }`.
+	_isPlainContainer(value) {
+		if (Array.isArray(value)) return true;
+		if (value === null || typeof value !== "object") return false;
+		const proto = Object.getPrototypeOf(value);
+		return proto === Object.prototype || proto === null;
+	}
+
+	// Structural equality for plain containers. Key order is irrelevant, but the
+	// key sets must match, so an extra or missing property fails.
+	//
+	// Identity is answered before either limit is charged: a value that is the
+	// same reference on both sides is decided by === alone, so a comparison that
+	// would have short-circuited can never be failed by an exhausted budget.
+	// Short-circuiting only terminates, and anything that does not short-
+	// circuit can only descend, so moving the check cannot make a cycle spin.
+	//
+	// Both limits fail closed: exceeding either returns false, which reports the
+	// case as failed rather than passing it. The depth cap is what guarantees
+	// termination on a self-referential return value — a cycle can only be
+	// climbed by descending, so it reaches the cap. The node budget bounds how
+	// many containers one case may make us inspect: a container is charged even
+	// when its leaves agree for free, so a deep or branchy structure gives up
+	// after a bounded amount of inspection rather than being walked in full. A
+	// wide disagreement never gets that far, because the key sets are compared
+	// before any walk begins. Both limits are per comparison, so one
+	// pathological case cannot starve the cases after it.
+	_deepEqual(a, b, depth = 0, budget = { remaining: 10000 }) {
+		if (a === b) return true;
+		if (budget.remaining-- <= 0 || depth > 32) return false;
+		// Anything that is not a container on both sides compares by identity.
+		// Without this, a nested 1 and a nested 2 would both have zero keys and
+		// report as two equal empty objects.
+		if (!this._isPlainContainer(a) || !this._isPlainContainer(b)) return false;
+
+		const aIsArray = Array.isArray(a);
+		if (aIsArray !== Array.isArray(b)) return false;
+
+		if (aIsArray) {
+			if (a.length !== b.length) return false;
+			// An index loop, not every(): every() skips holes in a sparse array,
+			// which would let a hole match whatever sits at that index.
+			for (let i = 0; i < a.length; i++) {
+				if (!this._deepEqual(a[i], b[i], depth + 1, budget)) return false;
+			}
+			return true;
+		}
+
+		const aKeys = Object.keys(a);
+		const bKeys = Object.keys(b);
+		// Lengths before sorting: the common failing path is a wide learner
+		// object against a small authored `expected`, and sorting 60,001 keys
+		// only to discover the lengths differ is work nobody needs.
+		if (aKeys.length !== bKeys.length) return false;
+		aKeys.sort();
+		bKeys.sort();
+		if (!aKeys.every((key, i) => key === bKeys[i])) return false;
+		return aKeys.every((key) => this._deepEqual(a[key], b[key], depth + 1, budget));
+	}
+
+	// Renders a value for the detail block. Containers go through JSON so the
+	// learner sees the property that differs rather than "[object Object]".
+	//
+	// Two hazards the raw JSON call walks into: it throws outright on a circular
+	// structure, which would take the whole results panel down with it, and it
+	// renders a merely shared reference as if it were a loop, which would tell a
+	// learner their object is cyclic when it is only referenced twice. The
+	// replacer therefore tracks the ancestor path: inside a replacer `this` is
+	// the object the value was read off, so popping the stack back to `this` is
+	// the path to the root, and only an ancestor seen again is a cycle.
+	//
+	// The cap runs after the branch below, so a long plain string is bounded too
+	// — these rows are also repainted from persisted state, and an unbounded row
+	// is a panel one return value can flood. The cap is per line, so a row that
+	// shows both expected and got reaches 4,000 characters; what matters is that
+	// each value, and therefore each row, is bounded.
+	_displayValue(value) {
+		const text = this._displayText(value);
+		return text.length > 2000 ? `${text.slice(0, 2000)}… (truncated)` : text;
+	}
+
+	_displayText(value) {
+		try {
+			if (!this._isPlainContainer(value)) return String(value);
+			const ancestors = [];
+			const text = JSON.stringify(value, function (_key, val) {
+				while (ancestors.length > 0 && ancestors[ancestors.length - 1] !== this) {
+					ancestors.pop();
+				}
+				if (val !== null && typeof val === "object") {
+					if (ancestors.includes(val)) return "[circular]";
+					ancestors.push(val);
+				}
+				return val;
+			});
+			return typeof text === "string" ? text : "[unserializable]";
+		} catch {
+			return "[unserializable]";
+		}
+	}
+
+	_normalizeOutput(str) {
+		return String(str)
+			.replace(/\r\n?/g, "\n")
+			.split("\n")
+			.map((line) => line.trim().replace(/\s+/g, " "))
+			.filter((line) => line.length > 0)
+			.join("\n");
+	}
+
+	_resultsHTML(results) {
+		return results.map((r) => {
+			const lines = [];
+			if (!r.passed) {
+				if (r.expected !== undefined) lines.push(`expected: ${this._displayValue(r.expected)}`);
+				if (r.actual !== undefined) lines.push(`got: ${this._displayValue(r.actual)}`);
+				if (r.error) lines.push(`error: ${this._displayValue(r.error)}`);
+			}
+			const detail = lines.length > 0
+				? `<div class="prog-test-detail">${this._escapeText(lines.join("\n"))}</div>`
+				: "";
+			return `<div class="prog-test-result ${r.passed ? "passed" : "failed"}">
+						${r.passed ? "✓" : "✗"} ${this._escapeText(r.label)}${detail}
+					</div>`;
+		}).join("");
+	}
+
+	_escapeText(value) {
+		return String(value ?? "")
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&#39;");
+	}
+
+	_resetCode() {
+		// Use real starterCode if config has loaded; otherwise default placeholder.
+		// Do NOT set _savedCode unless we have real starterCode, so the
+		// first-load logic in _handleProgrammingData can still populate it.
+		// Also, editor.setValue() fires the "change" handler, so we must reset
+		// _savedCode to undefined after the programmatic setValue.
+		const hasRealConfig = this._componentConfig && this._componentConfig.starterCode;
+		const starterCode = hasRealConfig ? this._componentConfig.starterCode : "// Write your code here\n";
+		this.editor.setValue(starterCode);
+		if (hasRealConfig) {
+			this._savedCode = starterCode;
+		} else {
+			this._savedCode = undefined;
+		}
+
+		// Clear sessionStorage draft for this component so a refresh after
+		// reset shows the placeholder, not the old code.
+		const componentId = this.getAttribute("id");
+		if (this._pageName && componentId) {
+			const key = `cml:draft:${this._pageName}:${componentId}`;
+			try {
+				window.sessionStorage.removeItem(key);
+			} catch (_e) {
+				// Ignore storage errors.
+			}
+		} else if (componentId) {
+			// Config not loaded yet; defer the clear until pageName arrives.
+			this._resetPending = true;
+		}
+	}
+
+
+	_validateCode(code, config) {
+		const patterns = config.bannedPatterns;
+		if (!patterns || !Array.isArray(patterns) || patterns.length === 0) {
+			return { valid: true, error: null };
+		}
+		for (const pattern of patterns) {
+			let regex;
+			try {
+				regex = new RegExp(pattern);
+			} catch (e) {
+				if (code.includes(pattern)) {
+					return { valid: false, error: `Code contains banned pattern: "${pattern}"` };
+				}
+				continue;
+			}
+			if (regex.test(code)) {
+				return { valid: false, error: `Code contains banned pattern: "${pattern}"` };
+			}
+		}
+		return { valid: true, error: null };
+	}
+
+	_handleProgrammingData(event) {
+		const data = event.detail;
+		if (!data) return;
+		const myId = this.getAttribute("id");
+		if (data.id && data.id !== myId) return;
+
+		const value = data.value || data;
+
+		const isConfigPayload =
+			typeof value === "object" &&
+			value !== null &&
+			("starterCode" in value || "language" in value || "testCases" in value);
+
+		if (!this._staticConfig && isConfigPayload) {
+			this._staticConfig = {
+				starterCode: value.starterCode || "",
+				language: value.language || "javascript",
+				timeout: value.timeout || 5000,
+				expectedOutput: value.expectedOutput,
+				testCases: value.testCases || [],
+				options: value.options || [],
+				bannedPatterns: value.bannedPatterns || [],
+			};
+			this._componentConfig = { ...this._staticConfig };
+			if (value.pageName) {
+				this._pageName = value.pageName;
+				// If a reset was requested before config arrived, clear the draft now.
+				if (this._resetPending) {
+					this._resetPending = false;
+					const componentId = this.getAttribute("id");
+					if (componentId) {
+						const key = `cml:draft:${this._pageName}:${componentId}`;
+						try {
+							window.sessionStorage.removeItem(key);
+						} catch (_e) {
+							// Ignore storage errors.
+						}
+					}
+				}
+			}
+		}
+
+		if (value.attemptsLeft !== undefined) this.attemptsLeft = value.attemptsLeft;
+		if (value.hasAttempted !== undefined) this.hasAttempted = value.hasAttempted;
+		if (value.score !== undefined) this.score = value.score;
+		if (value.maxScore !== undefined) this.maxScore = value.maxScore;
+
+		if (value.savedCode !== undefined && value.savedCode !== null) {
+			this._savedCode = value.savedCode;
+			if (this.editor) {
+				this.editor.setValue(value.savedCode);
+			}
+		} else if (isConfigPayload && this.editor && this._savedCode === undefined) {
+			// First load: no draft in sessionStorage yet. Populate editor with
+			// starterCode from config so the placeholder appears immediately.
+			this._savedCode = value.starterCode || "";
+			this.editor.setValue(this._savedCode);
+		}
+
+		// A reply for a run that never reached the sandbox carries the persisted
+		// rows only as state: repainting them next to the run's error would read
+		// as a verdict on code that never executed.
+		if (
+			value.consumesAttempt !== false &&
+			value.testResults &&
+			value.testResults.length > 0 &&
+			this.editor
+		) {
+			const resultsDiv = this.querySelector("#prog-results");
+			const resultsList = this.querySelector("#prog-results-list");
+			if (resultsDiv && resultsList) {
+				resultsDiv.style.display = "block";
+				resultsList.innerHTML = this._resultsHTML(value.testResults);
+			}
+		}
+
+		this._markRunButtonExhausted();
+		this._updateToolbarReadout();
+	}
+
+	// Repaints the toolbar readouts from the state the last reply reported.
+	_updateToolbarReadout() {
+		const scoreEl = this.querySelector(".prog-score");
+		if (scoreEl) scoreEl.textContent = `Best score: ${this._scorePercentText()}`;
+		const attemptsEl = this.querySelector(".prog-attempts");
+		if (attemptsEl) attemptsEl.textContent = `Attempts left: ${this._attemptsText()}`;
+	}
+
+	_scorePercentText() {
+		const pct = this._scorePercent();
+		return pct === null ? "—" : `${pct}%`;
+	}
+
+	_attemptsText() {
+		if (this.attemptsLeft === Infinity) return "Unlimited";
+		if (!Number.isFinite(this.attemptsLeft)) return "—";
+		return String(this.attemptsLeft);
+	}
+}
+
 // Register the custom tags
 customElements.define("course-video", CourseVideo);
 customElements.define("course-article", CourseArticle);
 customElements.define("course-quiz", CourseQuiz);
+customElements.define("course-programming", CourseProgramming);
