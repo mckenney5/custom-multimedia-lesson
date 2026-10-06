@@ -207,7 +207,7 @@
 					"expected": "Hello, World!"
 				},
 				{
-					"label": "greet() returns Hello, World! (duplicate for score parity)",
+					"label": "greet() returns Hello, World!",
 					"functionName": "greet",
 					"args": [],
 					"expected": "Hello, World!"
